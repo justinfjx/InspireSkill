@@ -1,3 +1,3 @@
 """Inspire Training Platform SDK."""
 
-__version__ = "3.0.3"
+__version__ = "3.1.0"
