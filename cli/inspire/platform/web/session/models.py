@@ -26,7 +26,7 @@ class SessionExpiredError(Exception):
     """Raised when the web session has expired (401 from server)."""
 
 
-# Default workspace placeholder (override with INSPIRE_WORKSPACE_ID env var)
+# Sentinel for "workspace not yet detected from the authenticated browser session".
 DEFAULT_WORKSPACE_ID = "ws-00000000-0000-0000-0000-000000000000"
 
 

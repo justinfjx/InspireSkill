@@ -5,6 +5,11 @@ package re-exports the storage helpers so callers can do
 ``from inspire.accounts import current_account, account_config_path``.
 """
 
+from inspire.accounts.normalize import (
+    NORMALIZATION_SENTINEL,
+    NormalizationReport,
+    normalize_environment,
+)
 from inspire.accounts.storage import (
     CONFIG_FILENAME,
     AccountError,
@@ -27,6 +32,8 @@ from inspire.accounts.storage import (
 __all__ = [
     "CONFIG_FILENAME",
     "AccountError",
+    "NORMALIZATION_SENTINEL",
+    "NormalizationReport",
     "account_config_path",
     "account_dir",
     "account_exists",
@@ -38,6 +45,7 @@ __all__ = [
     "ensure_inspire_home",
     "inspire_home",
     "list_accounts",
+    "normalize_environment",
     "remove_account",
     "set_current_account",
     "validate_name",

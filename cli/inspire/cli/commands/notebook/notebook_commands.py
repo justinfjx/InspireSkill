@@ -886,6 +886,10 @@ def ssh_notebook_cmd(
         inspire notebook ssh <notebook-name>                  # bootstrap (or reconnect)
         inspire notebook ssh <notebook-name> --command "hostname"
     """
+    from inspire.accounts import normalize_environment
+
+    normalize_environment()
+
     # Fast path: if a cached bridge already exists for this notebook
     # name, hand off to the reconnect flow (no bootstrap needed).
     if not command and not pubkey:
@@ -899,7 +903,7 @@ def ssh_notebook_cmd(
             _cfg = None
 
         if _cfg and notebook in _cfg.bridges:
-            click.get_current_context().invoke(_reconnect, bridge=notebook)
+            click.get_current_context().invoke(_reconnect, notebook=notebook)
             return
 
     run_notebook_ssh(

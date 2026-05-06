@@ -853,7 +853,9 @@ def _resolve_discover_runtime(
     if not workspace_id or workspace_id == default_workspace_id:
         click.echo(
             click.style(
-                "Could not detect a real workspace_id. Set INSPIRE_WORKSPACE_ID and retry.",
+                "Could not detect a real workspace_id from the authenticated session. "
+                "Re-run `inspire init --discover` after signing into an account that "
+                "can see at least one workspace.",
                 fg="red",
             )
         )

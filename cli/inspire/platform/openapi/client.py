@@ -127,10 +127,7 @@ class InspireAPI:
         "INSPIRE_PROJECT_ID",
         "project-00000000-0000-0000-0000-000000000000",  # Placeholder - set INSPIRE_PROJECT_ID env var
     )
-    DEFAULT_WORKSPACE_ID = os.getenv(
-        "INSPIRE_WORKSPACE_ID",
-        "ws-00000000-0000-0000-0000-000000000000",  # Placeholder - set INSPIRE_WORKSPACE_ID env var
-    )
+    DEFAULT_WORKSPACE_ID = "ws-00000000-0000-0000-0000-000000000000"
     DEFAULT_IMAGE = "docker.example.com/inspire-studio/ngc-cuda12.8-base:1.0"
     DEFAULT_IMAGE_PATH = "inspire-studio/ngc-cuda12.8-base:1.0"
     DEFAULT_DOCKER_REGISTRY = "docker.example.com"

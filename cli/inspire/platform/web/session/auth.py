@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 import time
 from typing import Optional
@@ -29,21 +28,6 @@ def _session_matches_username(cached: WebSession, username: str) -> bool:
 def _has_real_workspace_id(session: WebSession) -> bool:
     value = str(session.workspace_id or "").strip()
     return bool(value) and value != DEFAULT_WORKSPACE_ID
-
-
-def _maybe_apply_workspace_override(
-    cached: WebSession,
-    env_workspace_id: Optional[str],
-) -> None:
-    if not env_workspace_id:
-        return
-    if cached.workspace_id == env_workspace_id:
-        return
-    cached.workspace_id = env_workspace_id
-    try:
-        cached.save()
-    except Exception:
-        pass
 
 
 def get_credentials() -> tuple[str, str]:
@@ -91,11 +75,18 @@ def login_with_playwright(
             browser = p.chromium.launch(headless=headless, proxy=proxy)
         except Exception as exc:
             if "Executable doesn't exist" in str(exc):
-                raise RuntimeError(
-                    "Playwright browser not found. First login requires a browser to "
-                    "complete SSO authentication.\n\n"
-                    "  Install with:  playwright install chromium\n"
-                    "  Or if using uv tool:  uvx --from inspire-skill playwright install chromium"
+                # ConfigError surfaces through the standard CLI error path
+                # (`exit_with_error` / `_handle_error`) instead of bubbling up
+                # as an "Unhandled exception" traceback. `inspire account add`
+                # offers to install chromium proactively; this branch only
+                # fires when a user reaches login without going through
+                # account add (e.g. uv tool upgrade across major versions).
+                from inspire.config import ConfigError
+                raise ConfigError(
+                    "Playwright chromium is not installed; SSO login cannot proceed. "
+                    "Install once with:\n"
+                    "    uvx --from inspire-skill playwright install chromium\n"
+                    "or, on a non-uv install: `playwright install chromium`."
                 ) from None
             raise
         context = browser.new_context(proxy=proxy, ignore_https_errors=True)
@@ -215,21 +206,14 @@ def login_with_playwright(
         except Exception:
             user_detail = None
 
-        # Extract workspace_id (spaceId)
-        # Priority: 1) env var override, 2) auto-detect from browser, 3) default placeholder
-        workspace_id = os.environ.get("INSPIRE_WORKSPACE_ID")
-        if not workspace_id:
-            try:
-                detected = page.evaluate("() => window.localStorage.getItem('spaceId')")
-            except Exception:
-                detected = None
+        # Extract workspace_id (spaceId) from the authenticated browser state.
+        try:
+            detected = page.evaluate("() => window.localStorage.getItem('spaceId')")
+        except Exception:
+            detected = None
 
-            detected_str = str(detected or "").strip()
-            if detected_str:
-                workspace_id = detected_str
-
-        if not workspace_id:
-            workspace_id = DEFAULT_WORKSPACE_ID
+        detected_str = str(detected or "").strip()
+        workspace_id = detected_str or DEFAULT_WORKSPACE_ID
 
         # Discover all workspace IDs via /api/v1/user/routes/{spaceId}
         # The response contains a "userWorkspaceList" route with all workspaces
@@ -309,9 +293,6 @@ def get_web_session(force_refresh: bool = False, require_workspace: bool = False
     Returns:
         A valid WebSession with storage_state and optionally workspace_id.
     """
-    # Check for workspace override from environment
-    env_workspace_id = os.environ.get("INSPIRE_WORKSPACE_ID")
-
     # Resolve credentials early so we can avoid reusing a cache from another user.
     credentials_error: Optional[ValueError] = None
     try:
@@ -327,7 +308,6 @@ def get_web_session(force_refresh: bool = False, require_workspace: bool = False
     if not force_refresh:
         cached = WebSession.load()
         if cached and cached.storage_state.get("cookies"):
-            _maybe_apply_workspace_override(cached, env_workspace_id)
             if require_workspace and not _has_real_workspace_id(cached):
                 pass
             elif username and not _session_matches_username(cached, username):
@@ -341,8 +321,6 @@ def get_web_session(force_refresh: bool = False, require_workspace: bool = False
     if credentials_error is not None:
         cached = WebSession.load(allow_expired=True)
         if cached and cached.storage_state.get("cookies"):
-            _maybe_apply_workspace_override(cached, env_workspace_id)
-
             if require_workspace and not _has_real_workspace_id(cached):
                 raise credentials_error
             return cached
@@ -354,7 +332,6 @@ def get_web_session(force_refresh: bool = False, require_workspace: bool = False
     if not force_refresh:
         cached = WebSession.load(allow_expired=True)
         if cached and cached.storage_state.get("cookies"):
-            _maybe_apply_workspace_override(cached, env_workspace_id)
             if (
                 not require_workspace or _has_real_workspace_id(cached)
             ) and _session_matches_username(cached, username):

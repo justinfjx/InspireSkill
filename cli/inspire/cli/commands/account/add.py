@@ -170,6 +170,18 @@ def add(
     elif existing_active:
         click.echo(f"Active account unchanged: {existing_active}")
 
+    # Normalize the wider environment once — quarantine pre-v3 unscoped files,
+    # warn on stale env vars dropped by v3.x, ensure playwright is ready for
+    # the SSO login that every web-side command needs. Idempotent via the
+    # ~/.inspire/.environment-normalized-v3 sentinel; subsequent `account add`
+    # invocations are silent when the environment is already clean.
+    from inspire.accounts import normalize_environment
+
+    normalize_environment(
+        interactive=not non_interactive,
+        auto_install_playwright=not non_interactive,
+    )
+
 
 def _toml_basic(s: str) -> str:
     """Escape a string for a TOML basic (double-quoted) string literal."""

@@ -25,15 +25,25 @@ from .json_report import emit_init_json, snapshot_paths
 from .templates import _init_smart_mode, _init_template_mode
 
 
+_NO_ACTIVE_ACCOUNT_MESSAGE = "No active account configured. Run `inspire account add` first."
+
+
+def _require_active_account_config_path() -> Path:
+    """Return the active account config path, or fail fast with a direct error."""
+    global_path = Config.writable_config_path()
+    if global_path is None:
+        raise ValueError(_NO_ACTIVE_ACCOUNT_MESSAGE)
+    return global_path
+
+
 def _get_config_paths() -> tuple[Path, Path]:
     """Writable paths for ``inspire init``.
 
-    The first element lands under the active account's directory
-    (``~/.inspire/accounts/<name>/config.toml``) when one is set, so
-    ``init --discover`` writes to the file the loader actually reads.
-    Falls back to the legacy global path for users without an account.
+    The first element always lands under the active account's directory
+    (``~/.inspire/accounts/<name>/config.toml``), so ``init`` fails fast
+    when no account is active instead of crashing later on a ``None`` path.
     """
-    global_path = Config.writable_config_path()
+    global_path = _require_active_account_config_path()
     project_path = Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
     return global_path, project_path
 
@@ -206,9 +216,6 @@ def init(
     """
     ctx.json_output = bool(ctx.json_output or json_output_local)
     effective_json = ctx.json_output
-
-    global_path, project_path = _get_config_paths()
-    before = snapshot_paths(global_path, project_path)
     warnings: list[str] = []
 
     def _warn(msg: str) -> None:
@@ -216,19 +223,22 @@ def init(
         if not effective_json:
             click.echo(click.style(f"Warning: {msg}", fg="yellow"))
 
-    if not discover and (
-        probe_limit or probe_keep_notebooks or probe_pubkey or probe_timeout != 900
-    ):
-        _warn(
-            "Probe options are only effective with --discover --probe-shared-path and were ignored."
-        )
-
-    if not discover and (username or base_url or target_dir):
-        _warn(
-            "--username, --base-url, and --target-dir are only effective with --discover and were ignored."
-        )
-
     try:
+        global_path, project_path = _get_config_paths()
+        before = snapshot_paths(global_path, project_path)
+
+        if not discover and (
+            probe_limit or probe_keep_notebooks or probe_pubkey or probe_timeout != 900
+        ):
+            _warn(
+                "Probe options are only effective with --discover --probe-shared-path and were ignored."
+            )
+
+        if not discover and (username or base_url or target_dir):
+            _warn(
+                "--username, --base-url, and --target-dir are only effective with --discover and were ignored."
+            )
+
         if global_flag and project_flag:
             raise ValueError("Cannot specify both --global and --project")
 

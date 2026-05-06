@@ -399,8 +399,8 @@ def _resolve_notebook_id(
             "No workspace_id configured or available for notebook lookup.",
             EXIT_CONFIG_ERROR,
             hint=(
-                "Configure [workspaces] in your account config.toml or set "
-                "INSPIRE_WORKSPACE_ID."
+                "Run `inspire init --discover` to populate [workspaces] in your "
+                "account config.toml, or pass --workspace <alias> explicitly."
             ),
         )
 

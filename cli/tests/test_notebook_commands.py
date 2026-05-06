@@ -1455,3 +1455,45 @@ def test_run_notebook_ssh_reports_when_tunnel_not_ready(
     assert "SSH preflight failed" in captured["message"]
     assert "Proxy readiness report:" in captured["hint"]
 
+
+def test_ssh_notebook_cache_hit_invokes_reconnect_with_notebook_kwarg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import click
+    import inspire.accounts as accounts_mod
+    from inspire.cli.commands.notebook import remote_shell as remote_shell_module
+
+    captured: dict[str, str] = {}
+    fake_tunnel_config = tunnel_module.TunnelConfig()
+    fake_tunnel_config.add_bridge(
+        tunnel_module.BridgeProfile(
+            name="gpu-main",
+            proxy_url="https://proxy.example.com/proxy/31337/",
+        )
+    )
+
+    monkeypatch.setattr(accounts_mod, "current_account", lambda: None)
+    monkeypatch.setattr(
+        tunnel_module, "load_tunnel_config", lambda account=None: fake_tunnel_config
+    )
+    monkeypatch.setattr(
+        notebook_cmd_module,
+        "run_notebook_ssh",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("should not bootstrap on cache hit")
+        ),
+    )
+
+    @click.command("ssh")
+    @click.argument("notebook", required=False)
+    @click.pass_context
+    def fake_reconnect(ctx: click.Context, notebook: Optional[str]) -> None:
+        captured["notebook"] = notebook or ""
+
+    monkeypatch.setattr(remote_shell_module, "bridge_ssh", fake_reconnect)
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["notebook", "ssh", "gpu-main"])
+
+    assert result.exit_code == EXIT_SUCCESS
+    assert captured["notebook"] == "gpu-main"
