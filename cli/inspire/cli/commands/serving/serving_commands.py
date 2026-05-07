@@ -30,6 +30,7 @@ def _resolve_serving_name(ctx: Context, name: str, *, pick: Optional[int] = None
 
     Scope: ``my_serving=True`` (default) × session workspace, full page.
     """
+
     def _lister():
         session = get_web_session()
         items, _ = browser_api_module.list_servings(
@@ -79,21 +80,20 @@ def _format_list_rows(rows: list[dict[str, str]], total: int) -> str:
         return "No inference servings found."
     widths = {
         col: max(len(col.title().replace("_", " ")), *(len(r[col]) for r in rows))
-        for col in ("id", "name", "status", "replicas", "created_at")
+        for col in ("name", "status", "replicas", "created_at")
     }
     header = (
-        f"{'ID':<{widths['id']}} {'Name':<{widths['name']}} "
-        f"{'Status':<{widths['status']}} {'Replicas':<{widths['replicas']}} "
+        f"{'Name':<{widths['name']}}  "
+        f"{'Status':<{widths['status']}}  {'Replicas':<{widths['replicas']}}  "
         f"{'Created':<{widths['created_at']}}"
     )
     sep = "-" * len(header)
     lines = ["Inference Servings", header, sep]
     for r in rows:
         lines.append(
-            f"{r['id']:<{widths['id']}} "
-            f"{r['name']:<{widths['name']}} "
-            f"{r['status']:<{widths['status']}} "
-            f"{r['replicas']:<{widths['replicas']}} "
+            f"{r['name']:<{widths['name']}}  "
+            f"{r['status']:<{widths['status']}}  "
+            f"{r['replicas']:<{widths['replicas']}}  "
             f"{r['created_at']:<{widths['created_at']}}"
         )
     lines.append(sep)
@@ -227,9 +227,7 @@ def stop_serving(ctx: Context, name: str, pick: Optional[int]) -> None:
         api.stop_inference_serving(inference_serving_id)
 
         if ctx.json_output:
-            click.echo(
-                json_formatter.format_json({"name": name, "stopped": True})
-            )
+            click.echo(json_formatter.format_json({"name": name, "stopped": True}))
             return
 
         click.echo(human_formatter.format_success(f"Inference serving stopped: {name}"))
@@ -248,7 +246,9 @@ def stop_serving(ctx: Context, name: str, pick: Optional[int]) -> None:
 @click.option("--workspace", default=None, help="Workspace name")
 @pass_context
 def configs_serving(
-    ctx: Context, workspace: Optional[str],) -> None:
+    ctx: Context,
+    workspace: Optional[str],
+) -> None:
     """Show available inference-serving configs (images / specs) for a workspace."""
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -265,7 +265,9 @@ def configs_serving(
 
         configs = data.get("configs") if isinstance(data, dict) else None
         if not configs:
-            click.echo("No inference-serving configs returned (workspace may be empty or not authorized).")
+            click.echo(
+                "No inference-serving configs returned (workspace may be empty or not authorized)."
+            )
             return
 
         click.echo("Available Inference Serving Configs")

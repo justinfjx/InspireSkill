@@ -33,6 +33,7 @@ def _resolve_ray_name(ctx: Context, name: str, *, pick: Optional[int] = None) ->
     job anyway). Full-page fetch (`page_size=10000`) so large workspaces
     don't drop the target off the end of page 1.
     """
+
     def _lister():
         session = get_web_session()
         me = browser_api_module.get_current_user(session=session)
@@ -71,25 +72,23 @@ def _format_ray_list_rows(rows: list[dict[str, str]]) -> str:
     if not rows:
         return "No Ray jobs found."
 
-    id_w = max(len("Ray Job ID"), *(len(r["ray_job_id"]) for r in rows))
     name_w = max(len("Name"), *(len(r["name"]) for r in rows))
     status_w = max(len("Status"), *(len(r["status"]) for r in rows))
     created_w = max(len("Created"), *(len(r["created_at"]) for r in rows))
     user_w = max(len("Created By"), *(len(r["created_by_name"]) for r in rows))
 
     header = (
-        f"{'Ray Job ID':<{id_w}} {'Name':<{name_w}} "
-        f"{'Status':<{status_w}} {'Created':<{created_w}} "
+        f"{'Name':<{name_w}}  "
+        f"{'Status':<{status_w}}  {'Created':<{created_w}}  "
         f"{'Created By':<{user_w}}"
     )
     sep = "-" * len(header)
     lines = ["Ray Jobs (弹性计算)", header, sep]
     for row in rows:
         lines.append(
-            f"{row['ray_job_id']:<{id_w}} "
-            f"{row['name']:<{name_w}} "
-            f"{row['status']:<{status_w}} "
-            f"{row['created_at']:<{created_w}} "
+            f"{row['name']:<{name_w}}  "
+            f"{row['status']:<{status_w}}  "
+            f"{row['created_at']:<{created_w}}  "
             f"{row['created_by_name']:<{user_w}}"
         )
     lines.append(sep)
@@ -254,7 +253,7 @@ def status_ray(ctx: Context, name: str) -> None:
     type=int,
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous — "
-         "matches the list order in the AmbiguousName error.",
+    "matches the list order in the AmbiguousName error.",
 )
 @pass_context
 def stop_ray(ctx: Context, name: str, pick: Optional[int]) -> None:
@@ -362,9 +361,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
         if not chunk:
             continue
         if "=" not in chunk:
-            raise click.BadParameter(
-                f"worker spec token {chunk!r} has no '='; expected key=value"
-            )
+            raise click.BadParameter(f"worker spec token {chunk!r} has no '='; expected key=value")
         k, _, v = chunk.partition("=")
         out[k.strip()] = v.strip()
 
@@ -553,9 +550,7 @@ def create_ray(
             click.echo(json_formatter.format_json(data))
             return
 
-        click.echo(
-            human_formatter.format_success(f"Ray job created: {body.get('name')}")
-        )
+        click.echo(human_formatter.format_success(f"Ray job created: {body.get('name')}"))
         click.echo(f"Project:   {body.get('project_id')}")
         click.echo(f"Workspace: {body.get('workspace_id')}")
         click.echo(f"Workers:   {len(body.get('worker_groups') or [])} group(s)")
@@ -621,9 +616,7 @@ def _assemble_create_body(
         explicit_workspace_name=workspace,
     )
     if resolved_workspace_id is None:
-        raise ConfigError(
-            "Missing workspace_id. Set --workspace or configure [workspaces]."
-        )
+        raise ConfigError("Missing workspace_id. Set --workspace or configure [workspaces].")
 
     def _resolve_ray(triple: str, group_name: str) -> Any:
         try:
@@ -804,7 +797,9 @@ def instances_ray(ctx: Context, name: str) -> None:
         instances = browser_api_module.list_ray_job_instances(ray_job_id, session=session)
 
         if ctx.json_output:
-            click.echo(json_formatter.format_json({"instances": instances, "total": len(instances)}))
+            click.echo(
+                json_formatter.format_json({"instances": instances, "total": len(instances)})
+            )
             return
 
         if not instances:

@@ -157,10 +157,16 @@ def _job_info_to_row(job, *, workspace_name: str = "") -> dict:  # noqa: ANN001
 
 
 def _format_job_list(rows: list[dict]) -> str:
+    """Render jobs as a table without raw ids.
+
+    The v2 user boundary takes names only — surfacing ``job-<uuid>`` in
+    the listing invites agents to round-trip them and then hit
+    ``reject_id_at_boundary`` later. JSON output keeps every field for
+    scripts.
+    """
     if not rows:
         return "No jobs found."
 
-    id_w = max(len("Job ID"), *(len(str(r["job_id"])) for r in rows))
     name_w = max(len("Name"), *(len(str(r["name"])) for r in rows))
     status_w = max(len("Status"), *(len(str(r["status"])) for r in rows))
     created_w = max(len("Created"), *(len(str(r["created_at"])) for r in rows))
@@ -171,8 +177,8 @@ def _format_job_list(rows: list[dict]) -> str:
     user_w = max(len("Created By"), *(len(str(r.get("created_by_name") or "")) for r in rows))
 
     header = (
-        f"{'Job ID':<{id_w}} {'Name':<{name_w}} {'Status':<{status_w}} "
-        f"{'Created':<{created_w}} {'Workspace':<{workspace_w}} {'Created By':<{user_w}}"
+        f"{'Name':<{name_w}}  {'Status':<{status_w}}  "
+        f"{'Created':<{created_w}}  {'Workspace':<{workspace_w}}  {'Created By':<{user_w}}"
     )
     sep = "-" * len(header)
     lines = ["Jobs", header, sep]
@@ -180,11 +186,10 @@ def _format_job_list(rows: list[dict]) -> str:
         workspace = str(row.get("workspace_name") or row.get("workspace_id") or "")
         created_by = str(row.get("created_by_name") or "")
         lines.append(
-            f"{str(row['job_id']):<{id_w}} "
-            f"{str(row['name']):<{name_w}} "
-            f"{str(row['status']):<{status_w}} "
-            f"{str(row['created_at']):<{created_w}} "
-            f"{workspace:<{workspace_w}} "
+            f"{str(row['name']):<{name_w}}  "
+            f"{str(row['status']):<{status_w}}  "
+            f"{str(row['created_at']):<{created_w}}  "
+            f"{workspace:<{workspace_w}}  "
             f"{created_by:<{user_w}}"
         )
     lines.append(sep)

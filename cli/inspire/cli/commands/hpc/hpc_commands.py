@@ -29,6 +29,7 @@ def _resolve_hpc_name(ctx: Context, name: str, *, pick: Optional[int] = None) ->
 
     Scope: current user × session workspace, full page.
     """
+
     def _lister():
         session = get_web_session()
         me = browser_api_module.get_current_user(session=session)
@@ -100,26 +101,24 @@ def _looks_like_full_slurm_script(entrypoint: str) -> bool:
 
 
 def _format_hpc_list_rows(rows: list[dict[str, str]]) -> str:
-    """Format HPC job rows into a compact table."""
+    """Format HPC job rows into a compact table without raw ids.
+
+    Names cross the v2 user boundary; ids stay in JSON for scripts.
+    """
     if not rows:
         return "No HPC jobs found."
 
-    job_id_width = max(len("Job ID"), *(len(r["job_id"]) for r in rows))
     name_width = max(len("Name"), *(len(r["name"]) for r in rows))
     status_width = max(len("Status"), *(len(r["status"]) for r in rows))
     created_width = max(len("Created"), *(len(r["created_at"]) for r in rows))
 
-    header = (
-        f"{'Job ID':<{job_id_width}} {'Name':<{name_width}} "
-        f"{'Status':<{status_width}} {'Created':<{created_width}}"
-    )
+    header = f"{'Name':<{name_width}}  " f"{'Status':<{status_width}}  {'Created':<{created_width}}"
     sep = "-" * len(header)
     lines = ["HPC Jobs", header, sep]
     for row in rows:
         lines.append(
-            f"{row['job_id']:<{job_id_width}} "
-            f"{row['name']:<{name_width}} "
-            f"{row['status']:<{status_width}} "
+            f"{row['name']:<{name_width}}  "
+            f"{row['status']:<{status_width}}  "
             f"{row['created_at']:<{created_width}}"
         )
     lines.append(sep)
@@ -230,8 +229,13 @@ def list_hpc(
     help="Docker image (default from [job].image)",
 )
 @click.option("--image-type", default="SOURCE_PRIVATE", show_default=True, help="Image source type")
-@click.option("--instance-count", type=int, default=1, show_default=True,
-              help="Number of nodes (web UI: 节点数)")
+@click.option(
+    "--instance-count",
+    type=int,
+    default=1,
+    show_default=True,
+    help="Number of nodes (web UI: 节点数)",
+)
 @click.option(
     "--priority",
     type=click.IntRange(1, 10),
@@ -241,14 +245,27 @@ def list_hpc(
         "Project quota may cap the requested value."
     ),
 )
-@click.option("--number-of-tasks", type=int, default=1, show_default=True,
-              help="Slurm --ntasks (web UI: 子任务数量)")
-@click.option("--cpus-per-task", type=int, default=None,
-              help="Slurm --cpus-per-task (web UI: 单个任务 CPU 核数). "
-                   "Default: derive from --quota cpu count")
-@click.option("--memory-per-cpu", type=int, default=None,
-              help="Slurm --mem-per-cpu in GiB (web UI: 每 CPU 使用内存 GB). "
-                   "Default: derive from --quota mem / --quota cpu")
+@click.option(
+    "--number-of-tasks",
+    type=int,
+    default=1,
+    show_default=True,
+    help="Slurm --ntasks (web UI: 子任务数量)",
+)
+@click.option(
+    "--cpus-per-task",
+    type=int,
+    default=None,
+    help="Slurm --cpus-per-task (web UI: 单个任务 CPU 核数). "
+    "Default: derive from --quota cpu count",
+)
+@click.option(
+    "--memory-per-cpu",
+    type=int,
+    default=None,
+    help="Slurm --mem-per-cpu in GiB (web UI: 每 CPU 使用内存 GB). "
+    "Default: derive from --quota mem / --quota cpu",
+)
 @click.option(
     "--enable-hyper-threading/--disable-hyper-threading",
     default=False,
@@ -303,6 +320,7 @@ def create_hpc(
         )
         if resolved_workspace_id is None:
             from inspire.config.workspaces import workspace_required_hint
+
             raise ConfigError(
                 "--workspace is required (no longer falls back to a config default in v3.1.0). "
                 f"To proceed: {workspace_required_hint(config)}."
@@ -504,9 +522,7 @@ def delete_hpc(ctx: Context, name: str, yes: bool, pick: Optional[int]) -> None:
 
         if ctx.json_output:
             click.echo(
-                json_formatter.format_json(
-                    {"name": name, "status": "deleted", "result": result}
-                )
+                json_formatter.format_json({"name": name, "status": "deleted", "result": result})
             )
             return
         click.echo(human_formatter.format_success(f"HPC job deleted: {name}"))

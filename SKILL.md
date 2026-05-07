@@ -28,7 +28,9 @@ description: "Execution-first Inspire platform playbook for agents driving the i
 | --- | --- |
 | 账号 | 一账号一独立目录 `~/.inspire/accounts/<name>/`（装 `config.toml` / `bridges.json` / `web_session.json`），活动账号写在 `~/.inspire/current`。无活动账号时 CLI 直接报错，没全局 fallback。切账号 = 改一个文件。 |
 | 默认 workspace 范围 | 本 SKILL 只把 **`CPU 资源空间`** + **`分布式训练空间`** 视为一等公民。其它 workspace（`整节点任务空间` / `CI-情境智能*` / `可上网GPU资源` / `专属资源开发空间` 等）是课题组专属或沙箱，**别主动往里塞任务**；需要时由仓库级 `INSPIRE.md` 覆盖层指定。 |
-| `--json` 位置 | 全局 `--json` **必须放子命令之前**：`inspire --json hpc status <name>`。 |
+| 别加 env 前缀 | **不要**给 `inspire` 命令前面套 `env FOO=... BAR=... inspire <cmd>`。`inspire account add` 之后账号级别（`[auth]` / `[proxy]` / `[workspaces]`）已经持久化，`inspire init --discover` 之后项目级别（`[paths].target_dir` / `[context].project`）也已经持久化；CLI 自己会读这些。**直接 `inspire <cmd>` 就行**——每条命令都加一坨 `INSPIRE_TARGET_DIR=... HTTP_PROXY=... HTTPS_PROXY=... ALL_PROXY=...` 是浪费上下文 + 容易把错值（比如 `/root`）盖过正确的配置文件。需要为单条命令临时改某个值才考虑 `INSPIRE_X=... inspire <cmd>`。 |
+| `--json` 节制使用 | **默认走人类格式**——更短、不暴露 raw `notebook-id` / `job-id`、不会让 agent 把 ID 倒手再传回（v2 边界拒收 ID）。只有以下场景才加 `--json`：① 要 `jq -r '.data.x'` 抠特定字段 ② 写脚本消费 ③ `<res> status` 在提交后核对 `priority_level` / `status` 这种关键字段。`<res> list` / `<res> events` 这种"扫一眼"操作绝对不用 `--json`，否则会一次刷出几百行 raw payload 把上下文吃光。 |
+| `--json` 位置 | 真要用时，全局 `--json` **必须放子命令之前**：`inspire --json hpc status <name>`。 |
 | Debug | `inspire --debug <cmd>` 把脱敏日志写进 `~/.cache/inspire-skill/logs/`。 |
 | 查配置 | **别直接读** `~/.inspire/accounts/<name>/config.toml` 或 `./.inspire/config.toml`；合并由 CLI 负责。扁平字段用 `inspire config show [--compact --json]`，活动账号 / 项目 / workspace alias / compute_groups 用 `inspire config context [--json]`。 |
 | 项目叙述上下文 | 仓库根下用 **`INSPIRE.md`** 写非配置性上下文。建议五节：`Default Image` · `Path Conventions` · `Public Directory Layout` · `Existing Notebooks`（角色 → ID） · `Ongoing Jobs`。**不**把 config.toml 内容复制进来。`AGENTS.md` / `CLAUDE.md` / `GEMINI.md` 只放通用工程事项。 |
@@ -203,18 +205,18 @@ description: "Execution-first Inspire platform playbook for agents driving the i
 | 场景 | 做法 |
 | --- | --- |
 | 独立 repo 日常 | 本地 `git push` → `notebook exec "cd <repo> && git pull"` |
-| 多仓库工作区 | `INSPIRE_TARGET_DIR` 设到 `<user>/` 下自建工作区根，里面并列多 repo |
+| 多仓库工作区 | `[paths].target_dir` 写在仓库 `./.inspire/config.toml` 里，设到 `<user>/` 下自建工作区根，下面并列多 repo |
 | 非 Git 文件 | `notebook scp`，远端路径写绝对 |
 | 目标计算组不可上网但共享路径可见 | 切到同一路径下的可上网区实例做 git，拉回来即可 |
+
+`[paths].target_dir` 由 `inspire init --discover` 写入仓库根的 `./.inspire/config.toml`，CLI 自动读取——**不要**每次命令再 `export INSPIRE_TARGET_DIR=...` 或 `env INSPIRE_TARGET_DIR=...` 套着跑（会被 §1.2 那条规则拦下来）。
 
 日常闭环：
 
 ```bash
-export INSPIRE_TARGET_DIR=/inspire/ssd/project/<topic>/<user>/<workspace-subpath>
-
 cd /local/path/<repo>
 git push origin <branch>
-inspire notebook exec "cd <repo> && git pull && git log -1 --oneline"
+inspire notebook exec <notebook-name> "cd <repo> && git pull && git log -1 --oneline"
 
 inspire notebook ssh <notebook-name>
 inspire notebook exec <notebook-name> "hostname"
@@ -246,7 +248,7 @@ inspire notebook install-deps <name> --slurm --ray
 
 ```bash
 inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
-  --name cpu-box --image <任意镜像> --project <P> --wait --json
+  --name cpu-box --image <任意镜像> --project <P> --wait
 
 inspire notebook ssh cpu-box
 ```
@@ -255,7 +257,7 @@ inspire notebook ssh cpu-box
 
 ```bash
 inspire notebook exec cpu-box "apt-get update && apt-get install -y <deps> && pip install ..."
-inspire image save cpu-box -n <img> -v v1 --public --wait --json
+inspire image save cpu-box -n <img> -v v1 --public --wait
 inspire image set-default --job <URL> --notebook <URL>
 ```
 

@@ -9,7 +9,6 @@ import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-
 # ---------------------------------------------------------------------------
 # Messages
 # ---------------------------------------------------------------------------
@@ -314,22 +313,39 @@ def format_image_list(images: List[Dict[str, Any]]) -> str:
         "SOURCE_PRIVATE": "private",
     }
 
-    lines = [
-        f"{'Name':<30} {'Version':<12} {'Source':<10} {'Status':<10} {'Framework':<14}",
-        "-" * 80,
-    ]
-
+    rendered = []
     for img in images:
-        name = str(img.get("name", "N/A"))[:30]
-        version = str(img.get("version", ""))[:12]
         raw_source = str(img.get("source", ""))
-        source = source_labels.get(raw_source, raw_source)[:10]
-        status = str(img.get("status", ""))[:10]
-        framework = str(img.get("framework", ""))[:14]
+        rendered.append(
+            {
+                "name": str(img.get("name", "N/A")),
+                "version": str(img.get("version", "")),
+                "source": source_labels.get(raw_source, raw_source),
+                "status": str(img.get("status", "")),
+                "framework": str(img.get("framework", "")),
+            }
+        )
 
-        lines.append(f"{name:<30} {version:<12} {source:<10} {status:<10} {framework:<14}")
+    name_w = max(len("Name"), *(len(r["name"]) for r in rendered))
+    version_w = max(len("Version"), *(len(r["version"]) for r in rendered))
+    source_w = max(len("Source"), *(len(r["source"]) for r in rendered))
+    status_w = max(len("Status"), *(len(r["status"]) for r in rendered))
+    framework_w = max(len("Framework"), *(len(r["framework"]) for r in rendered))
 
-    lines.append("-" * 80)
+    header = (
+        f"{'Name':<{name_w}}  {'Version':<{version_w}}  "
+        f"{'Source':<{source_w}}  {'Status':<{status_w}}  {'Framework':<{framework_w}}"
+    )
+    sep = "-" * len(header)
+    lines = [header, sep]
+
+    for r in rendered:
+        lines.append(
+            f"{r['name']:<{name_w}}  {r['version']:<{version_w}}  "
+            f"{r['source']:<{source_w}}  {r['status']:<{status_w}}  {r['framework']:<{framework_w}}"
+        )
+
+    lines.append(sep)
     lines.append(f"Total: {len(images)} image(s)")
 
     return "\n".join(lines)

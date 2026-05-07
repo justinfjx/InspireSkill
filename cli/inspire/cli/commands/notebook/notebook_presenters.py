@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from inspire.cli.formatters import json_formatter
+from inspire.cli.formatters.human_formatter import format_epoch
 from .notebook_lookup import _format_notebook_resource
 
 
@@ -78,7 +79,13 @@ def _print_notebook_detail(notebook: dict) -> None:
 
 
 def _print_notebook_list(items: list, json_output: bool) -> None:
-    """Print notebook list in appropriate format."""
+    """Print notebook list in appropriate format.
+
+    The human-readable table never shows the raw notebook UUID — at the v2
+    user boundary the CLI takes names only, and surfacing ids invites
+    agents to start round-tripping them. JSON output keeps every field
+    for callers that pipe to jq / write scripts.
+    """
     if json_output:
         click.echo(json_formatter.format_json({"items": items, "total": len(items)}))
         return
@@ -87,19 +94,31 @@ def _print_notebook_list(items: list, json_output: bool) -> None:
         click.echo("No notebook instances found.")
         return
 
-    lines = [
-        f"{'Name':<25} {'Status':<12} {'Resource':<12} {'ID':<38}",
-        "-" * 90,
-    ]
+    name_strings = [str(item.get("name") or "N/A") for item in items]
+    status_strings = [str(item.get("status") or "Unknown") for item in items]
+    resource_strings = [_format_notebook_resource(item) for item in items]
+    created_strings = [format_epoch(item.get("created_at")) for item in items]
 
-    for item in items:
-        name = item.get("name", "N/A")[:25]
-        status = item.get("status", "Unknown")[:12]
-        notebook_id = item.get("notebook_id", item.get("id", "N/A"))
-        resource_info = _format_notebook_resource(item)
-        lines.append(f"{name:<25} {status:<12} {resource_info:<12} {notebook_id:<38}")
+    name_w = max(len("Name"), *(len(s) for s in name_strings))
+    status_w = max(len("Status"), *(len(s) for s in status_strings))
+    resource_w = max(len("Resource"), *(len(s) for s in resource_strings))
+    created_w = max(len("Created"), *(len(s) for s in created_strings))
 
-    lines.append(f"\nShowing {len(items)} notebook(s)")
+    header = (
+        f"{'Name':<{name_w}}  {'Status':<{status_w}}  "
+        f"{'Resource':<{resource_w}}  {'Created':<{created_w}}"
+    )
+    lines = [header, "-" * len(header)]
+    for name, status, resource, created in zip(
+        name_strings, status_strings, resource_strings, created_strings
+    ):
+        lines.append(
+            f"{name:<{name_w}}  {status:<{status_w}}  "
+            f"{resource:<{resource_w}}  {created:<{created_w}}"
+        )
+
+    lines.append("")
+    lines.append(f"Showing {len(items)} notebook(s)")
     click.echo("\n".join(lines))
 
 

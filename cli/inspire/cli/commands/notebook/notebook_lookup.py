@@ -19,7 +19,6 @@ from inspire.cli.context import (
 )
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import is_partial_id
-from inspire.config.workspaces import select_workspace_id
 from inspire.platform.web import session as web_session_module
 
 _ZERO_WORKSPACE_ID = "ws-00000000-0000-0000-0000-000000000000"
@@ -377,9 +376,7 @@ def _resolve_notebook_id(
     # v2.0.0: names only — reject id-shaped inputs so agents never see or
     # repeat platform ids. Matches the rest of the CLI surface (job / hpc /
     # ray / serving / image all do the same).
-    if _looks_like_notebook_id(identifier) or is_partial_id(
-        identifier, prefix="notebook-"
-    ):
+    if _looks_like_notebook_id(identifier) or is_partial_id(identifier, prefix="notebook-"):
         _handle_error(
             ctx,
             "ValidationError",
@@ -404,32 +401,45 @@ def _resolve_notebook_id(
 
     user_ids: list[str] = []
 
-    matches: list[tuple[str, dict]] = []
-    # Let auth / session failures propagate — swallowing them here would
-    # surface an auth problem as "Notebook not found" and send the user
-    # chasing a typo in a name that's actually fine.
-    try:
-        workspace_items = _list_notebooks_for_workspaces(
-            session,
-            base_url=base_url,
-            workspace_ids=workspace_ids,
-            user_ids=user_ids,
-            keyword=identifier,
-        )
-    except (KeyboardInterrupt, SystemExit):
-        raise
-    except Exception as error:  # noqa: BLE001 — CLI boundary
-        cls_name = type(error).__name__
-        if cls_name in {"SessionExpiredError", "AuthenticationError"}:
-            raise
-        logger.debug("Notebook workspace listing failed for %s: %s", identifier, error)
-        workspace_items = {}
-    for ws_id in workspace_ids:
-        items = workspace_items.get(ws_id, [])
+    # Retry the listing a few times when the name doesn't show up: the platform
+    # list API has a small eventual-consistency window after a fresh
+    # `notebook create` (we've observed ~5-10s of "list says it's not there
+    # yet, then it appears"). Without this, a `create` immediately followed
+    # by `stop` / `status` / `delete` by name would 404 on the user even
+    # though the notebook IS being created. Auth / session errors still
+    # propagate — only the "list returned but found nothing" case retries.
+    import time as _time
 
-        for item in items:
-            if str(item.get("name") or "") == identifier:
-                matches.append((ws_id, item))
+    matches: list[tuple[str, dict]] = []
+    attempts = 4  # 0s, 2s, 4s, 6s — covers ~12s of eventual consistency
+    for attempt in range(attempts):
+        try:
+            workspace_items = _list_notebooks_for_workspaces(
+                session,
+                base_url=base_url,
+                workspace_ids=workspace_ids,
+                user_ids=user_ids,
+                keyword=identifier,
+            )
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as error:  # noqa: BLE001 — CLI boundary
+            cls_name = type(error).__name__
+            if cls_name in {"SessionExpiredError", "AuthenticationError"}:
+                raise
+            logger.debug("Notebook workspace listing failed for %s: %s", identifier, error)
+            workspace_items = {}
+        for ws_id in workspace_ids:
+            items = workspace_items.get(ws_id, [])
+
+            for item in items:
+                if str(item.get("name") or "") == identifier:
+                    matches.append((ws_id, item))
+
+        if matches:
+            break
+        if attempt < attempts - 1:
+            _time.sleep(2 * (attempt + 1))
 
     matches.sort(key=lambda m: str(m[1].get("created_at") or ""), reverse=True)
 
