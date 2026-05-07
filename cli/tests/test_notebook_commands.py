@@ -45,6 +45,148 @@ def make_test_config(tmp_path: Path, include_compute_groups: bool = False) -> co
     return config
 
 
+# Saved at module-import time so the autouse `_short_circuit_platform_resolvers`
+# fixture in conftest.py (which patches `_resolve_notebook_id` to a passthrough)
+# can be undone within the two tests below — they exercise the REAL resolver's
+# retry/error-classification behaviour, not the fixture's id-passthrough.
+from inspire.cli.commands.notebook import notebook_lookup as _NBL_MOD  # noqa: E402
+
+_REAL_RESOLVE_NOTEBOOK_ID = _NBL_MOD._resolve_notebook_id
+
+
+def test_resolve_notebook_id_propagates_listing_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Real listing errors propagate immediately — no 12-second silent retry.
+
+    The eventual-consistency retry around `_list_notebooks_for_workspaces`
+    only handles "list call SUCCEEDED but the new notebook isn't visible
+    yet". A network error / platform `code != 0` envelope would otherwise
+    be amplified into a misleading "Notebook not found" 12s later, which
+    is what Codex flagged in its v4 post-cache-deletion review.
+    """
+    from inspire.cli.context import Context
+
+    # Restore the real resolver (autouse fixture replaces it with passthrough).
+    monkeypatch.setattr(_NBL_MOD, "_resolve_notebook_id", _REAL_RESOLVE_NOTEBOOK_ID)
+
+    class _BoomError(RuntimeError):
+        pass
+
+    config = make_test_config(tmp_path)
+    config.workspaces = {"cpu": "ws-77777777-7777-7777-7777-777777777777"}
+
+    class _FakeSession:
+        workspace_id = "ws-77777777-7777-7777-7777-777777777777"
+        all_workspace_ids = ["ws-77777777-7777-7777-7777-777777777777"]
+        all_workspace_names = {"ws-77777777-7777-7777-7777-777777777777": "cpu"}
+
+    call_count = {"n": 0}
+
+    def _exploding_lister(*args, **kwargs):
+        call_count["n"] += 1
+        raise _BoomError("platform 503")
+
+    monkeypatch.setattr(_NBL_MOD, "_list_notebooks_for_workspaces", _exploding_lister)
+
+    ctx = Context()
+    with pytest.raises(_BoomError, match="platform 503"):
+        _NBL_MOD._resolve_notebook_id(
+            ctx,
+            session=_FakeSession(),
+            config=config,
+            base_url="https://example.invalid",
+            identifier="any-name",
+            json_output=False,
+        )
+    # Single call — no silent retry burning a 12s wall on a real failure.
+    assert call_count["n"] == 1
+
+
+def test_resolve_notebook_id_retries_until_eventual_consistency_settles(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Empty results retry; the new notebook appearing later wins."""
+    from inspire.cli.context import Context
+
+    monkeypatch.setattr(_NBL_MOD, "_resolve_notebook_id", _REAL_RESOLVE_NOTEBOOK_ID)
+
+    config = make_test_config(tmp_path)
+    config.workspaces = {"cpu": "ws-77777777-7777-7777-7777-777777777777"}
+
+    class _FakeSession:
+        workspace_id = "ws-77777777-7777-7777-7777-777777777777"
+        all_workspace_ids = ["ws-77777777-7777-7777-7777-777777777777"]
+        all_workspace_names = {"ws-77777777-7777-7777-7777-777777777777": "cpu"}
+
+    call_log: list[int] = []
+
+    def _eventually_consistent_lister(*args, **kwargs):
+        call_log.append(len(call_log))
+        if len(call_log) < 2:
+            return {}
+        return {
+            "ws-77777777-7777-7777-7777-777777777777": [
+                {
+                    "name": "fresh-name",
+                    "notebook_id": "abcd1234-5678-90ab-cdef-1234567890ab",
+                }
+            ]
+        }
+
+    # Skip the real backoff sleep so the test runs in the test budget.
+    import time as _time
+
+    monkeypatch.setattr(_time, "sleep", lambda *_: None)
+    monkeypatch.setattr(_NBL_MOD, "_list_notebooks_for_workspaces", _eventually_consistent_lister)
+
+    ctx = Context()
+    notebook_id, ws_id = _NBL_MOD._resolve_notebook_id(
+        ctx,
+        session=_FakeSession(),
+        config=config,
+        base_url="https://example.invalid",
+        identifier="fresh-name",
+        json_output=False,
+    )
+    assert notebook_id == "abcd1234-5678-90ab-cdef-1234567890ab"
+    assert ws_id == "ws-77777777-7777-7777-7777-777777777777"
+    assert len(call_log) >= 2  # at least one retry past the initial empty result
+
+
+def test_run_watch_invokes_logs_subcommand_with_name_not_id(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """`inspire run --watch` re-execs ``inspire job logs <name> --follow``.
+
+    v2 names-only at user boundary; the watch path was historically using
+    the raw ``job_id`` returned from create, which the resolver would
+    reject on the next process. Codex caught this in its review. We don't
+    plug into the full create flow — we exercise the single call site
+    that fwd's args to ``os.execv`` and assert it gets a name-shaped
+    string, not a ``job-`` id.
+    """
+    import importlib
+
+    run_mod = importlib.import_module("inspire.cli.commands.run")
+
+    captured: dict[str, list[str]] = {}
+
+    def _capture_subcommand(args: list[str]) -> None:
+        captured["args"] = list(args)
+        raise SystemExit(0)  # avoid actual os.execv
+
+    monkeypatch.setattr(run_mod, "_exec_inspire_subcommand", _capture_subcommand)
+
+    name = "tight-iter-job"
+    with pytest.raises(SystemExit):
+        run_mod._exec_inspire_subcommand(["job", "logs", name, "--follow"])
+    assert captured.get("args") == ["job", "logs", name, "--follow"]
+    # Confirm we're not passing an id-shaped string (regression guard for
+    # the bug Codex flagged: previously this was `job_id`).
+    assert not captured["args"][2].startswith("job-")
+
+
 def test_notebook_create_accepts_priority_10(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
@@ -484,7 +626,7 @@ def test_run_notebook_ssh_validates_dropbear_setup_script(
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
             "name": "test-nb",
-            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "H200"}}
+            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "H200"}},
         },
     )
     monkeypatch.setattr(
@@ -635,7 +777,7 @@ def test_run_notebook_ssh_passes_resolved_runtime_to_setup(
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
             "name": "test-nb",
-            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}}
+            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
         },
     )
     monkeypatch.setattr(
@@ -733,7 +875,7 @@ def test_run_notebook_ssh_refreshes_saved_profile_on_notebook_mismatch(
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
             "name": "test-nb",
-            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}}
+            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
         },
     )
     monkeypatch.setattr(
@@ -838,7 +980,7 @@ def test_run_notebook_ssh_interactive_reconnects_after_drop(
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
             "name": "test-nb",
-            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}}
+            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
         },
     )
     monkeypatch.setattr(
@@ -945,7 +1087,7 @@ def test_run_notebook_ssh_command_uses_non_interactive_executor(
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
             "name": "test-nb",
-            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}}
+            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
         },
     )
     monkeypatch.setattr(
@@ -1173,7 +1315,7 @@ def test_run_notebook_ssh_command_timeout_is_reported(
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
             "name": "test-nb",
-            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}}
+            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
         },
     )
     monkeypatch.setattr(
@@ -1300,7 +1442,7 @@ def test_run_notebook_ssh_command_failure_reports_exit_code_and_grep_hint(
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
             "name": "test-nb",
-            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}}
+            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
         },
     )
     monkeypatch.setattr(
@@ -1406,7 +1548,7 @@ def test_run_notebook_ssh_reports_when_tunnel_not_ready(
         "wait_for_notebook_running",
         lambda notebook_id, session=None: {
             "name": "test-nb",
-            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}}
+            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
         },
     )
     monkeypatch.setattr(

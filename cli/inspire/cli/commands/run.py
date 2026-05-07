@@ -102,6 +102,7 @@ def _run_flow(
         )
         if not selected_workspace_id:
             from inspire.config.workspaces import workspace_required_hint
+
             _handle_error(
                 ctx,
                 "ConfigError",
@@ -202,9 +203,8 @@ def _run_flow(
         if ctx.json_output:
             click.echo(json_formatter.format_json(data))
         else:
-            click.echo(f"Job created: {job_id}")
+            click.echo(f"Job created: {name}")
             if ctx.debug:
-                click.echo(f"Name: {name}")
                 click.echo(f"Quota: {quota_spec.display()}")
                 if nodes > 1:
                     click.echo(f"Nodes: {nodes}")
@@ -217,7 +217,7 @@ def _run_flow(
                     click.echo(f"Log file: {log_path}")
             elif priority is not None:
                 click.echo(f"Priority: {priority}")
-            click.echo(f"Check status with: inspire job status {job_id}")
+            click.echo(f"Check status with: inspire job status {name}")
 
         if watch:
             if ctx.json_output:
@@ -226,10 +226,10 @@ def _run_flow(
             if ctx.debug:
                 click.echo("Following logs...")
             try:
-                _exec_inspire_subcommand(["job", "logs", job_id, "--follow"])
+                _exec_inspire_subcommand(["job", "logs", name, "--follow"])
             except Exception as e:
                 click.echo(f"Failed to start log follow: {e}", err=True)
-                click.echo(f"You can still run: inspire job logs {job_id} --follow")
+                click.echo(f"You can still run: inspire job logs {name} --follow")
                 sys.exit(EXIT_GENERAL_ERROR)
 
         sys.exit(EXIT_SUCCESS)

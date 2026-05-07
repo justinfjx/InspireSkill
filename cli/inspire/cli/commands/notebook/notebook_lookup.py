@@ -401,38 +401,34 @@ def _resolve_notebook_id(
 
     user_ids: list[str] = []
 
-    # Retry the listing a few times when the name doesn't show up: the platform
-    # list API has a small eventual-consistency window after a fresh
-    # `notebook create` (we've observed ~5-10s of "list says it's not there
-    # yet, then it appears"). Without this, a `create` immediately followed
-    # by `stop` / `status` / `delete` by name would 404 on the user even
-    # though the notebook IS being created. Auth / session errors still
-    # propagate — only the "list returned but found nothing" case retries.
+    # Retry the listing a few times when the name doesn't show up: the
+    # platform list API has a small eventual-consistency window after a
+    # fresh `notebook create` (~5-10 s of "list call SUCCEEDED but the new
+    # notebook isn't in the page yet"). Without this, a `create` immediately
+    # followed by `stop` / `status` / `delete` by name would 404 on the
+    # user even though the notebook IS being created.
+    #
+    # Critically: only that "successful response, target not present" case
+    # is retryable. Network errors, malformed responses, and platform
+    # `code != 0` envelopes propagate immediately — otherwise we'd amplify
+    # a transient real failure into a misleading 12-second wall ending in
+    # "Notebook not found". The retry exists for eventual consistency on
+    # the *contents* of a successful response, not as a generic error loop.
     import time as _time
 
     matches: list[tuple[str, dict]] = []
     attempts = 4  # 0s, 2s, 4s, 6s — covers ~12s of eventual consistency
     for attempt in range(attempts):
-        try:
-            workspace_items = _list_notebooks_for_workspaces(
-                session,
-                base_url=base_url,
-                workspace_ids=workspace_ids,
-                user_ids=user_ids,
-                keyword=identifier,
-            )
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except Exception as error:  # noqa: BLE001 — CLI boundary
-            cls_name = type(error).__name__
-            if cls_name in {"SessionExpiredError", "AuthenticationError"}:
-                raise
-            logger.debug("Notebook workspace listing failed for %s: %s", identifier, error)
-            workspace_items = {}
+        workspace_items = _list_notebooks_for_workspaces(
+            session,
+            base_url=base_url,
+            workspace_ids=workspace_ids,
+            user_ids=user_ids,
+            keyword=identifier,
+        )
+        matches = []
         for ws_id in workspace_ids:
-            items = workspace_items.get(ws_id, [])
-
-            for item in items:
+            for item in workspace_items.get(ws_id, []):
                 if str(item.get("name") or "") == identifier:
                     matches.append((ws_id, item))
 

@@ -479,7 +479,7 @@ def start_notebook_cmd(
         return
 
     if not json_output:
-        click.echo(f"Notebook '{notebook_id}' is being started.")
+        click.echo(f"Notebook '{notebook}' is being started.")
 
     notebook_detail = None
     if wait or post_start_spec is not None:
@@ -591,7 +591,7 @@ def notebook_status(
             _handle_error(
                 ctx,
                 "NotFound",
-                f"Notebook instance '{notebook_id}' not found",
+                f"Notebook instance '{notebook}' not found",
                 EXIT_API_ERROR,
             )
         else:
@@ -728,6 +728,7 @@ def list_notebooks(
         resolved = None if resolved == _ZERO_WORKSPACE_ID else resolved
         if not resolved:
             from inspire.config.workspaces import workspace_required_hint
+
             _handle_error(
                 ctx,
                 "ConfigError",

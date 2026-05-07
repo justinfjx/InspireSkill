@@ -76,7 +76,7 @@ description: "Execution-first Inspire platform playbook for agents driving the i
 | 命令 | 用途 |
 | --- | --- |
 | `inspire notebook list [-A -s RUNNING --name X]` | 列实例 |
-| `inspire notebook create --workspace X --group Y -q <gpu,cpu,mem> --image URL --project P [--wait --json]` | 建实例 |
+| `inspire notebook create --workspace X --group Y -q <gpu,cpu,mem> --image URL --project P [--wait]` | 建实例（`--wait` 等到 RUNNING 再返回；输出已是名称-only，agent 别再加 `--json`） |
 | `inspire notebook status <name>` | 详情，镜像名在 `image.name` |
 | `inspire notebook events <name> [--tail N --from-cache]` | 实例生命周期事件（调度 / 镜像拉取 / 保存镜像） |
 | `inspire notebook lifecycle <name>` | 多次启停的粗粒度时间线（一次 `start→stop` 一行） |
@@ -167,7 +167,7 @@ description: "Execution-first Inspire platform playbook for agents driving the i
 | 命令 | 用途 |
 | --- | --- |
 | `inspire image list [--source official\|public\|private\|all]` | 浏览；UI 上的"官方镜像/个人可见镜像/公开可见镜像" 对应 `official`/`private`/`public`，`all` 聚合去重（默认 `official`） |
-| `inspire image save <notebook-name> -n X -v v1 [--public --wait --json]` | 从运行中实例保存为镜像；`--public/--private` 指定可见性 |
+| `inspire image save <notebook-name> -n X -v v1 [--public --wait]` | 从运行中实例保存为镜像；`--public/--private` 指定可见性 |
 | `inspire image set-visibility <name>:<ver> --public\|--private` | 翻转已有镜像可见性 |
 | `inspire image register [--method address]` | 注册外部镜像，优先 address 方式 |
 | `inspire image set-default --job <URL> --notebook <URL>` | 写回最近的项目级 `.inspire/config.toml`（没有位置参数） |
@@ -306,7 +306,7 @@ inspire ray create -n <name>-pipeline \
 ```bash
 # 单节点调试
 inspire notebook create --workspace 分布式训练空间 -q 1,20,200 --group H100 \
-  --name <name>-debug --image <ref> --project <P> --wait --json
+  --name <name>-debug --image <ref> --project <P> --wait
 inspire notebook ssh <name>-debug --command "nvidia-smi"
 
 # 多节点训练(精细)

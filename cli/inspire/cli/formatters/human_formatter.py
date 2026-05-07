@@ -130,9 +130,9 @@ def format_job_status(job_data: Dict[str, Any]) -> str:
     status = str(job_data.get("status", "UNKNOWN"))
     lines = ["Job Status"]
 
-    # Core fields
+    # Core fields. Raw job_id intentionally omitted from the human view per
+    # the v2 names-only boundary; pass --json to surface every field.
     fields = [
-        ("Job ID", job_data.get("job_id", "N/A")),
         ("Name", job_data.get("name", "N/A")),
         ("Status", status),
         ("Running Time", _format_duration(job_data.get("running_time_ms", "0"))),

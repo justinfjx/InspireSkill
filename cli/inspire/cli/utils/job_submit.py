@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from inspire.platform.web import browser_api as browser_api_module
@@ -49,30 +50,54 @@ def sanitize_job_name_for_filename(name: str) -> str:
     return _NAME_FILENAME_RE.sub("_", (name or "").strip()) or "job"
 
 
-def derive_remote_log_path(config: Config, *, name: str) -> str | None:
-    """Compute the deterministic remote log path for a job name.
+def _now_log_timestamp() -> str:
+    """ISO-ish timestamp suffix used in deterministic log filenames.
 
-    Returns ``None`` when ``[paths].target_dir`` is not configured (no
-    log redirect happens in that case). The same formula is used both
-    by ``submit_training_job`` (writing) and ``inspire job logs``
-    (reading), so they always agree.
+    UTC + ``%Y%m%dT%H%M%SZ`` so the suffix is filesystem-safe and sortable
+    by ``ls -1t`` (which sorts on mtime, but the lexicographic order of
+    these timestamps matches mtime ordering too — useful for tools that
+    fall back to lexicographic sorting).
+    """
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def derive_remote_log_glob(config: Config, *, name: str) -> str | None:
+    """Glob pattern matching every log file written by jobs with this NAME.
+
+    ``inspire job logs <name>`` resolves it via SSH (`ls -1t <pattern> |
+    head -1`) to find the most recent run. Returns ``None`` when
+    ``[paths].target_dir`` isn't configured (no shared-FS log redirect).
+
+    Naming convention: ``<target_dir>/.inspire/training_master_<safe>_*.log``
+    where ``<safe>`` is the sanitized job name and ``*`` is a UTC timestamp
+    that ``submit_training_job`` writes per submission. Re-submitting the
+    same NAME produces a new log file rather than clobbering the previous
+    run's output.
     """
     if not config.target_dir:
         return None
     safe = sanitize_job_name_for_filename(name)
-    return os.path.join(config.target_dir, ".inspire", f"training_master_{safe}.log")
+    return os.path.join(config.target_dir, ".inspire", f"training_master_{safe}_*.log")
 
 
 def build_remote_logged_command(
     config: Config, *, command: str, name: str
 ) -> tuple[str, str | None]:
-    """Build the remote command (with optional logging) and return (final_command, log_path)."""
+    """Build the remote command (with optional logging) and return (final_command, log_path).
+
+    The concrete log path uses a per-submission UTC timestamp so two jobs
+    with the same name (e.g. delete-and-recreate iteration) write to
+    distinct files. ``derive_remote_log_glob`` recovers the matching
+    pattern at lookup time.
+    """
     env_exports = build_env_exports(config.remote_env)
     final_command = f"{env_exports}{command}" if env_exports else command
 
-    log_path = derive_remote_log_path(config, name=name)
-    if log_path is not None:
-        log_dir = os.path.dirname(log_path)
+    log_path: str | None = None
+    if config.target_dir:
+        safe = sanitize_job_name_for_filename(name)
+        log_dir = os.path.join(config.target_dir, ".inspire")
+        log_path = os.path.join(log_dir, f"training_master_{safe}_{_now_log_timestamp()}.log")
         final_command = (
             f'{env_exports}mkdir -p "{log_dir}" && '
             f'( cd "{config.target_dir}" && {command} ) > "{log_path}" 2>&1'
@@ -196,7 +221,7 @@ def submit_training_job(
 __all__ = [
     "JobSubmission",
     "build_remote_logged_command",
-    "derive_remote_log_path",
+    "derive_remote_log_glob",
     "sanitize_job_name_for_filename",
     "select_project_for_workspace",
     "submit_training_job",

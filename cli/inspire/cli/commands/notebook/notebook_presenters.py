@@ -53,8 +53,10 @@ def _print_notebook_detail(notebook: dict) -> None:
 
     shm = start_cfg.get("shared_memory_size", 0) or 0
 
+    # Raw notebook_id intentionally omitted — v2 names-only boundary.
+    # `inspire --json notebook status <name>` exposes every field for
+    # callers that legitimately need the id.
     fields = [
-        ("ID", notebook.get("notebook_id") or notebook.get("id")),
         ("Status", notebook.get("status")),
         ("Project", project.get("name") or notebook.get("project_name")),
         ("Priority", project.get("priority_name")),

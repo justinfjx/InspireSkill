@@ -403,14 +403,23 @@ def test_wrap_in_bash():
     assert wrap_in_bash("  bash -c 'foo'  ") == "  bash -c 'foo'  "
 
 
-def test_job_status_updates_cache_and_formats(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+def test_job_status_human_output_hides_raw_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    """Human ``job status`` shows the name, never the raw ``job-<uuid>``.
+
+    v2 names-only boundary: surfacing ids in the human view tempts agents
+    to round-trip them and then hit ``reject_id_at_boundary``. JSON
+    output keeps every field for scripts.
+    """
     patch_config_and_auth(monkeypatch, tmp_path)
     runner = CliRunner()
 
+    # Test conftest patches resolve_job_id to accept the raw id and pass
+    # it through; that's a fixture convenience, not a real-CLI behaviour.
     result = runner.invoke(cli_main, ["job", "status", TEST_JOB_ID])
     assert result.exit_code == 0
     assert "Job Status" in result.output
-    assert TEST_JOB_ID in result.output
+    assert "Name: test-job" in result.output
+    assert TEST_JOB_ID not in result.output  # raw id stays out of human output
 
 
 def test_job_status_not_found_sets_specific_exit_code(

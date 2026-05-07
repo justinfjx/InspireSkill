@@ -2,9 +2,11 @@
 
 `inspire job logs <name>` cats / tails / follows the remote log file via
 the SSH tunnel of a cached notebook (any one with shared-FS access; pick
-explicitly with ``--notebook``). The log path is derived deterministically
-from the job NAME plus ``[paths].target_dir`` so we don't depend on a
-local job-id → log-path table; pass ``--remote-log-path`` to override.
+explicitly with ``--notebook``). The log path uses the convention
+``<target_dir>/.inspire/training_master_<sanitized_name>_<timestamp>.log``;
+``inspire job logs`` resolves the latest match via SSH ``ls -1t`` so a
+re-submitted name shows the most recent run, not a clobbered file. Pass
+``--remote-log-path`` to override (e.g. for jobs created from the Web UI).
 
 Bulk mode and the legacy GitHub-workflow fallback were removed alongside
 the JobCache deletion: the SSH tunnel kit is universal (cf. SKILL §1.1
@@ -40,8 +42,34 @@ from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.auth import AuthManager
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.job_cli import resolve_job_id
-from inspire.cli.utils.job_submit import derive_remote_log_path
+from inspire.cli.utils.job_submit import derive_remote_log_glob
 from inspire.config import Config, ConfigError
+
+
+def _resolve_latest_log_via_ssh(
+    glob_pattern: str, *, bridge_name: Optional[str] = None
+) -> Optional[str]:
+    """Resolve a log glob pattern to the most recently written matching file.
+
+    Uses ``ls -1t`` so the freshest mtime wins (re-submitting the same job
+    NAME picks up the new run, not a clobbered old log). The pattern is
+    intentionally NOT shell-quoted so ``*`` expands; the directory and
+    sanitized name within it have no other shell metacharacters by
+    construction (``sanitize_job_name_for_filename`` strips them).
+
+    Returns the absolute path on hit, ``None`` on no match. Errors during
+    SSH propagate up — the caller is the boundary that decides whether to
+    surface them.
+    """
+    cmd = f"ls -1t {glob_pattern} 2>/dev/null | head -n 1"
+    try:
+        result = run_ssh_command(command=cmd, capture_output=True, bridge_name=bridge_name)
+    except Exception:
+        return None
+    if result.returncode != 0:
+        return None
+    out = (result.stdout or "").strip()
+    return out or None
 
 
 def _fetch_log_via_ssh(
@@ -95,18 +123,32 @@ def _follow_logs_via_ssh(
     final_status = None
     status_check_interval = 5
 
-    click.echo(f"Log file: {remote_log_path}")
+    is_glob = "*" in remote_log_path
+    if is_glob:
+        click.echo(f"Log file pattern: {remote_log_path}")
+    else:
+        click.echo(f"Log file: {remote_log_path}")
 
-    check_cmd = f"test -f '{remote_log_path}' && echo 'exists' || echo 'waiting'"
     start_time = time.time()
-    file_exists = False
+    concrete_log_path: Optional[str] = None
 
     while time.time() - start_time < wait_timeout:
         try:
-            result = run_ssh_command(check_cmd, timeout=10, bridge_name=bridge_name)
-            if "exists" in result.stdout:
-                file_exists = True
-                break
+            if is_glob:
+                # Re-resolve every iteration so a fresh log file (post-create
+                # eventual consistency on the FS, or job_id-based suffix that
+                # only materializes when the job's container starts) is
+                # picked up automatically.
+                resolved = _resolve_latest_log_via_ssh(remote_log_path, bridge_name=bridge_name)
+                if resolved:
+                    concrete_log_path = resolved
+                    break
+            else:
+                check_cmd = f"test -f '{remote_log_path}' && echo 'exists' || echo 'waiting'"
+                result = run_ssh_command(check_cmd, timeout=10, bridge_name=bridge_name)
+                if "exists" in result.stdout:
+                    concrete_log_path = remote_log_path
+                    break
         except Exception:
             pass
 
@@ -114,10 +156,13 @@ def _follow_logs_via_ssh(
         click.echo(f"\rWaiting for job to start... ({elapsed}s)", nl=False)
         time.sleep(5)
 
-    if not file_exists:
+    if not concrete_log_path:
         click.echo(f"\n\nTimeout: Log file not created after {wait_timeout}s")
         click.echo("Job may still be queuing. Check status with: inspire job status <job-name>")
         return None
+
+    # Past the wait gate — switch to the concrete path for tail -f.
+    remote_log_path = concrete_log_path
 
     click.echo("\nJob started! Following logs...")
     click.echo(f"(showing last {tail_lines} lines, then following new content)")
@@ -483,8 +528,8 @@ def logs(
         except ConfigError as e:
             _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
             return
-        resolved_log_path = derive_remote_log_path(config, name=job)
-        if not resolved_log_path:
+        glob_pattern = derive_remote_log_glob(config, name=job)
+        if not glob_pattern:
             _handle_error(
                 ctx,
                 "ConfigError",
@@ -497,6 +542,26 @@ def logs(
                 ),
             )
             return
+        resolved_log_path = _resolve_latest_log_via_ssh(glob_pattern, bridge_name=bridge)
+        if not resolved_log_path:
+            if follow:
+                # `_follow_logs_via_ssh` polls for the file's existence with
+                # its own wait loop — pass the glob pattern through so it
+                # can poll-resolve on each iteration.
+                resolved_log_path = glob_pattern
+            else:
+                _handle_error(
+                    ctx,
+                    "LogNotFound",
+                    f"No log file matches {glob_pattern!r} on the shared filesystem.",
+                    EXIT_LOG_NOT_FOUND,
+                    hint=(
+                        "The job may not have started writing yet. Pass --follow "
+                        "to wait, or pass --remote-log-path if the job uses a "
+                        "non-default path (e.g. created from the Web UI)."
+                    ),
+                )
+                return
 
     if not job_id:
         _handle_error(ctx, "JobNotFound", f"Job not found: {job}", EXIT_JOB_NOT_FOUND)

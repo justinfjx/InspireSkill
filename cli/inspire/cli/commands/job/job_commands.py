@@ -386,8 +386,7 @@ def _watch_jobs(
                         s = (entry.get("status") or "").lower()
                         emoji = "✅" if "succeeded" in s else "❌"
                         click.echo(
-                            f"{str(entry.get('job_id', 'N/A'))[:36]:36}  "
-                            f"{str(entry.get('name', 'N/A'))[:20]:20}  "
+                            f"{str(entry.get('name', 'N/A')):<32}  "
                             f"{emoji} {entry.get('status', 'N/A')}"
                         )
                 click.echo(f"\n(refreshing every {interval}s; Ctrl+C to stop)")
