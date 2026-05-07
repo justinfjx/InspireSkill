@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from typing import Optional
 
@@ -49,6 +50,10 @@ _LIVE_REFRESH_STATUSES = {
     "QUEUING",
     "job_queuing",
 }
+
+
+class WebJobResolutionError(Exception):
+    """Raised when a web job name/id cannot be resolved safely."""
 
 
 def _expand_status_aliases(statuses: list[str] | tuple[str, ...] | None) -> set[str]:
@@ -128,12 +133,27 @@ def _refresh_live_jobs_from_web_api(cache, jobs: list[dict]) -> list[dict]:  # n
                 cache.update_status(job_id, new_status)
     except Exception:
         return jobs
+    finally:
+        _close_web_client()
 
     return jobs
 
 
 def _looks_like_workspace_id(value: str) -> bool:
     return value.strip().lower().startswith("ws-")
+
+
+def _looks_like_job_id(value: str) -> bool:
+    return value.strip().lower().startswith("job-")
+
+
+def _close_web_client() -> None:
+    try:
+        from inspire.platform.web.session import _close_browser_client
+
+        _close_browser_client()
+    except Exception:
+        pass
 
 
 def _resolve_job_list_workspace(config: Config, workspace: Optional[str]) -> Optional[str]:
@@ -211,6 +231,104 @@ def _job_info_to_row(job, *, workspace_name: str = "") -> dict:  # noqa: ANN001
     }
 
 
+def _scan_web_jobs_round_robin(
+    *,
+    session,  # noqa: ANN001
+    workspace_ids: list[str],
+    creator_id: Optional[str],
+    api_status: Optional[str],
+    allowed_statuses: set[str] | None,
+    name: Optional[str],
+    page_num: int,
+    page_size: int,
+    max_pages: int,
+    limit: int,
+) -> tuple[list[dict], list[dict]]:
+    """Scan all candidate workspaces one page at a time.
+
+    This keeps broad name searches responsive without assuming any semantic
+    workspace names. A sequential scan can spend all of ``max_pages`` on an
+    unrelated workspace before reaching the one that contains the match.
+    """
+    rows: list[dict] = []
+    workspace_states: list[dict] = [
+        {
+            "workspace_id": workspace_id,
+            "workspace_name": _workspace_name(session, workspace_id) if workspace_id else "",
+            "next_page": max(1, page_num),
+            "pages": 0,
+            "total": 0,
+            "done": False,
+        }
+        for workspace_id in workspace_ids
+    ]
+
+    while any(not state["done"] for state in workspace_states):
+        active_states = [state for state in workspace_states if not state["done"]]
+        if not active_states:
+            break
+
+        def fetch_page(state: dict) -> tuple[dict, list, int]:  # noqa: ANN001
+            workspace_id = str(state["workspace_id"] or "")
+            current_page = int(state["next_page"])
+            items, total = browser_api_module.list_jobs(
+                workspace_id=workspace_id or None,
+                created_by=creator_id,
+                status=api_status,
+                keyword=name,
+                page_num=current_page,
+                page_size=page_size,
+                session=session,
+            )
+            return state, items, total
+
+        max_workers = min(len(active_states), 4)
+        limit_reached = False
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {executor.submit(fetch_page, state): state for state in active_states}
+            for future in as_completed(future_map):
+                state, items, total = future.result()
+                current_page = int(state["next_page"])
+
+                state["pages"] += 1
+                state["total"] = total
+
+                for job in items:
+                    if allowed_statuses and job.status not in allowed_statuses:
+                        continue
+                    if not _job_matches_name(job, name):
+                        continue
+                    rows.append(_job_info_to_row(job, workspace_name=state["workspace_name"]))
+
+                if limit > 0 and len(rows) >= limit:
+                    limit_reached = True
+                if not items:
+                    state["done"] = True
+                    continue
+                if total is not None and current_page * page_size >= int(total):
+                    state["done"] = True
+                    continue
+                if int(state["pages"]) >= max_pages:
+                    state["done"] = True
+                    continue
+                state["next_page"] = current_page + 1
+        if limit_reached:
+            for remaining in workspace_states:
+                remaining["done"] = True
+
+    scanned = [
+        {
+            "workspace_id": state["workspace_id"],
+            "workspace_name": state["workspace_name"],
+            "total": state["total"],
+            "pages": state["pages"],
+        }
+        for state in workspace_states
+        if int(state["pages"]) > 0
+    ]
+    return rows, scanned
+
+
 def _format_web_job_list(rows: list[dict]) -> str:
     if not rows:
         return "No web jobs found."
@@ -247,6 +365,127 @@ def _format_web_job_list(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_web_job_status(job_data: dict) -> str:
+    if not job_data:
+        return "No web job detail found."
+
+    created_by = job_data.get("created_by") if isinstance(job_data.get("created_by"), dict) else {}
+    framework_config = job_data.get("framework_config") or []
+    first_spec = (
+        framework_config[0] if framework_config and isinstance(framework_config[0], dict) else {}
+    )
+    price_info = first_spec.get("instance_spec_price_info") or {}
+    gpu_info = price_info.get("gpu_info") or {}
+
+    fields = [
+        ("Job ID", job_data.get("job_id") or "N/A"),
+        ("Name", job_data.get("name") or "N/A"),
+        ("Status", job_data.get("status") or "N/A"),
+        ("Project", job_data.get("project_name") or job_data.get("project_id") or ""),
+        ("Workspace", job_data.get("workspace_id") or ""),
+        ("Compute Group", job_data.get("logic_compute_group_name") or ""),
+        ("Priority", job_data.get("priority_name") or job_data.get("priority") or ""),
+        ("Priority Level", job_data.get("priority_level") or ""),
+        ("Created By", created_by.get("name") or created_by.get("id") or ""),
+        ("Created", human_formatter.format_epoch(job_data.get("created_at"))),
+        ("Framework", job_data.get("framework") or ""),
+        ("Instances", first_spec.get("instance_count") or job_data.get("node_count") or ""),
+        ("Per Instance GPU", first_spec.get("gpu_count") or ""),
+        ("Per Instance CPU", first_spec.get("cpu") or price_info.get("cpu_count") or ""),
+        ("Per Instance Mem", f"{first_spec.get('mem_gi')} GiB" if first_spec.get("mem_gi") else ""),
+        ("Per Instance SHM", f"{first_spec.get('shm_gi')} GiB" if first_spec.get("shm_gi") else ""),
+        ("GPU Type", gpu_info.get("gpu_type_display") or ""),
+        ("Image", first_spec.get("image") or ""),
+        ("Description", job_data.get("description") or ""),
+    ]
+
+    lines = ["Web Job Status"]
+    for label, value in fields:
+        if value not in (None, ""):
+            lines.append(f"{label}: {value}")
+    command = str(job_data.get("command") or "").strip()
+    if command:
+        lines.append("Command:")
+        lines.append(command)
+    return "\n".join(lines)
+
+
+def _format_job_instances(instances: list[dict]) -> str:
+    if not instances:
+        return "No job instances found."
+
+    name_w = max(len("Instance"), *(len(str(i.get("name") or "")) for i in instances))
+    status_w = max(len("Status"), *(len(str(i.get("instance_status") or "")) for i in instances))
+    type_w = max(len("Type"), *(len(str(i.get("instance_type") or "")) for i in instances))
+    node_w = max(len("Node"), *(len(str(i.get("node") or "")) for i in instances))
+    header = (
+        f"{'Instance':<{name_w}} {'Status':<{status_w}} "
+        f"{'Type':<{type_w}} {'Node':<{node_w}} {'Created'}"
+    )
+    sep = "-" * len(header)
+    lines = ["Job Instances", header, sep]
+    for inst in instances:
+        lines.append(
+            f"{str(inst.get('name') or ''):<{name_w}} "
+            f"{str(inst.get('instance_status') or ''):<{status_w}} "
+            f"{str(inst.get('instance_type') or ''):<{type_w}} "
+            f"{str(inst.get('node') or ''):<{node_w}} "
+            f"{human_formatter.format_epoch(inst.get('created_at'))}"
+        )
+    lines.append(sep)
+    lines.append(f"Total: {len(instances)} instance(s)")
+    return "\n".join(lines)
+
+
+def _resolve_web_job_id(
+    *,
+    config: Config,
+    job: str,
+    workspace: Optional[str],
+    all_workspaces: bool,
+    all_users: bool,
+    created_by: Optional[str],
+    max_pages: int,
+) -> str:
+    job = (job or "").strip()
+    if not job:
+        raise WebJobResolutionError("Job name/id cannot be empty")
+    if _looks_like_job_id(job):
+        return job
+
+    rows, _ = _list_web_jobs(
+        config=config,
+        workspace=workspace,
+        all_workspaces=all_workspaces,
+        all_users=all_users,
+        created_by=created_by,
+        status=None,
+        name=job,
+        page_num=1,
+        page_size=100,
+        max_pages=max_pages,
+        limit=1,
+    )
+    exact = [row for row in rows if row.get("name") == job or row.get("job_id") == job]
+    if len(exact) == 1:
+        return str(exact[0]["job_id"])
+    if len(exact) > 1:
+        candidates = ", ".join(str(row.get("job_id") or "") for row in exact[:5])
+        raise WebJobResolutionError(
+            f"Multiple web jobs share name {job!r}; pass the job id instead. Candidates: {candidates}"
+        )
+    if len(rows) == 1:
+        return str(rows[0]["job_id"])
+    if rows:
+        candidates = ", ".join(f"{row.get('name')} ({row.get('job_id')})" for row in rows[:5])
+        raise WebJobResolutionError(
+            f"Multiple web jobs match {job!r}; pass the full job name or job id. Candidates: {candidates}"
+        )
+    raise WebJobResolutionError(
+        f"No web job matching {job!r} found. Try `inspire job list -A --name {job}`."
+    )
+
+
 def _list_web_jobs(
     *,
     config: Config,
@@ -275,7 +514,26 @@ def _list_web_jobs(
         rows: list[dict] = []
         scanned: list[dict] = []
 
-        for workspace_id in _web_workspace_ids(session, resolved_workspace_id, all_workspaces):
+        workspace_ids = _web_workspace_ids(session, resolved_workspace_id, all_workspaces)
+        if name and all_workspaces and not resolved_workspace_id:
+            rows, scanned = _scan_web_jobs_round_robin(
+                session=session,
+                workspace_ids=workspace_ids,
+                creator_id=creator_id,
+                api_status=api_status,
+                allowed_statuses=allowed_statuses,
+                name=name,
+                page_num=page_num,
+                page_size=page_size,
+                max_pages=max_pages,
+                limit=limit,
+            )
+            rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+            if limit > 0:
+                rows = rows[:limit]
+            return rows, scanned
+
+        for workspace_id in workspace_ids:
             current_page = max(1, page_num)
             pages_read = 0
             total = 0
@@ -286,6 +544,7 @@ def _list_web_jobs(
                     workspace_id=workspace_id or None,
                     created_by=creator_id,
                     status=api_status,
+                    keyword=name,
                     page_num=current_page,
                     page_size=page_size,
                     session=session,
@@ -328,12 +587,7 @@ def _list_web_jobs(
             rows = rows[:limit]
         return rows, scanned
     finally:
-        try:
-            from inspire.platform.web.session import _close_browser_client
-
-            _close_browser_client()
-        except Exception:
-            pass
+        _close_web_client()
 
 
 def _watch_jobs(
@@ -652,20 +906,76 @@ def list_jobs(
 
 @click.command("status")
 @click.argument("job")
+@click.option("--web", is_flag=True, help="Query the web UI detail API instead of OpenAPI")
+@click.option("--workspace", default=None, help="Workspace alias or ws-... id (web mode)")
+@click.option(
+    "--all-workspaces",
+    "-A",
+    is_flag=True,
+    help="Search all visible workspaces when resolving a web job name",
+)
+@click.option(
+    "--all-users",
+    is_flag=True,
+    help="Include jobs from all users when resolving a web job name",
+)
+@click.option(
+    "--created-by", default=None, help="Filter web job name resolution by creator user ID"
+)
+@click.option(
+    "--max-pages",
+    type=int,
+    default=50,
+    show_default=True,
+    help="Max web pages to scan per workspace when resolving a job name",
+)
 @pass_context
-def status(ctx: Context, job: str) -> None:
+def status(
+    ctx: Context,
+    job: str,
+    web: bool,
+    workspace: Optional[str],
+    all_workspaces: bool,
+    all_users: bool,
+    created_by: Optional[str],
+    max_pages: int,
+) -> None:
     """Check the status of a training job.
 
-    JOB is the name shown in `inspire job list`. v2 does not accept ids.
+    JOB is the name shown in `inspire job list`. In --web mode, JOB may also
+    be a `job-...` id copied from `inspire job list --web`.
 
     \b
     Example:
         inspire job status my-training-run
+        inspire --json job status --web job-...
     """
-    job_id = resolve_job_id(ctx, job)
-
     try:
-        config, _ = Config.from_files_and_env()
+        config, _ = Config.from_files_and_env(require_credentials=False)
+
+        if web or workspace or all_workspaces or all_users or created_by:
+            job_id = _resolve_web_job_id(
+                config=config,
+                job=job,
+                workspace=workspace,
+                all_workspaces=all_workspaces,
+                all_users=all_users,
+                created_by=created_by,
+                max_pages=max_pages,
+            )
+            try:
+                session = get_web_session()
+                job_data = browser_api_module.get_job_detail(job_id, session=session)
+            finally:
+                _close_web_client()
+
+            if ctx.json_output:
+                click.echo(json_formatter.format_json({"source": "web", "job": job_data}))
+            else:
+                click.echo(_format_web_job_status(job_data))
+            return
+
+        job_id = resolve_job_id(ctx, job)
         api = AuthManager.get_api(config)
 
         result = api.get_job_detail(job_id)
@@ -682,7 +992,11 @@ def status(ctx: Context, job: str) -> None:
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+    except WebJobResolutionError as e:
+        _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
     except AuthenticationError as e:
+        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
+    except (SessionExpiredError, ValueError) as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
     except Exception as e:
         msg = str(e).lower()
@@ -690,6 +1004,90 @@ def status(ctx: Context, job: str) -> None:
             _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
         else:
             _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
+
+
+@click.command("instances")
+@click.argument("job")
+@click.option("--web", is_flag=True, help="Use the web UI API (default for this command)")
+@click.option("--workspace", default=None, help="Workspace alias or ws-... id")
+@click.option(
+    "--all-workspaces",
+    "-A",
+    is_flag=True,
+    help="Search all visible workspaces when resolving a job name",
+)
+@click.option("--all-users", is_flag=True, help="Include jobs from all users when resolving name")
+@click.option("--created-by", default=None, help="Filter name resolution by creator user ID")
+@click.option("--page-num", type=int, default=1, show_default=True, help="Instance page number")
+@click.option("--page-size", type=int, default=200, show_default=True, help="Instance page size")
+@click.option(
+    "--max-pages",
+    type=int,
+    default=50,
+    show_default=True,
+    help="Max web pages to scan per workspace when resolving a job name",
+)
+@pass_context
+def instances(
+    ctx: Context,
+    job: str,
+    web: bool,
+    workspace: Optional[str],
+    all_workspaces: bool,
+    all_users: bool,
+    created_by: Optional[str],
+    page_num: int,
+    page_size: int,
+    max_pages: int,
+) -> None:
+    """List pod-level instances for a distributed-training job.
+
+    \b
+    Examples:
+        inspire job instances --web job-...
+        inspire job instances -A my-training-run
+    """
+    del web  # This command is Browser-API only; keep --web for a consistent UX.
+
+    try:
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        job_id = _resolve_web_job_id(
+            config=config,
+            job=job,
+            workspace=workspace,
+            all_workspaces=all_workspaces,
+            all_users=all_users,
+            created_by=created_by,
+            max_pages=max_pages,
+        )
+        try:
+            session = get_web_session()
+            rows, total = browser_api_module.list_job_instances(
+                job_id,
+                page_num=page_num,
+                page_size=page_size,
+                session=session,
+            )
+        finally:
+            _close_web_client()
+
+        if ctx.json_output:
+            click.echo(
+                json_formatter.format_json(
+                    {"source": "web", "job_id": job_id, "instances": rows, "total": total}
+                )
+            )
+        else:
+            click.echo(_format_job_instances(rows))
+
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+    except WebJobResolutionError as e:
+        _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
+    except (SessionExpiredError, ValueError) as e:
+        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
+    except Exception as e:
+        _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
 
 
 @click.command("stop")
@@ -813,8 +1211,38 @@ def delete(ctx: Context, job: str, yes: bool, pick: Optional[int]) -> None:
 @click.argument("job")
 @click.option("--timeout", type=int, default=14400, help="Timeout in seconds (default: 4 hours)")
 @click.option("--interval", type=int, default=30, help="Poll interval in seconds (default: 30)")
+@click.option("--web", is_flag=True, help="Poll the web UI detail API instead of OpenAPI")
+@click.option("--workspace", default=None, help="Workspace alias or ws-... id (web mode)")
+@click.option(
+    "--all-workspaces",
+    "-A",
+    is_flag=True,
+    help="Search all visible workspaces when resolving a web job name",
+)
+@click.option("--all-users", is_flag=True, help="Include jobs from all users in web mode")
+@click.option(
+    "--created-by", default=None, help="Filter web job name resolution by creator user ID"
+)
+@click.option(
+    "--max-pages",
+    type=int,
+    default=50,
+    show_default=True,
+    help="Max web pages to scan per workspace when resolving a job name",
+)
 @pass_context
-def wait(ctx: Context, job: str, timeout: int, interval: int) -> None:
+def wait(
+    ctx: Context,
+    job: str,
+    timeout: int,
+    interval: int,
+    web: bool,
+    workspace: Optional[str],
+    all_workspaces: bool,
+    all_users: bool,
+    created_by: Optional[str],
+    max_pages: int,
+) -> None:
     """Wait for a job to complete.
 
     Polls the job status until it reaches a terminal state
@@ -823,13 +1251,27 @@ def wait(ctx: Context, job: str, timeout: int, interval: int) -> None:
     \b
     Example:
         inspire job wait my-training-run --timeout 7200
+        inspire job wait --web job-... --timeout 60
     """
-    job_id = resolve_job_id(ctx, job)
-
     try:
-        config, _ = Config.from_files_and_env()
-        api = AuthManager.get_api(config)
-        cache = job_deps.JobCache(config.get_expanded_cache_path())
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        web_mode = web or workspace or all_workspaces or all_users or created_by
+        if web_mode:
+            job_id = _resolve_web_job_id(
+                config=config,
+                job=job,
+                workspace=workspace,
+                all_workspaces=all_workspaces,
+                all_users=all_users,
+                created_by=created_by,
+                max_pages=max_pages,
+            )
+            api = None
+            cache = None
+        else:
+            job_id = resolve_job_id(ctx, job)
+            api = AuthManager.get_api(config)
+            cache = job_deps.JobCache(config.get_expanded_cache_path())
 
         terminal_statuses = {
             "SUCCEEDED",
@@ -853,11 +1295,19 @@ def wait(ctx: Context, job: str, timeout: int, interval: int) -> None:
                 return
 
             try:
-                result = api.get_job_detail(job_id)
-                job_data = result.get("data", {})
+                if web_mode:
+                    try:
+                        session = get_web_session()
+                        job_data = browser_api_module.get_job_detail(job_id, session=session)
+                    finally:
+                        _close_web_client()
+                else:
+                    result = api.get_job_detail(job_id)
+                    job_data = result.get("data", {})
                 current_status = job_data.get("status", "UNKNOWN")
 
-                cache.update_status(job_id, current_status)
+                if cache is not None:
+                    cache.update_status(job_id, current_status)
 
                 if current_status != last_status:
                     if ctx.json_output:
@@ -901,7 +1351,11 @@ def wait(ctx: Context, job: str, timeout: int, interval: int) -> None:
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+    except WebJobResolutionError as e:
+        _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
     except AuthenticationError as e:
+        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
+    except (SessionExpiredError, ValueError) as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
     except KeyboardInterrupt:
         if not ctx.json_output:
@@ -1017,49 +1471,105 @@ def update_jobs(ctx: Context, status: tuple, limit: int, delay: float) -> None:
 
 @click.command("command")
 @click.argument("job")
+@click.option("--web", is_flag=True, help="Read command from the web UI detail API")
+@click.option("--workspace", default=None, help="Workspace alias or ws-... id (web mode)")
+@click.option(
+    "--all-workspaces",
+    "-A",
+    is_flag=True,
+    help="Search all visible workspaces when resolving a web job name",
+)
+@click.option("--all-users", is_flag=True, help="Include jobs from all users in web mode")
+@click.option(
+    "--created-by", default=None, help="Filter web job name resolution by creator user ID"
+)
+@click.option(
+    "--max-pages",
+    type=int,
+    default=50,
+    show_default=True,
+    help="Max web pages to scan per workspace when resolving a job name",
+)
 @pass_context
-def show_command(ctx: Context, job: str) -> None:
+def show_command(
+    ctx: Context,
+    job: str,
+    web: bool,
+    workspace: Optional[str],
+    all_workspaces: bool,
+    all_users: bool,
+    created_by: Optional[str],
+    max_pages: int,
+) -> None:
     """Show the training command used for a job."""
-    job_id = resolve_job_id(ctx, job)
-
-    cached_command = None
-    cache = job_deps.JobCache(os.getenv("INSPIRE_JOB_CACHE"))
-    cached_job = cache.get_job(job_id)
-    if cached_job:
-        cached_command = cached_job.get("command")
-
     command_value = None
     source = None
 
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
-        api = AuthManager.get_api(config)
+        web_mode = web or workspace or all_workspaces or all_users or created_by
+        if web_mode:
+            job_id = _resolve_web_job_id(
+                config=config,
+                job=job,
+                workspace=workspace,
+                all_workspaces=all_workspaces,
+                all_users=all_users,
+                created_by=created_by,
+                max_pages=max_pages,
+            )
+            try:
+                session = get_web_session()
+                job_data = browser_api_module.get_job_detail(job_id, session=session)
+            finally:
+                _close_web_client()
+            command_value = job_data.get("command")
+            if command_value:
+                source = "web"
+        else:
+            job_id = resolve_job_id(ctx, job)
+            cached_command = None
+            cache = job_deps.JobCache(os.getenv("INSPIRE_JOB_CACHE"))
+            cached_job = cache.get_job(job_id)
+            if cached_job:
+                cached_command = cached_job.get("command")
 
-        result = api.get_job_detail(job_id)
-        job_data = result.get("data", {})
-        command_value = job_data.get("command")
-        if command_value:
-            source = "api"
+            command_value = None
+            source = None
+
+            try:
+                api = AuthManager.get_api(config)
+                result = api.get_job_detail(job_id)
+                job_data = result.get("data", {})
+                command_value = job_data.get("command")
+                if command_value:
+                    source = "api"
+            except Exception:
+                if not cached_command:
+                    raise
+
+            if not command_value and cached_command:
+                command_value = cached_command
+                source = "cache"
     except ConfigError as e:
-        if not cached_command:
-            _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-            return
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
+    except WebJobResolutionError as e:
+        _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
+        return
     except AuthenticationError as e:
-        if not cached_command:
-            _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
-            return
+        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
+        return
+    except (SessionExpiredError, ValueError) as e:
+        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
+        return
     except Exception as e:
-        if not cached_command:
-            msg = str(e).lower()
-            if "not found" in msg or "invalid job id" in msg:
-                _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
-            else:
-                _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
-            return
-
-    if not command_value and cached_command:
-        command_value = cached_command
-        source = "cache"
+        msg = str(e).lower()
+        if "not found" in msg or "invalid job id" in msg:
+            _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
+        else:
+            _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
+        return
 
     if not command_value:
         _handle_error(
@@ -1080,6 +1590,7 @@ def show_command(ctx: Context, job: str) -> None:
 
 
 __all__ = [
+    "instances",
     "list_jobs",
     "show_command",
     "status",
