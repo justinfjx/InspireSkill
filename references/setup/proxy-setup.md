@@ -5,7 +5,7 @@
 > 本文档对齐本机 Clash Verge profile 脚本结构。macOS 下常见路径为：
 > `~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/profiles/Script.js`。
 >
-> 下方脚本已去敏感化。所有 `<...>` 都是占位符，代理节点名也已泛化；必须替换为你所在实验室 / 组织管理员分发的真实值，不要把真实 host、username、password 提交到仓库或聊天记录。
+> 下方脚本已去敏感化。所有 `<...>` 都是占位符，代理节点名、DNS 地址和校内直连 IP/CIDR 也已泛化；必须替换为你所在实验室 / 组织管理员分发的真实值，不要把真实 host、username、password、DNS、内网 / 校园网 IP 提交到仓库或聊天记录。
 
 ## 场景模式
 
@@ -14,7 +14,7 @@
 | 值 | 场景 | `*.sii.edu.cn` 走向 |
 | --- | --- | --- |
 | `"sii"` | 创智 / SII 直连 | `DIRECT` |
-| `"fudan"` | 复旦直连 | 走 `🧮 启智计算`代理组；复旦域名和指定校内 IP 直连 |
+| `"fudan"` | 复旦直连 | 走 `🧮 启智计算`代理组；复旦域名和指定校内地址直连 |
 | `"roaming"` | 其它网络 | 走 `🧮 启智计算`代理组 |
 
 脚本本身不强行设置 Clash Verge 监听端口。把 Clash Verge 的 mixed port 配成 `7897` 后，CLI 账号配置中填写 `http://127.0.0.1:7897` 或 `socks5://127.0.0.1:7897` 即可。
@@ -94,9 +94,10 @@ var QIZHI_GROUP = {
 // 规则改写时保留这些目标，其它统一走 Proxies。
 var KEEP_TARGETS = { DIRECT: 1, REJECT: 1, "🧮 启智计算": 1 };
 
-// 仅 fudan 场景使用。
-var FUDAN_DNS = ["202.120.224.6", "202.120.224.26", "61.129.42.6"];
-var PUBLIC_DNS = ["223.5.5.5", "223.6.6.6", "119.29.29.29"];
+// 仅 fudan 场景使用。下面的 DNS 和 CIDR 是占位符，不要提交本机真实值。
+var FUDAN_DNS = ["<fudan-dns-1>", "<fudan-dns-2>", "<fudan-dns-3>"];
+var PUBLIC_DNS = ["<public-dns-1>", "<public-dns-2>", "<public-dns-3>"];
+var FUDAN_DIRECT_CIDRS = ["<fudan-campus-service-cidr>"];
 
 // 本脚本管理的代理名。
 var MANAGED_PROXY_NAMES = {
@@ -191,9 +192,11 @@ function patchFudanCampus(config) {
 
   var fudanRules = [
     "DOMAIN,icourse.fudan.edu.cn,DIRECT",
-    "DOMAIN-SUFFIX,fudan.edu.cn,DIRECT",
-    "IP-CIDR,175.186.248.2/32,DIRECT,no-resolve"
+    "DOMAIN-SUFFIX,fudan.edu.cn,DIRECT"
   ];
+  for (var c = 0; c < FUDAN_DIRECT_CIDRS.length; c++) {
+    fudanRules.push("IP-CIDR," + FUDAN_DIRECT_CIDRS[c] + ",DIRECT,no-resolve");
+  }
   var rules = ensureArray(config.rules);
   for (var i = fudanRules.length - 1; i >= 0; i--) {
     forceUnshift(rules, fudanRules[i]);
