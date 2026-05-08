@@ -22,66 +22,32 @@ description: "Execution-first Inspire platform playbook for agents driving the i
 | 清理 | 终态且不再需要的资源用 `<res> delete <name> --yes` 清理；running 先 stop。不确定是否仍有人使用时跳过。 |
 | 大操作 | 共享盘大规模 `mv`、`cp`、`rm` 前先看文件量和大小分布。超过 20 分钟的远程操作用后台任务和 sentinel 文件，不要让 `notebook exec` 长时间同步挂住。 |
 
-## 2. 基础命令入口
+## 2. CLI 命令查询入口
 
-### 2.1 账号、配置、资源
+命令列表、子命令功能和参数说明以 CLI help 为准，不在 SKILL 或 references 中维护硬编码清单。需要确认某个操作时，先查 help，再执行实时查询或提交命令。
 
-| 命令 | 用途 |
-| --- | --- |
-| `inspire account add <name>` | 添加账号、平台地址和代理配置，并可设为活动账号 |
-| `inspire account {list,use,current,remove}` | 多账号管理 |
-| `inspire init --discover` | 在当前仓库绑定 Inspire 项目、workspace、compute group 和远端路径 |
-| `inspire config show --compact` | 查看合并后的账号、代理、镜像和路径配置 |
-| `inspire config context` | 查看活动账号、当前项目、workspace alias 和 compute groups |
-| `inspire config check` | 检查认证和平台连通性 |
-| `inspire resources list --all --include-cpu` | 查实时 GPU/CPU 可用量 |
-| `inspire resources nodes -A` | 查整节点空余 |
-| `inspire resources specs --usage all` | 查 notebook、job、HPC、Ray 可用规格三元组 |
-| `inspire project list` | 查项目配额、预算和优先级 |
-| `inspire user whoami` | 查当前登录身份 |
-| `inspire user permissions --workspace <name>` | 查 workspace 权限码 |
+```bash
+inspire --help
+inspire <command-group> --help
+inspire <command-group> <subcommand> --help
+```
 
-### 2.2 Notebook
+在本仓库源码 checkout 内验证 CLI 行为时，用：
 
-| 命令 | 用途 |
-| --- | --- |
-| `inspire notebook list -A` | 列 notebook，默认看人类表格 |
-| `inspire notebook create --workspace X --group Y -q <gpu,cpu,mem> --image URL --project P --wait` | 创建实例并等待 RUNNING |
-| `inspire notebook status <name>` | 查实例详情 |
-| `inspire notebook events <name>` | 查生命周期事件 |
-| `inspire notebook ssh <name>` | 建立 SSH 通路 |
-| `inspire notebook exec <name> "<cmd>"` | 运行一次性远程命令 |
-| `inspire notebook shell <name>` | 打开持久交互 shell |
-| `inspire notebook scp <name> <src> <dst>` | 传非 Git 文件，远端路径优先写绝对路径 |
-| `inspire notebook {start,stop,delete} <name> --yes` | 生命周期操作 |
-| `inspire notebook test <name>` | 连通性测试 |
+```bash
+cd cli
+uv run inspire --help
+uv run inspire notebook --help
+uv run inspire hpc create --help
+```
 
-Notebook 细节、镜像固化、远程命令语义和大文件操作：加载 [references/notebook.md](references/notebook.md)。
+`inspire --help` 的 `Commands` 区给出当前版本真实命令组；`inspire <command-group> --help` 给出该组所有子命令；`inspire <command-group> <subcommand> --help` 给出参数、默认值、必填项和注意事项。不要把旧文档、记忆或历史示例当作命令存在性的事实来源。
 
-### 2.3 Job、HPC、Ray
+常见任务的语义背景仍按需加载 reference：
 
-| 命令 | 用途 |
-| --- | --- |
-| `inspire job create -n <name> -q <gpu,cpu,mem> --nodes N -c "<cmd>" --workspace X --group Y --image URL --priority 5` | 创建 GPU 多节点任务 |
-| `inspire run "<cmd>" -q <gpu,cpu,mem> --nodes N --workspace X --group Y --image URL --watch` | 快速提交 GPU job 并跟日志 |
-| `inspire job {list,status,logs,events,stop,delete} <name>` | 观测、止损和清理 GPU job |
-| `inspire hpc create -n <name> -c "<slurm-body>" --compute-group G --workspace X -q <gpu,cpu,mem> --project P --image URL --image-type SOURCE_PRIVATE` | 创建 CPU Slurm/HPC 任务 |
-| `inspire hpc {list,status,events,metrics,stop,delete} <name>` | 观测、止损和清理 HPC 任务 |
-| `inspire ray create ...` | 创建 Ray 集群；仅在明确需要弹性计算时使用 |
-| `inspire ray {list,status,events,instances,stop,delete} <name>` | 观测、止损和清理 Ray 集群 |
-
-GPU job、HPC 两层资源模型、Ray 适用边界和示例：加载 [references/compute-workloads.md](references/compute-workloads.md)。
-
-### 2.4 镜像、部署和只读辅助命令
-
-| 命令 | 用途 |
-| --- | --- |
-| `inspire image list --source all` | 浏览镜像 |
-| `inspire image save <notebook-name> -n X -v v1 --public --wait` | 从 notebook 保存镜像 |
-| `inspire image set-default --job URL --notebook URL` | 写入项目默认镜像 |
-| `inspire serving list`、`inspire serving status <name>`、`inspire serving metrics <name>` | 模型部署观测；权限受限，创建优先走 Web UI |
-| `inspire model list`、`inspire model versions <model-id>` | 模型注册表只读浏览 |
-| `inspire project detail <project-id>`、`inspire user api-keys` | 项目 / 用户 metadata 查询 |
+- Notebook 细节、镜像固化、远程命令语义和大文件操作：加载 [references/notebook.md](references/notebook.md)。
+- GPU job、HPC 两层资源模型、Ray 适用边界和示例：加载 [references/compute-workloads.md](references/compute-workloads.md)。
+- Workspace、compute group、规格三元组、存储池和路径隔离：加载 [references/resources-and-paths.md](references/resources-and-paths.md)。
 
 ## 3. 按需加载索引
 

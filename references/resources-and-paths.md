@@ -4,16 +4,18 @@
 
 当任务需要选择 workspace、compute group、`--quota` 三元组、项目配额、远端共享盘路径，或需要解释为什么某个路径在实例里不可见时，加载本文档。
 
-## 1. 资源查询顺序
+## 1. 资源查询入口
 
-| 场景 | 命令 |
-| --- | --- |
-| 看实时 GPU/CPU 余量 | `inspire resources list --all --include-cpu` |
-| 看整节点余量 | `inspire resources nodes -A` |
-| 看 notebook、job、HPC、Ray 可用规格 | `inspire resources specs --usage all` |
-| 只看某类 workload 的规格 | `inspire resources specs --usage notebook`、`job`、`hpc` 或 `ray` |
-| 锁定 workspace 或计算组 | `inspire resources specs --workspace <name> --group <name>` |
-| 看项目预算和配额 | `inspire project list` |
+资源、规格、项目和用户相关能力以 CLI help 为准，不在 Agent 文档里维护硬编码清单。
+
+```bash
+inspire resources --help
+inspire resources specs --help
+inspire project --help
+inspire user --help
+```
+
+日常先看 resources 的 human 表格，再按需锁定 workload、workspace 或 compute group。看项目预算和配额时使用 project 入口；确认当前身份、workspace 权限码或 API Key 元数据时使用 user 入口。
 
 Agent 默认读取人类表格。结构化输出只用于脚本，不作为日常观察面。
 
@@ -70,15 +72,6 @@ inspire config context
 
 ## 7. 项目、负责人和用户元数据
 
-日常看配额、预算和优先级用 `inspire project list`。更细的项目详情和负责人下拉只在确认归属或预算拆分时使用：
-
-| 命令 | 用途 |
-| --- | --- |
-| `inspire project detail <project-id>` | 单项目详情：预算 / 子项目预算 / 优先级 / 创建人 |
-| `inspire project owners` | 全局负责人下拉清单 |
-| `inspire user whoami` | 当前登录身份 |
-| `inspire user permissions --workspace <name>` | 当前账号在 workspace 内的权限码 |
-| `inspire user quota` | 用户级配额，普通账号通常不可用，失败时改看 `project list` |
-| `inspire user api-keys` | 当前用户 API Key 元数据；不会返回 key 值 |
+日常看配额、预算和优先级时先查 `inspire project --help`，更细的项目详情和负责人下拉只在确认归属或预算拆分时使用。当前登录身份、workspace 权限码、用户级配额和 API Key 元数据从 `inspire user --help` 选择对应子命令；用户级配额普通账号通常不可用，失败时改看项目列表。
 
 API Key 值只在创建时一次性下发；创建 / 删除走 Web UI `/userCenter`。

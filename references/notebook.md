@@ -4,24 +4,18 @@
 
 当任务需要创建 notebook、SSH 连接、远程执行、传文件、保存镜像、安装 Slurm/Ray 依赖，或判断 `shell` 与 `exec` 的差异时，加载本文档。
 
-## 1. 常用命令
+## 1. CLI help 查询
 
-| 命令 | 用途 |
-| --- | --- |
-| `inspire notebook list -A -s RUNNING --name <keyword>` | 列实例 |
-| `inspire notebook create --workspace X --group Y -q <gpu,cpu,mem> --name <name> --image URL --project P --wait` | 创建实例并等待 RUNNING |
-| `inspire notebook status <name>` | 详情，镜像名在人类输出里可见 |
-| `inspire notebook events <name> --tail 50` | 生命周期事件 |
-| `inspire notebook lifecycle <name>` | 多次启停的粗粒度时间线 |
-| `inspire notebook ssh <name>` | Bootstrap SSH |
-| `inspire notebook exec <name> "<cmd>"` | 一次性远程命令 |
-| `inspire notebook shell <name>` | 持久交互 SSH |
-| `inspire notebook scp <name> <src> <dst>` | 传非仓库文件 |
-| `inspire notebook test <name>` | 连通性测试 |
-| `inspire notebook refresh <name>` | notebook 重启后刷新 SSH 缓存 |
-| `inspire notebook connections` | 列已 bootstrap 的 notebook |
-| `inspire notebook forget <name>` | 清本地 SSH 缓存 |
-| `inspire notebook top --watch` | 实时 `nvidia-smi` |
+notebook 子命令、参数和功能说明以 CLI help 为准，不在 Agent 文档里维护速查表。
+
+```bash
+inspire notebook --help
+inspire notebook create --help
+inspire notebook exec --help
+inspire notebook scp --help
+```
+
+需要确认单个操作时，先查对应子命令的 `--help`，再结合本文档的约束选择 workspace、compute group、路径和执行方式。
 
 ## 2. `shell` 与 `exec`
 
@@ -85,7 +79,7 @@ nohup "$RT_BIN" 22222 31337 >/tmp/rtunnel-server.log 2>&1 &
 
 ## 4. 代码与文件流转
 
-| 场景 | 做法 |
+| 文件流转类型 | 做法 |
 | --- | --- |
 | 独立 repo 日常同步 | 本地 `git push`，远端 `git pull` |
 | 多仓库工作区 | 通过 `inspire init --discover` 配好项目远端工作目录，多个 repo 并列放置 |

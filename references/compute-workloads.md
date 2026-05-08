@@ -8,17 +8,7 @@
 
 `inspire job` 覆盖 GPU 多节点工作负载，包括分布式训练、批量推理和并发单节点 worker pool。`job` 是 GPU 路径；`hpc` 是 CPU Slurm 路径。
 
-| 命令 | 用途 |
-| --- | --- |
-| `inspire job create -n <name> -q <gpu,cpu,mem> --nodes N -c "<cmd>" --workspace X --group Y --image URL --priority 5` | 精细提交 |
-| `inspire run "<cmd>" -q <gpu,cpu,mem> --nodes N --workspace X --group Y --image URL --watch` | 快速提交并跟日志 |
-| `inspire job list -A --name <keyword>` | Web API 实时扫描 workspace |
-| `inspire job status <name>` | 权威状态和优先级 |
-| `inspire job logs <name> --follow` | 跟日志 |
-| `inspire job events <name> --instance <pod> --tail 50` | 查调度事件，定位 pod 级失败 |
-| `inspire job stop <name> --yes` | 止损 |
-| `inspire job delete <name> --yes` | 清理终态任务 |
-| `inspire job metrics <name>` | 多 worker 资源曲线和离散度 |
+命令列表、参数和单命令功能以 CLI help 为准。先用 `inspire job --help` 看可用子命令；需要提交、查看、日志、事件、停止、删除或指标时，再分别查 `inspire job <subcommand> --help`。快速提交入口也可查 `inspire run --help`。
 
 `job list`、name-to-ID 解析和状态判断都应使用平台实时结果，不把本地历史 cache 当事实来源。
 
@@ -143,12 +133,6 @@ inspire ray events <name> --tail 50
 
 `inspire serving` 面向模型部署服务，普通训练 / 预处理任务不要走它。账号需有 `inference_serving.create` 或等价权限；普通账号在 Web UI 上点"部署服务"可能被静默踢回首页，CLI create 也不会可靠。
 
-| 命令 | 用途 |
-| --- | --- |
-| `inspire serving list [-a\|--all]` | 默认只列当前用户部署；`-a` 列 workspace 全量 |
-| `inspire serving status <serving-id>` | 单个部署详情 |
-| `inspire serving stop <serving-id>` | 止损 |
-| `inspire serving configs` | workspace 可用镜像 / 规格组合 |
-| `inspire serving metrics <name>` | 多副本部署资源视图时间序列，默认输出 PNG 和 per-replica stats |
+命令列表、参数和单命令功能以 CLI help 为准。先用 `inspire serving --help` 看可用子命令；需要列部署、看状态、停止服务、查看可用配置或读取指标时，再分别查 `inspire serving <subcommand> --help`。
 
 `list` / `configs` 只在 Browser API；`status` / `stop` OpenAPI 和 Browser API 都有，CLI 优先选 OpenAPI。创建部署的参数过多且强绑定 Web 表单，CLI 暂不覆盖，直接用 Web UI `/jobs/modelDeployment`。
