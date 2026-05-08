@@ -437,8 +437,7 @@ def list_projects_cmd(
                 _cfg, _ = _Cfg.from_files_and_env(
                     require_credentials=False, require_target_dir=False
                 )
-                cfg_candidates = [
-                ]
+                cfg_candidates: list[str | None] = []
                 cfg_workspaces = getattr(_cfg, "workspaces", None)
                 if isinstance(cfg_workspaces, dict):
                     cfg_candidates.extend(cfg_workspaces.values())

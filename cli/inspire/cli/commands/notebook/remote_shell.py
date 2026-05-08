@@ -85,6 +85,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
             f"No cached notebook connection for '{bridge}'.",
             hint="Run 'inspire notebook connections' to see cached notebook names.",
         )
+        raise RuntimeError("unreachable")
     if selected_bridge is None:
         _handle_error(
             ctx,
@@ -92,6 +93,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
             "No cached notebook connection.",
             hint="Bootstrap one with: inspire notebook ssh <notebook>",
         )
+        raise RuntimeError("unreachable")
 
     bridge_name = selected_bridge.name
     logger.debug("bridge_ssh start bridge=%s", bridge_name)
@@ -116,6 +118,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                 f"No cached notebook connection for '{bridge_name}'.",
                 hint="Run 'inspire notebook connections' to see cached notebook names.",
             )
+            raise RuntimeError("unreachable")
 
         tunnel_ready = is_tunnel_available(
             bridge_name=bridge_name,

@@ -32,6 +32,7 @@ from inspire.bridge.forge import (
 )
 from inspire.bridge.tunnel import (
     BridgeProfile,
+    TunnelConfig,
     TunnelNotAvailableError,
     is_tunnel_available,
     run_ssh_command,
@@ -68,8 +69,20 @@ def split_denylist(items: tuple[str, ...]) -> list[str]:
     return parts
 
 
-def _build_remote_command(*, command: str, target_dir: str, env_exports: str) -> str:
+def _build_remote_command(*, command: str, target_dir: Optional[str], env_exports: str) -> str:
+    if not target_dir:
+        return f"{env_exports}{command}"
     return f'{env_exports}cd "{target_dir}" && {command}'
+
+
+def _resolve_exec_remote_cwd(*, cwd: Optional[str], config: Config) -> Optional[str]:
+    if cwd or config.target_dir:
+        return resolve_remote_cwd(
+            cwd=cwd,
+            target_dir=config.target_dir,
+            aliases=config.path_aliases,
+        )
+    return None
 
 
 def _normalize_exec_command(command_parts: tuple[str, ...]) -> str:
@@ -139,13 +152,16 @@ def try_exec_via_ssh_tunnel(
     ssh_execution_started = False
     full_command = _build_remote_command(
         command=command,
-        target_dir=str(config.target_dir),
+        target_dir=config.target_dir,
         env_exports=env_exports,
     )
 
+    def _load_public_key(_path: Optional[str] = None) -> str:
+        return load_ssh_public_key_material()
+
     def _require_rebuild(
         bridge: BridgeProfile,
-        tunnel_config: object,
+        tunnel_config: TunnelConfig,
         *,
         reason: str,
     ) -> Optional[int]:
@@ -222,7 +238,7 @@ def try_exec_via_ssh_tunnel(
             tunnel_config=tunnel_config,
             session_loader=lambda: require_web_session(ctx, hint=WEB_AUTH_HINT),
             rebuild_fn=rebuild_notebook_bridge_profile,
-            key_loader=lambda _path=None: load_ssh_public_key_material(),
+            key_loader=_load_public_key,
         )
 
         if result.status is NotebookBridgeReconnectStatus.REBUILT:
@@ -373,7 +389,7 @@ def try_exec_via_ssh_tunnel(
                 click.echo("Using SSH tunnel (fast path)")
                 click.echo(f"Notebook: {resolved_bridge_name}")
                 click.echo(f"Command: {command}")
-                click.echo(f"Working dir: {config.target_dir}")
+                click.echo(f"Working dir: {config.target_dir or '$HOME'}")
                 if stdin_mode:
                     click.echo("Stdin: passthrough")
                 click.echo("--- Command Output ---")
@@ -469,7 +485,7 @@ def exec_via_workflow(
     if _verbose_output(ctx):
         click.echo(f"Triggering bridge exec (request {request_id})")
         click.echo(f"Command: {command}")
-        click.echo(f"Working dir: {config.target_dir}")
+        click.echo(f"Working dir: {config.target_dir or '$HOME'}")
         if merged_denylist:
             click.echo(f"Denylist: {merged_denylist}")
         if artifact_paths_list:
@@ -696,11 +712,7 @@ def exec_command(
 
     try:
         config, _ = Config.from_files_and_env(require_target_dir=False, require_credentials=False)
-        config.target_dir = resolve_remote_cwd(
-            cwd=cwd,
-            target_dir=config.target_dir,
-            aliases=config.path_aliases,
-        )
+        config.target_dir = _resolve_exec_remote_cwd(cwd=cwd, config=config)
     except ConfigError as e:
         emit_output_error(
             ctx,

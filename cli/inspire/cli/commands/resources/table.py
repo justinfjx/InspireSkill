@@ -60,7 +60,7 @@ def render_table(
     rows: Iterable[Sequence[object]],
     widths: Sequence[int],
     *,
-    aligns: Sequence[Align] | None = None,
+    aligns: Sequence[str] | None = None,
     line_char: str = "-",
 ) -> list[str]:
     """Render a simple fixed-width table using display widths."""
@@ -70,7 +70,7 @@ def render_table(
     lines = [
         sep,
         " ".join(
-            pad_cell(header, width, align=align)
+            pad_cell(header, width, align="right" if align == "right" else "left")
             for header, width, align in zip(headers, widths, aligns)
         ),
         sep,
@@ -78,7 +78,7 @@ def render_table(
     for row in rows:
         lines.append(
             " ".join(
-                pad_cell(cell, width, align=align)
+                pad_cell(cell, width, align="right" if align == "right" else "left")
                 for cell, width, align in zip(row, widths, aligns)
             )
         )

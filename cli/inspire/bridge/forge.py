@@ -146,7 +146,7 @@ class GitHubClient:
             body = None
 
         req = urlrequest.Request(url, data=body, headers=headers)
-        req.get_method = lambda: method  # type: ignore[assignment]
+        req.get_method = lambda: method  # type: ignore[method-assign]
         return req
 
     def request_json(self, method: str, url: str, data: Optional[dict] = None) -> dict:

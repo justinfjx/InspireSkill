@@ -6,7 +6,7 @@ import uuid
 import shlex
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
@@ -214,7 +214,7 @@ def resolve_notebook_project(
     json_output: bool,
     workspace_id: str | None = None,
     session: WebSession | None = None,
-) -> object | None:
+) -> Any | None:
     project_value = project
     if project_value and not project_value.startswith("project-"):
         for alias, project_id in (config.projects or {}).items():
@@ -269,7 +269,7 @@ def resolve_notebook_project(
     return selected_project
 
 
-def _find_image_match(images: list, image: str) -> object | None:
+def _find_image_match(images: list[Any], image: str) -> Any | None:
     image_lower = image.lower()
     for img in images:
         if (
@@ -287,7 +287,7 @@ def resolve_notebook_image(
     images: list,
     image: Optional[str],
     json_output: bool,
-) -> object | None:
+) -> Any | None:
     selected_image = None
 
     if image:
@@ -628,7 +628,7 @@ def _fetch_workspace_projects(
     *,
     workspace_id: str,
     session: WebSession,
-) -> list | None:
+) -> list[Any] | None:
     try:
         projects = browser_api_module.list_projects(workspace_id=workspace_id, session=session)
     except Exception as e:

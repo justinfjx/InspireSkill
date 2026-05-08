@@ -13,7 +13,6 @@ reverse-engineered from the 资源视图 tab in the web UI:
 
 from __future__ import annotations
 
-from typing import Any
 
 import pytest
 

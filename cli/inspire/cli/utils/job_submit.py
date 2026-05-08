@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -95,13 +96,23 @@ def build_remote_logged_command(
 
     log_path: str | None = None
     if config.target_dir:
+        remote_env = dict(config.remote_env)
+        remote_env.setdefault("PYTHONUNBUFFERED", "1")
+        env_exports = build_env_exports(remote_env)
         safe = sanitize_job_name_for_filename(name)
         log_dir = os.path.join(config.target_dir, ".inspire")
         log_path = os.path.join(log_dir, f"training_master_{safe}_{_now_log_timestamp()}.log")
-        final_command = (
-            f'{env_exports}mkdir -p "{log_dir}" && '
-            f'( cd "{config.target_dir}" && {command} ) > "{log_path}" 2>&1'
+        quoted_log_path = shlex.quote(log_path)
+        stdout_tee = f"tee -a {quoted_log_path}"
+        stderr_tee = f"tee -a {quoted_log_path} >&2"
+        script = (
+            f"{env_exports}"
+            f"mkdir -p {shlex.quote(log_dir)} && "
+            f": > {quoted_log_path} && "
+            f"cd {shlex.quote(config.target_dir)} && "
+            f"{{ {command} 2> >({stderr_tee}); }} | {stdout_tee}"
         )
+        final_command = f"bash -o pipefail -c {shlex.quote(script)}"
 
     return final_command, log_path
 

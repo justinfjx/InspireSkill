@@ -685,11 +685,11 @@ class TestInitCommand:
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
 
-        # Simulate choosing project config
-        result = runner.invoke(init, input="p\n")
+        # Template mode still supports the legacy interactive project/global choice.
+        result = runner.invoke(init, ["--template"], input="p\n")
 
         assert result.exit_code == 0
-        assert "No environment variables detected" in result.output
+        assert "Creating template config" in result.output
         config_file = tmp_path / ".inspire" / "config.toml"
         assert config_file.exists()
         content = config_file.read_text()
@@ -777,8 +777,8 @@ class TestInitCommand:
         config_file.write_text("[auth]\nusername = 'existing'")
 
         runner = CliRunner()
-        # Simulate choosing 'p' then declining overwrite
-        result = runner.invoke(init, input="p\nn\n")
+        # Simulate choosing 'p' then declining overwrite in explicit template mode.
+        result = runner.invoke(init, ["--template"], input="p\nn\n")
 
         assert "already exists" in result.output
         assert "Aborted" in result.output
@@ -872,7 +872,7 @@ class TestInitCommand:
         monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--force"])
+        result = runner.invoke(init, ["--project", "--force"])
 
         assert result.exit_code == 0
 

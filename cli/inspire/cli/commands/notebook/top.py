@@ -55,6 +55,7 @@ def _select_target_bridges(
                 EXIT_CONFIG_ERROR,
                 hint="Run 'inspire notebook connections' to see cached notebook names.",
             )
+            raise RuntimeError("unreachable")
         notebook_id = _bridge_notebook_id(bridge)
         if not notebook_id:
             _handle_error(
@@ -67,6 +68,7 @@ def _select_target_bridges(
                 EXIT_CONFIG_ERROR,
                 hint="Recreate it with 'inspire notebook ssh <notebook>'.",
             )
+            raise RuntimeError("unreachable")
         return [bridge]
 
     bridges = [b for b in tunnel_config.list_bridges() if _bridge_notebook_id(b)]
@@ -373,7 +375,7 @@ def notebook_top(
     targets = _select_target_bridges(ctx, tunnel_config=tunnel_config, bridge_name=bridge)
 
     while True:
-        payload = {
+        payload: dict[str, Any] = {
             "timestamp": _utc_timestamp(),
             "items": _collect_all_metrics(targets, tunnel_config=tunnel_config, no_check=no_check),
         }

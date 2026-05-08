@@ -22,6 +22,9 @@ from typing import Any
 import pytest
 from click.testing import CliRunner
 
+from inspire.cli.main import main as cli_main
+from inspire.platform.web.browser_api.metrics import MetricGroup, MetricSample
+
 metrics_shared = importlib.import_module("inspire.cli.utils.metrics_shared")
 job_metrics_module = importlib.import_module(
     "inspire.cli.commands.job.job_metrics"
@@ -32,9 +35,6 @@ hpc_metrics_module = importlib.import_module(
 serving_metrics_module = importlib.import_module(
     "inspire.cli.commands.serving.serving_metrics"
 )
-
-from inspire.cli.main import main as cli_main
-from inspire.platform.web.browser_api.metrics import MetricGroup, MetricSample
 
 
 class _FakeSession:

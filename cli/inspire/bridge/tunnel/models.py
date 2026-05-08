@@ -30,6 +30,8 @@ _PROXY_PORT_RE = re.compile(r"/proxy/(\d+)/")
 def _coerce_rtunnel_port(value: object) -> Optional[int]:
     if value in (None, ""):
         return None
+    if not isinstance(value, (str, bytes, bytearray, int)):
+        return None
     try:
         port = int(value)
     except (TypeError, ValueError):

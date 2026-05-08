@@ -50,29 +50,29 @@ def find_best_compute_group_accurate(
                     reverse=True,
                 )
 
-                selected = None
+                node_selected = None
                 if preferred_groups:
                     for group in candidates:
                         if group.group_id in preferred_groups:
-                            selected = group
+                            node_selected = group
                             break
 
-                if selected is None:
-                    selected = candidates[0]
+                if node_selected is None:
+                    node_selected = candidates[0]
 
-                total_gpus = selected.total_nodes * selected.gpu_per_node
-                used_gpus = max(total_gpus - selected.free_gpus, 0)
+                total_gpus = node_selected.total_nodes * node_selected.gpu_per_node
+                used_gpus = max(total_gpus - node_selected.free_gpus, 0)
 
                 return GPUAvailability(
-                    group_id=selected.group_id,
-                    group_name=selected.group_name,
-                    gpu_type=selected.gpu_type,
+                    group_id=node_selected.group_id,
+                    group_name=node_selected.group_name,
+                    gpu_type=node_selected.gpu_type,
                     total_gpus=total_gpus,
                     used_gpus=used_gpus,
-                    available_gpus=selected.free_gpus,
+                    available_gpus=node_selected.free_gpus,
                     low_priority_gpus=0,
-                    free_nodes=selected.free_nodes,
-                    gpu_per_node=selected.gpu_per_node,
+                    free_nodes=node_selected.free_nodes,
+                    gpu_per_node=node_selected.gpu_per_node,
                     selection_source="nodes",
                 )
         except Exception:

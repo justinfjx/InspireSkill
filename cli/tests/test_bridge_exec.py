@@ -43,6 +43,35 @@ def make_tunnel_config(name: str = "gpu-main") -> TunnelConfig:
     return tunnel_config
 
 
+def test_bridge_exec_without_target_dir_runs_in_remote_default_cwd(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config = make_sync_config(tmp_path)
+    config.target_dir = None
+    captured: Dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(exec_cmd_module, "load_tunnel_config", lambda: make_tunnel_config())
+    monkeypatch.setattr(exec_cmd_module, "is_tunnel_available", lambda **kwargs: True)
+
+    def fake_run_streaming(**kwargs: Any) -> int:
+        captured.update(kwargs)
+        return 0
+
+    monkeypatch.setattr(exec_cmd_module, "run_ssh_command_streaming", fake_run_streaming)
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["notebook", "exec", "gpu-main", "hostname"])
+
+    assert result.exit_code == EXIT_SUCCESS
+    assert captured["command"] == "hostname"
+    assert 'cd "' not in captured["command"]
+
+
 def test_bridge_exec_invalid_remote_env_human_returns_config_error(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

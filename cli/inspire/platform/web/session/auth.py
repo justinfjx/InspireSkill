@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import re
 import time
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from inspire.config import Config
 
 from .models import DEFAULT_WORKSPACE_ID, WebSession
 from .proxy import get_playwright_proxy
+
+if TYPE_CHECKING:
+    from playwright.sync_api import ProxySettings
 
 
 def _load_runtime_config() -> Config:
@@ -69,7 +72,7 @@ def login_with_playwright(
 
     from playwright.sync_api import sync_playwright
 
-    proxy = get_playwright_proxy()
+    proxy = cast("ProxySettings | None", get_playwright_proxy())
     with sync_playwright() as p:
         try:
             browser = p.chromium.launch(headless=headless, proxy=proxy)
@@ -268,7 +271,7 @@ def login_with_playwright(
         browser.close()
 
         session = WebSession(
-            storage_state=storage_state,
+            storage_state=cast(dict[str, Any], storage_state),
             cookies=cookie_dict,
             workspace_id=workspace_id,
             login_username=username,

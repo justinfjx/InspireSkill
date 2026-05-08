@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 import requests
 
-from inspire.config import Config
 from inspire.platform.web import session as ws
 from inspire.platform.web.session import auth as ws_auth
 from inspire.platform.web.session import browser_client as ws_browser_client

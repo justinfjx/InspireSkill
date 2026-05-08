@@ -91,8 +91,11 @@ class MetricGroup:
         for row in raw:
             if not isinstance(row, dict):
                 continue
+            raw_timestamp = row.get("timestamp")
+            if raw_timestamp is None:
+                continue
             try:
-                ts = int(row.get("timestamp"))
+                ts = int(raw_timestamp)
             except (TypeError, ValueError):
                 continue
             try:

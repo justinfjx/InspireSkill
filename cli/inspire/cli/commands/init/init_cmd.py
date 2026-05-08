@@ -12,6 +12,21 @@ from inspire.cli.context import (
     pass_context,
 )
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.accounts import (
+    AccountError,
+    create_account,
+    current_account,
+    ensure_inspire_home,
+    list_accounts,
+    normalize_environment,
+    set_current_account,
+    validate_name,
+)
+from inspire.cli.commands.account.add import (
+    DEFAULT_BASE_URL,
+    DEFAULT_PROXY_HINT,
+    _render_config as _render_account_config,
+)
 from inspire.config import (
     CONFIG_FILENAME,
     PROJECT_CONFIG_DIR,
@@ -46,6 +61,98 @@ def _get_config_paths() -> tuple[Path, Path]:
     global_path = _require_active_account_config_path()
     project_path = Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
     return global_path, project_path
+
+
+def _bootstrap_first_account_if_needed(
+    *,
+    effective_json: bool,
+    cli_username: str | None,
+    cli_base_url: str | None,
+) -> bool:
+    """Create the first account inline for interactive ``inspire init``.
+
+    ``inspire init`` is now the first-run path, so making users detour into
+    ``inspire account add`` is unnecessary when no account exists yet. If an
+    account directory already exists but none is active, we keep the explicit
+    error boundary so we don't guess which account to use.
+    """
+    if current_account():
+        return False
+    if list_accounts():
+        raise ValueError(
+            "No active account configured. Run `inspire account use <name>` first."
+        )
+    if effective_json:
+        raise ValueError(
+            "No active account configured. Run `inspire account add <name>` first; "
+            "JSON init cannot prompt for credentials."
+        )
+
+    ensure_inspire_home()
+    click.echo("No active account configured. Creating the first account.\n")
+
+    while True:
+        raw_name = click.prompt("Account alias", default="default", show_default=True)
+        try:
+            account_name = validate_name(raw_name)
+        except AccountError as err:
+            click.echo(click.style(f"Invalid account alias: {err}", fg="red"), err=True)
+            continue
+        break
+
+    if cli_username is None:
+        username = click.prompt(
+            "Platform login username",
+            default=account_name,
+            show_default=True,
+        )
+    else:
+        username = cli_username
+    username = username.strip()
+    if not username:
+        raise ValueError("Username cannot be empty.")
+
+    password = click.prompt(
+        "Platform password",
+        hide_input=True,
+        confirmation_prompt="Confirm password",
+    )
+
+    if cli_base_url is None:
+        base_url = click.prompt(
+            "Inspire base URL",
+            default=DEFAULT_BASE_URL,
+            show_default=True,
+        )
+    else:
+        base_url = cli_base_url
+
+    click.echo(
+        "Proxy must reach BOTH the public internet and *.sii.edu.cn. "
+        f"Typical value: {DEFAULT_PROXY_HINT}"
+    )
+    proxy = click.prompt(
+        "Proxy URL (leave empty for none)",
+        default="",
+        show_default=False,
+    )
+
+    content = _render_account_config(
+        username=username,
+        password=password,
+        base_url=base_url.strip(),
+        proxy=(proxy or "").strip(),
+    )
+    try:
+        target = create_account(account_name, content)
+        set_current_account(account_name)
+    except AccountError as err:
+        raise ValueError(str(err)) from err
+
+    click.echo(f"Created account: {target}")
+    click.echo(f"Active account: {account_name}")
+    normalize_environment(interactive=True, auto_install_playwright=True)
+    return True
 
 
 @click.command()
@@ -218,12 +325,24 @@ def init(
     effective_json = ctx.json_output
     warnings: list[str] = []
 
+    default_discover = not discover and not template_flag and not global_flag and not project_flag
+    if default_discover:
+        discover = True
+
     def _warn(msg: str) -> None:
         warnings.append(msg)
         if not effective_json:
             click.echo(click.style(f"Warning: {msg}", fg="yellow"))
 
     try:
+        bootstrapped_account = False
+        if discover:
+            bootstrapped_account = _bootstrap_first_account_if_needed(
+                effective_json=effective_json,
+                cli_username=username,
+                cli_base_url=base_url,
+            )
+
         global_path, project_path = _get_config_paths()
         before = snapshot_paths(global_path, project_path)
 
@@ -286,6 +405,7 @@ def init(
                     "probe_keep_notebooks": bool(probe_keep_notebooks),
                     "probe_timeout": int(probe_timeout),
                     "probe_pubkey_provided": bool(probe_pubkey),
+                    "bootstrapped_account": bootstrapped_account,
                 },
                 effective_json=effective_json,
             )

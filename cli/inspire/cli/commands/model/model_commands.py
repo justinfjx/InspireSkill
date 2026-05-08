@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
@@ -129,7 +129,8 @@ def status_model(ctx: Context, model_id: str) -> None:
             click.echo(json_formatter.format_json(data))
             return
 
-        inner = data.get("model") if isinstance(data.get("model"), dict) else data
+        model_payload = data.get("model")
+        inner: dict[str, Any] = model_payload if isinstance(model_payload, dict) else data
         click.echo("Model")
         click.echo(f"Model ID:    {inner.get('model_id', model_id)}")
         click.echo(f"Name:        {inner.get('name', 'N/A')}")
@@ -169,7 +170,8 @@ def versions_model(ctx: Context, model_id: str) -> None:
 
         click.echo(f"Versions for {model_id}  (total={data.get('total', len(items))}, next={data.get('next_version', '?')})")
         for i, item in enumerate(items, 1):
-            inner = item.get("model") if isinstance(item, dict) and isinstance(item.get("model"), dict) else item
+            model_payload = item.get("model") if isinstance(item, dict) else None
+            inner = model_payload if isinstance(model_payload, dict) else item
             version = inner.get("version") or inner.get("model_version") or "?"
             size = inner.get("model_size_gb") or inner.get("size") or ""
             path = inner.get("model_path") or ""

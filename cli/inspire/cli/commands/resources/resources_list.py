@@ -76,7 +76,7 @@ def _resolve_workspace_scope(
             config,
             explicit_workspace_name=explicit_workspace_name,
         )
-        return [resolved_workspace_id], workspace_names, True
+        return [str(resolved_workspace_id)], workspace_names, True
 
     if show_all:
         seen: set[str] = set()
@@ -175,9 +175,9 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
             if show_workspace
             else ["left", "left", "right", "right", "right", "right", "left"]
         )
-        table_rows = []
+        gpu_table_rows: list[tuple[object, ...]] = []
         if show_workspace:
-            total_row = ("TOTAL", "", "", 0, 0, 0, 0, "")
+            total_row: tuple[object, ...] = ("TOTAL", "", "", 0, 0, 0, 0, "")
         else:
             total_row = ("TOTAL", "", 0, 0, 0, 0, "")
 
@@ -201,7 +201,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                 status = "✗"
 
             if show_workspace:
-                table_rows.append(
+                gpu_table_rows.append(
                     (
                         row.workspace_name,
                         row.gpu_type,
@@ -214,7 +214,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                     )
                 )
             else:
-                table_rows.append(
+                gpu_table_rows.append(
                     (
                         row.gpu_type,
                         row.group_name,
@@ -252,8 +252,8 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                 total_gpus,
                 "",
             )
-        table_rows.append(total_row)
-        lines.extend(render_table(headers, table_rows, widths, aligns=aligns, line_char="─"))
+        gpu_table_rows.append(total_row)
+        lines.extend(render_table(headers, gpu_table_rows, widths, aligns=aligns, line_char="─"))
 
     if include_cpu and cpu_rows:
         widths = (
@@ -286,7 +286,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
             if show_workspace
             else ["left", "right", "right", "right", "right", "right", "right"]
         )
-        table_rows = []
+        cpu_table_rows: list[tuple[object, ...]] = []
         lines.append("")
         lines.append("CPU-Only Compute Groups")
 
@@ -300,7 +300,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
 
         for row in sorted_cpu_rows:
             if show_workspace:
-                table_rows.append(
+                cpu_table_rows.append(
                     (
                         row.workspace_name,
                         row.group_name,
@@ -313,7 +313,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                     )
                 )
             else:
-                table_rows.append(
+                cpu_table_rows.append(
                     (
                         row.group_name,
                         _format_metric(row.cpu_available),
@@ -333,7 +333,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
             total_mem += row.memory_total_gib
 
         if show_workspace:
-            table_rows.append(
+            cpu_table_rows.append(
                 (
                     "TOTAL",
                     "",
@@ -346,7 +346,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                 )
             )
         else:
-            table_rows.append(
+            cpu_table_rows.append(
                 (
                     "TOTAL",
                     _format_metric(total_cpu_available),
@@ -357,7 +357,7 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
                     _format_metric(total_mem),
                 )
             )
-        lines.extend(render_table(headers, table_rows, widths, aligns=aligns, line_char="─"))
+        lines.extend(render_table(headers, cpu_table_rows, widths, aligns=aligns, line_char="─"))
 
     lines.append("")
     lines.append("💡 Legend:")

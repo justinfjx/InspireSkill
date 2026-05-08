@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inspire-skill"
-version = "4.0.0"
+version = "4.1.0"
 description = "CLI for the Inspire training platform: notebook lifecycle, distributed/HPC job submission, SSH tunneling, image and resource ops"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,6 +39,7 @@ dev = [
     "pytest-mock>=3.10.0",
     "black>=23.0.0",
     "ruff>=0.0.280",
+    "mypy>=1.10.0",
 ]
 
 [project.scripts]
@@ -69,6 +70,14 @@ target-version = "py310"
 line-length = 100
 target-version = ["py310"]
 
+[tool.mypy]
+python_version = "3.10"
+ignore_missing_imports = true
+follow_imports = "silent"
+warn_unused_ignores = true
+disallow_untyped_defs = false
+files = ["inspire"]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.1",
@@ -76,11 +85,12 @@ dev = [
     "ruff>=0.0.280",
     "commitizen>=3.12.0",
     "pre-commit>=3.6.0",
+    "mypy>=1.10.0",
 ]
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "4.0.0"
+version = "4.1.0"
 version_files = [
     "inspire/__init__.py:__version__",
     "pyproject.toml:^version"

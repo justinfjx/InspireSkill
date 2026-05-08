@@ -9,8 +9,6 @@ from typing import Any
 
 import click
 
-logger = logging.getLogger(__name__)
-
 from inspire.cli.context import (
     Context,
     EXIT_API_ERROR,
@@ -20,6 +18,8 @@ from inspire.cli.context import (
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import is_partial_id
 from inspire.platform.web import session as web_session_module
+
+logger = logging.getLogger(__name__)
 
 _ZERO_WORKSPACE_ID = "ws-00000000-0000-0000-0000-000000000000"
 
@@ -458,6 +458,7 @@ def _resolve_notebook_id(
                 f"Notebook '{identifier}' is missing an ID in API response.",
                 EXIT_API_ERROR,
             )
+            raise RuntimeError("unreachable")
         return notebook_id, ws_id
 
     def _label_for(item: dict, ws_id: str) -> str:
@@ -499,6 +500,7 @@ def _resolve_notebook_id(
             f"Notebook '{identifier}' is missing an ID in API response.",
             EXIT_API_ERROR,
         )
+        raise RuntimeError("unreachable")
     return notebook_id, ws_id
 
 

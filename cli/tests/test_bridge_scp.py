@@ -87,6 +87,42 @@ def test_bridge_scp_upload_success(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     assert result.output.strip() == "OK"
 
 
+def test_bridge_scp_reads_active_account_notebook_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    local_file = tmp_path / "test.txt"
+    local_file.write_text("hello")
+
+    config = Config(username="alice", password="")
+    tunnel_config = TunnelConfig(account="default")
+    tunnel_config.add_bridge(BridgeProfile(name="default", proxy_url="https://proxy.example.com"))
+    captured: Dict[str, Any] = {}
+
+    monkeypatch.setattr(
+        Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+    )
+
+    def fake_load_tunnel_config(account=None):  # type: ignore[no-untyped-def]
+        captured["account"] = account
+        return tunnel_config
+
+    monkeypatch.setattr(scp_cmd_module, "load_tunnel_config", fake_load_tunnel_config)
+    monkeypatch.setattr(scp_cmd_module, "is_tunnel_available", lambda **kwargs: True)
+
+    class FakeResult:
+        returncode = 0
+
+    monkeypatch.setattr(scp_cmd_module, "run_scp_transfer", lambda **kwargs: FakeResult())
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["notebook", "scp", "default", str(local_file), "/tmp/test.txt"])
+
+    assert result.exit_code == EXIT_SUCCESS
+    assert captured["account"] is None
+
+
 def test_bridge_scp_warns_when_remote_path_is_relative(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

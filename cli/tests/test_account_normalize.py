@@ -7,7 +7,6 @@ clean v3.x layout — no scattered ``if old_format`` guards.
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 import pytest

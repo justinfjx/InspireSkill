@@ -114,8 +114,8 @@ def _cached_bridge_for_identifier(
     if _looks_like_notebook_id(normalized):
         return None, None, None
 
-    tunnel_account = str(getattr(config, "username", "") or "").strip() or None
-    tunnel_config = load_tunnel_config(account=tunnel_account)
+    tunnel_account = None
+    tunnel_config = load_tunnel_config()
     for bridge in tunnel_config.bridges.values():
         notebook_name = str(getattr(bridge, "notebook_name", "") or "").strip()
         notebook_id = str(getattr(bridge, "notebook_id", "") or "").strip()
@@ -274,6 +274,7 @@ def _run_notebook_command_with_reconnect(
                     config=tunnel_config,
                     timeout=timeout_s,
                     capture_output=True,
+                    pass_stdin=True,
                 )
                 output = f"{result.stdout or ''}{result.stderr or ''}"
                 if result.returncode == 0:
@@ -319,6 +320,7 @@ def _run_notebook_command_with_reconnect(
                 bridge_name=profile_name,
                 config=tunnel_config,
                 timeout=timeout_s,
+                pass_stdin=True,
             )
             if exit_code == 0:
                 return

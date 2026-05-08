@@ -67,6 +67,10 @@ def config_from_env(*, require_target_dir: bool = False) -> Config:
                 "Invalid INSPIRE_BRIDGE_ACTION_TIMEOUT value. It must be an integer number of seconds."
             ) from e
 
+    log_cache_dir = os.getenv("INSP_LOG_CACHE_DIR") or os.getenv(
+        "INSPIRE_LOG_CACHE_DIR", "~/.inspire/logs"
+    ) or "~/.inspire/logs"
+
     return Config(
         username=username,
         password=password,
@@ -82,8 +86,7 @@ def config_from_env(*, require_target_dir: bool = False) -> Config:
         github_log_workflow=os.getenv("INSP_GITHUB_LOG_WORKFLOW", "retrieve_job_log.yml"),
         github_sync_workflow=os.getenv("INSP_GITHUB_SYNC_WORKFLOW", "sync_code.yml"),
         github_bridge_workflow=os.getenv("INSP_GITHUB_BRIDGE_WORKFLOW", "run_bridge_action.yml"),
-        log_cache_dir=os.getenv("INSP_LOG_CACHE_DIR")
-        or os.getenv("INSPIRE_LOG_CACHE_DIR", "~/.inspire/logs"),
+        log_cache_dir=log_cache_dir,
         remote_timeout=_parse_remote_timeout(os.getenv("INSP_REMOTE_TIMEOUT", "90")),
         default_remote=os.getenv("INSPIRE_DEFAULT_REMOTE", "origin"),
         bridge_action_timeout=bridge_action_timeout,

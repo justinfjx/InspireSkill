@@ -83,8 +83,9 @@ def parse_quota(text: str) -> QuotaSpec:
     return QuotaSpec(gpu_count=gpu, cpu_count=cpu, memory_gib=mem)
 
 
-def _extract_gpu_type(price: dict) -> str:
-    gpu_info = price.get("gpu_info") if isinstance(price.get("gpu_info"), dict) else {}
+def _extract_gpu_type(price: dict[str, Any]) -> str:
+    gpu_info_payload = price.get("gpu_info")
+    gpu_info: dict[str, Any] = gpu_info_payload if isinstance(gpu_info_payload, dict) else {}
     return str(
         gpu_info.get("gpu_type_display")
         or gpu_info.get("gpu_type")
@@ -288,16 +289,10 @@ def build_resource_spec_price(
     """Build the ``resource_spec_price`` dict the notebook create endpoint expects."""
     del shared_memory_size  # kept for symmetry; backend reads shared_memory_size elsewhere
     price = quota.raw_price if isinstance(quota.raw_price, dict) else {}
-    cpu_info = (
-        price.get("cpu_info")
-        if isinstance(price.get("cpu_info"), dict)
-        else {}
-    )
-    gpu_info = (
-        price.get("gpu_info")
-        if isinstance(price.get("gpu_info"), dict)
-        else {}
-    )
+    cpu_info_payload = price.get("cpu_info")
+    cpu_info: dict[str, Any] = cpu_info_payload if isinstance(cpu_info_payload, dict) else {}
+    gpu_info_payload = price.get("gpu_info")
+    gpu_info: dict[str, Any] = gpu_info_payload if isinstance(gpu_info_payload, dict) else {}
     machine_gpu_type = str(
         gpu_info.get("gpu_type")
         or price.get("gpu_type")

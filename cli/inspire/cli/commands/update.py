@@ -30,6 +30,16 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+import click
+
+from inspire import __version__
+from inspire.cli.utils.update_notice import (
+    PACKAGE_NAME,
+    TARBALL_URL,
+    run_check,
+    _is_newer,
+)
+
 
 def _opencode_config_dir() -> Path:
     """Resolve OpenCode's config dir: $OPENCODE_CONFIG_DIR or ~/.config/opencode."""
@@ -38,29 +48,18 @@ def _opencode_config_dir() -> Path:
         return Path(override).expanduser()
     return Path.home() / ".config" / "opencode"
 
-import click
-
-from inspire import __version__
-from inspire.cli.utils.update_notice import (
-    PACKAGE_NAME,
-    TARBALL_URL,
-    fetch_latest_version,
-    run_check,
-    _is_newer,
-    _read_cache,
-)
 
 HARNESS_SKILL_DIRS = {
-    "claude":   Path.home() / ".claude"   / "skills" / "inspire",
-    "codex":    Path.home() / ".codex"    / "skills" / "inspire",
-    "gemini":   Path.home() / ".gemini"   / "skills" / "inspire",
+    "claude": Path.home() / ".claude" / "skills" / "inspire",
+    "codex": Path.home() / ".codex" / "skills" / "inspire",
+    "gemini": Path.home() / ".gemini" / "skills" / "inspire",
     "openclaw": Path.home() / ".openclaw" / "skills" / "inspire",
-    "opencode": _opencode_config_dir()    / "skills" / "inspire",
+    "opencode": _opencode_config_dir() / "skills" / "inspire",
 }
 HARNESS_ROOTS = {
-    "claude":   Path.home() / ".claude",
-    "codex":    Path.home() / ".codex",
-    "gemini":   Path.home() / ".gemini",
+    "claude": Path.home() / ".claude",
+    "codex": Path.home() / ".codex",
+    "gemini": Path.home() / ".gemini",
     "openclaw": Path.home() / ".openclaw",
     "opencode": _opencode_config_dir(),
 }
@@ -188,7 +187,7 @@ def _extract_assets(tarball: bytes, dest: Path) -> Path | None:
                 return None
             top = top_segments.pop()
             try:
-                tf.extractall(dest, filter="data")  # type: ignore[arg-type]
+                tf.extractall(dest, filter="data")
             except TypeError:
                 # Python < 3.11.4 (no `filter=` kwarg). codeload is GitHub
                 # which we trust, so the legacy extract is acceptable.

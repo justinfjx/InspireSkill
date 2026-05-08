@@ -8,6 +8,7 @@ from .job_commands import (
     delete,
     instances,
     list_jobs,
+    shell,
     show_command,
     status,
     stop,
@@ -30,6 +31,7 @@ job.add_command(logs)
 job.add_command(events)
 job.add_command(instances)
 job.add_command(list_jobs)
+job.add_command(shell)
 job.add_command(stop)
 job.add_command(delete)
 job.add_command(wait)

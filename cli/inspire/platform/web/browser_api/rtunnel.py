@@ -14,11 +14,11 @@ from pathlib import Path
 from typing import Any, Optional
 
 try:
-    from playwright.sync_api import Error as PlaywrightError
+    from playwright.sync_api import Error as _PlaywrightError
 except ImportError:  # pragma: no cover - Playwright may be unavailable in some environments.
-
-    class PlaywrightError(Exception):
-        pass
+    PlaywrightError: type[Exception] = Exception
+else:
+    PlaywrightError = _PlaywrightError
 
 
 from inspire.platform.web.browser_api.core import (
@@ -331,7 +331,7 @@ def redact_proxy_url(proxy_url: str) -> str:
 
         if parts.query:
             query_items = parse_qsl(parts.query, keep_blank_values=True)
-            redacted_items = []
+            redacted_items: list[tuple[str, str]] = []
             for key, value in query_items:
                 if key.lower() in {"token", "access_token"}:
                     redacted_items.append((key, "<redacted>" if value else value))
@@ -604,16 +604,16 @@ def probe_existing_rtunnel_proxy_url(
     )
     deduped_urls = list(dict.fromkeys(urls))
 
-    http: Optional[object] = None
+    http = None
     try:
         http = build_requests_session(session, base_url)
         for url in deduped_urls:
             try:
-                resp = http.get(url, timeout=5)  # type: ignore[attr-defined]
+                resp = http.get(url, timeout=5)
             except (ConnectionError, OSError, RuntimeError, TimeoutError, ValueError):
                 continue
-            body = resp.text[:400] if getattr(resp, "text", "") else ""  # type: ignore[attr-defined]
-            if not _is_reachable_proxy_response(status_code=resp.status_code, body=body):  # type: ignore[attr-defined]
+            body = resp.text[:400] if resp.text else ""
+            if not _is_reachable_proxy_response(status_code=resp.status_code, body=body):
                 continue
             try:
                 save_rtunnel_proxy_state(
@@ -633,7 +633,7 @@ def probe_existing_rtunnel_proxy_url(
     finally:
         try:
             if http is not None:
-                http.close()  # type: ignore[attr-defined]
+                http.close()
         except (OSError, AttributeError):
             pass
 

@@ -17,9 +17,8 @@ shows the pod count.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
-from typing import Iterable
 
 import matplotlib
 
@@ -275,7 +274,7 @@ def render_metrics_png(
     for j in range(n, len(axes)):
         axes[j].set_visible(False)
 
-    fig.tight_layout(rect=[0, 0, 1, 0.985])
+    fig.tight_layout(rect=(0, 0, 1, 0.985))
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=140, bbox_inches="tight", facecolor="white")

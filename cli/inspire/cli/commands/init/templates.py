@@ -33,6 +33,13 @@ def _atomic_write_text(target: Path, content: str) -> None:
     os.replace(tmp, target)
 
 
+def _require_writable_global_path() -> Path:
+    global_path = Config.writable_config_path()
+    if global_path is None:
+        raise click.ClickException("No active account configured. Run `inspire account add` first.")
+    return global_path
+
+
 CONFIG_TEMPLATE = """# Inspire CLI Configuration
 # Location: {location_comment}
 #
@@ -118,7 +125,7 @@ denylist = ["*.tmp", ".git/*"]
 
 def _init_template_mode(global_flag: bool, project_flag: bool, force: bool) -> None:
     """Initialize config using template with placeholders (template mode)."""
-    global_path = Config.writable_config_path()
+    global_path = _require_writable_global_path()
     if global_flag:
         config_path = global_path
         location_comment = f"{global_path} (account)"
@@ -264,7 +271,7 @@ def _init_smart_mode(
         click.echo(f"  - {len(project_opts)} project-scope option(s)")
     click.echo()
 
-    global_path = Config.writable_config_path()
+    global_path = _require_writable_global_path()
     project_path = Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
 
     if global_flag:

@@ -21,12 +21,19 @@ from inspire.cli.context import (
     EXIT_JOB_NOT_FOUND,
     EXIT_SUCCESS,
     EXIT_TIMEOUT,
+    EXIT_VALIDATION_ERROR,
     pass_context,
 )
 from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.auth import AuthManager, AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.job_cli import resolve_job_id
+from inspire.cli.utils.job_shell import (
+    JobShellError,
+    normalize_job_instances,
+    open_job_shell,
+    select_job_instance,
+)
 from inspire.config import Config, ConfigError
 from inspire.config.workspaces import select_workspace_id
 from inspire.platform.web import browser_api as browser_api_module
@@ -269,7 +276,8 @@ def _format_web_job_status(job_data: dict) -> str:
     if not job_data:
         return "No web job detail found."
 
-    created_by = job_data.get("created_by") if isinstance(job_data.get("created_by"), dict) else {}
+    created_by_payload = job_data.get("created_by")
+    created_by: dict = created_by_payload if isinstance(created_by_payload, dict) else {}
     framework_config = job_data.get("framework_config") or []
     first_spec = (
         framework_config[0] if framework_config and isinstance(framework_config[0], dict) else {}
@@ -1153,6 +1161,7 @@ def wait(
                     finally:
                         _close_web_client()
                 else:
+                    assert api is not None
                     result = api.get_job_detail(job_id)
                     job_data = result.get("data", {})
                 current_status = job_data.get("status", "UNKNOWN")
@@ -1303,9 +1312,94 @@ def show_command(
             _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
 
 
+@click.command("shell")
+@click.argument("job")
+@click.option("--rank", type=int, default=None, help="Open the running instance with this rank")
+@click.option("--instance", "instance_name", default=None, help="Open this exact instance name")
+@click.option(
+    "--pick",
+    type=int,
+    default=None,
+    help="Pick the Nth running instance (1-indexed) when a job has multiple instances",
+)
+@click.option(
+    "--all-workspaces",
+    "-A",
+    is_flag=True,
+    help="Resolve the job name across every visible workspace, not just the current one",
+)
+@pass_context
+def shell(
+    ctx: Context,
+    job: str,
+    rank: Optional[int],
+    instance_name: Optional[str],
+    pick: Optional[int],
+    all_workspaces: bool,
+) -> None:
+    """Open an interactive shell inside a running training-job instance.
+
+    \b
+    Examples:
+        inspire job shell my-training-run
+        inspire job shell my-training-run --rank 0
+        inspire job shell my-training-run --instance pytorchjob-worker-0
+        inspire job shell my-training-run --pick 2
+    """
+    if sum(value is not None for value in (rank, instance_name, pick)) > 1:
+        _handle_error(
+            ctx,
+            "ValidationError",
+            "Use only one of --rank, --instance, or --pick.",
+            EXIT_VALIDATION_ERROR,
+        )
+        return
+
+    try:
+        job_id = resolve_job_id(ctx, job, all_workspaces=all_workspaces)
+        session = get_web_session()
+        try:
+            raw_instances, _ = browser_api_module.list_job_instances(
+                job_id,
+                page_num=1,
+                page_size=200,
+                session=session,
+            )
+        finally:
+            _close_web_client()
+
+        selected = select_job_instance(
+            normalize_job_instances(raw_instances),
+            instance_name=instance_name,
+            rank=rank,
+            pick=pick,
+        )
+
+        if not ctx.json_output:
+            click.echo(f"Opening shell: {job} / {selected.name}", err=True)
+            click.echo("Press Ctrl-] to disconnect.", err=True)
+
+        code = open_job_shell(job_id=job_id, instance_name=selected.name, session=session)
+        sys.exit(code)
+
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+    except AuthenticationError as e:
+        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
+    except (SessionExpiredError, ValueError) as e:
+        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
+    except JobShellError as e:
+        _handle_error(ctx, "JobShellError", str(e), EXIT_GENERAL_ERROR)
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except Exception as e:
+        _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
+
+
 __all__ = [
     "instances",
     "list_jobs",
+    "shell",
     "show_command",
     "status",
     "stop",

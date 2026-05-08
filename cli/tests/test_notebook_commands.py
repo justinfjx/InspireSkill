@@ -8,6 +8,7 @@ from click.testing import CliRunner
 from inspire import config as config_module
 from inspire.bridge import tunnel as tunnel_module
 from inspire.cli.commands.notebook import notebook_commands as notebook_cmd_module
+from inspire.cli.commands.notebook import connections_cmd as connections_cmd_module
 from inspire.cli.commands.notebook import remote_exec as remote_exec_module
 from inspire.cli.commands.notebook import remote_shell as remote_shell_module
 from inspire.cli.commands.notebook import notebook_ssh_flow as ssh_flow_module
@@ -154,6 +155,41 @@ def test_resolve_notebook_id_retries_until_eventual_consistency_settles(
     assert notebook_id == "abcd1234-5678-90ab-cdef-1234567890ab"
     assert ws_id == "ws-77777777-7777-7777-7777-777777777777"
     assert len(call_log) >= 2  # at least one retry past the initial empty result
+
+
+def test_notebook_connections_reads_active_account_cache(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config = make_test_config(tmp_path)
+    config.username = "alice"
+    tunnel_config = tunnel_module.TunnelConfig(account="default")
+    tunnel_config.add_bridge(
+        tunnel_module.BridgeProfile(
+            name="test-nb",
+            proxy_url="https://proxy.example.com/proxy/31337/",
+            notebook_id="notebook-12345678",
+        )
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        config_module.Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+    )
+
+    def fake_load_tunnel_config(account=None):  # type: ignore[no-untyped-def]
+        captured["account"] = account
+        return tunnel_config
+
+    monkeypatch.setattr(connections_cmd_module, "load_tunnel_config", fake_load_tunnel_config)
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["notebook", "connections", "--no-check"])
+
+    assert result.exit_code == EXIT_SUCCESS
+    assert captured["account"] is None
+    assert "test-nb" in result.output
 
 
 def test_run_watch_invokes_logs_subcommand_with_name_not_id(
@@ -1114,13 +1150,19 @@ def test_run_notebook_ssh_command_uses_non_interactive_executor(
     monkeypatch.setattr(
         tunnel_module,
         "run_ssh_command_streaming",
-        lambda command, bridge_name=None, config=None, timeout=None, output_callback=None: (
+        lambda command,
+        bridge_name=None,
+        config=None,
+        timeout=None,
+        output_callback=None,
+        pass_stdin=False: (
             streamed.update(
                 {
                     "command": command,
                     "bridge_name": bridge_name,
                     "config": config,
                     "timeout": timeout,
+                    "pass_stdin": pass_stdin,
                 }
             )
             or 0
@@ -1158,6 +1200,7 @@ def test_run_notebook_ssh_command_uses_non_interactive_executor(
     assert streamed["bridge_name"] == "nb-notebook"
     assert streamed["config"] is fake_tunnel_config
     assert streamed["timeout"] == 300
+    assert streamed["pass_stdin"] is True
 
 
 def test_run_notebook_ssh_name_uses_cached_bridge_metadata(
@@ -1214,13 +1257,19 @@ def test_run_notebook_ssh_name_uses_cached_bridge_metadata(
     monkeypatch.setattr(
         tunnel_module,
         "run_ssh_command_streaming",
-        lambda command, bridge_name=None, config=None, timeout=None, output_callback=None: (
+        lambda command,
+        bridge_name=None,
+        config=None,
+        timeout=None,
+        output_callback=None,
+        pass_stdin=False: (
             streamed.update(
                 {
                     "command": command,
                     "bridge_name": bridge_name,
                     "config": config,
                     "timeout": timeout,
+                    "pass_stdin": pass_stdin,
                 }
             )
             or 0
@@ -1253,6 +1302,7 @@ def test_run_notebook_ssh_name_uses_cached_bridge_metadata(
     assert streamed["bridge_name"] == "nb-notebook"
     assert streamed["config"] is fake_tunnel_config
     assert streamed["timeout"] == 300
+    assert streamed["pass_stdin"] is True
 
 
 def test_run_notebook_ssh_command_timeout_is_reported(

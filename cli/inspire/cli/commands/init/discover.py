@@ -57,12 +57,12 @@ class _ProbeDefaults(NamedTuple):
 class _DiscoveryPersistRequest:
     force: bool
     config: Config
-    browser_api_module: object
-    session: object
+    browser_api_module: Any
+    session: Any
     account_key: str
     workspace_id: str
-    projects: list[object]
-    selected_project: object
+    projects: list[Any]
+    selected_project: Any
     probe_shared_path: bool
     probe_limit: int
     probe_keep_notebooks: bool
@@ -277,7 +277,7 @@ def _select_probe_cpu_quota(schedule: dict[str, Any]) -> tuple[str, int, int]:
     return quota_id, cpu_count, memory_size
 
 
-def _select_probe_image(images: list[object], *, preferred: str | None = None) -> object | None:
+def _select_probe_image(images: list[Any], *, preferred: str | None = None) -> Any | None:
     if not images:
         return None
 
@@ -705,7 +705,7 @@ def _merge_alias_map(
 
 
 def _build_project_aliases(
-    projects: list[object],
+    projects: list[Any],
     *,
     existing: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], dict[str, str]]:
@@ -877,8 +877,8 @@ def _candidate_workspace_ids_for_discovery(
     try:
         from inspire.platform.web.browser_api.workspaces import try_enumerate_workspaces
 
-        for ws in try_enumerate_workspaces(session, workspace_id=workspace_id):
-            ws_id = str(ws.get("id") or "").strip()
+        for workspace_payload in try_enumerate_workspaces(session, workspace_id=workspace_id):
+            ws_id = str(workspace_payload.get("id") or "").strip()
             if ws_id:
                 candidates.append(ws_id)
     except Exception:
@@ -887,11 +887,11 @@ def _candidate_workspace_ids_for_discovery(
     ordered_unique: list[str] = []
     seen: set[str] = set()
     for raw_ws in candidates:
-        ws = str(raw_ws or "").strip()
-        if not ws or ws in seen:
+        ws_text = str(raw_ws or "").strip()
+        if not ws_text or ws_text in seen:
             continue
-        seen.add(ws)
-        ordered_unique.append(ws)
+        seen.add(ws_text)
+        ordered_unique.append(ws_text)
     return ordered_unique
 
 
@@ -900,14 +900,14 @@ def _collect_discovery_projects(
     browser_api_module,  # noqa: ANN001
     session,  # noqa: ANN001
     workspace_id: str,
-) -> tuple[list[object], list[tuple[str, str]]]:
+) -> tuple[list[Any], list[tuple[str, str]]]:
     """Collect projects across discovered workspaces (best-effort per workspace)."""
     workspace_ids = _candidate_workspace_ids_for_discovery(
         session=session,
         workspace_id=workspace_id,
     )
 
-    discovered: list[object] = []
+    discovered: list[Any] = []
     errors: list[tuple[str, str]] = []
     seen_project_ids: set[str] = set()
 
@@ -939,7 +939,7 @@ def _load_projects_for_discovery(
     probe_shared_path: bool,
     probe_limit: int,
     requested_project: str | None = None,
-) -> tuple[list[object], object]:
+) -> tuple[list[Any], Any]:
     projects, workspace_errors = _collect_discovery_projects(
         browser_api_module=browser_api_module,
         session=session,
@@ -1164,7 +1164,7 @@ def _resolve_project_catalog_aliases(
     *,
     project_data: dict[str, Any],
     project_account_section: dict[str, Any],
-    projects: list[object],
+    projects: list[Any],
 ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     existing_projects = project_data.get("projects")
     if not isinstance(existing_projects, dict):
@@ -1196,7 +1196,7 @@ def _resolve_project_catalog_aliases(
 def _populate_project_catalog(
     *,
     project_catalog: dict[str, dict[str, Any]],
-    projects: list[object],
+    projects: list[Any],
     browser_api_module,  # noqa: ANN001
     session,  # noqa: ANN001
     workspace_id: str,
@@ -1280,7 +1280,7 @@ def _update_account_shared_path_group(
 
 def _print_shared_path_group_summary(
     *,
-    projects: list[object],
+    projects: list[Any],
     project_catalog: dict[str, dict[str, Any]],
     alias_for_id: dict[str, str],
 ) -> None:
@@ -1490,8 +1490,7 @@ def _merge_workspace_aliases(
             if force or alias not in merged_workspaces:
                 merged_workspaces[alias] = workspace_value
 
-    explicit_workspaces = {
-    }
+    explicit_workspaces: dict[str, str] = {}
     for alias, raw_workspace_id in explicit_workspaces.items():
         workspace_value = str(raw_workspace_id or "").strip()
         if not workspace_value:
@@ -1967,12 +1966,12 @@ def _resolve_probe_defaults(
 
 def _build_probe_project_list(
     *,
-    projects: list[object],
+    projects: list[Any],
     project_catalog: dict[str, dict[str, Any]],
     force: bool,
     probe_limit: int,
-) -> list[object]:
-    to_probe: list[object] = []
+) -> list[Any]:
+    to_probe: list[Any] = []
     for project in projects:
         entry = project_catalog.get(project.project_id) or {}
         shared = str(entry.get("shared_path_group") or "").strip()
@@ -2010,7 +2009,7 @@ def _run_shared_path_probe(
     browser_api_module,  # noqa: ANN001
     session,  # noqa: ANN001
     account_key: str,
-    projects: list[object],
+    projects: list[Any],
     project_catalog: dict[str, dict[str, Any]],
     alias_for_id: dict[str, str],
     force: bool,
@@ -2176,7 +2175,7 @@ def _persist_default_path_aliases(
     *,
     project_data: dict[str, Any],
     account_key: str,
-    selected_project: object,
+    selected_project: Any,
     project_catalog: dict[str, dict[str, Any]],
     target_dir: str | None,
     force: bool,
@@ -2227,7 +2226,7 @@ def _prompt_storage_tier(current_path: str) -> str:
     if detected in (None, "hdd"):
         suggested = "ssd"
     else:
-        suggested = detected
+        suggested = detected if detected is not None else "ssd"
     click.echo("")
     click.echo("Remote workspace storage tier — pick where `target_dir` lives:")
     for tier, desc in _STORAGE_TIERS:
@@ -2247,7 +2246,7 @@ def _prompt_target_dir(
     force: bool,
     cli_target_dir: str | None,
     config: Config | None = None,
-    selected_project: object,
+    selected_project: Any,
     project_catalog: dict[str, dict[str, Any]],
 ) -> str | None:
     """Prompt for target_dir, using the catalog workdir as suggestion.
@@ -2412,7 +2411,7 @@ def _write_discovered_project_config(
     config: Config,
     account_key: str,
     selected_alias: str,
-    selected_project: object,
+    selected_project: Any,
     project_catalog: dict[str, dict[str, Any]],
     force: bool,
     target_dir: str | None = None,
@@ -2502,6 +2501,8 @@ def _persist_discovery_catalog(request: _DiscoveryPersistRequest) -> None:
     cli_target_dir = request.cli_target_dir
 
     global_path = Config.writable_config_path()
+    if global_path is None:
+        raise click.ClickException("No active account configured. Run `inspire account add` first.")
     project_path = Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
     if not _confirm_discovery_writes(
         force=force, global_path=global_path, project_path=project_path

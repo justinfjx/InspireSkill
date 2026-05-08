@@ -602,11 +602,12 @@ def notebook_status(
         return
 
     if data.get("code") == 0:
-        notebook = data.get("data", {})
+        notebook_payload = data.get("data", {})
+        notebook_detail = notebook_payload if isinstance(notebook_payload, dict) else {}
         if json_output:
-            click.echo(json_formatter.format_json(notebook))
+            click.echo(json_formatter.format_json(notebook_detail))
         else:
-            _print_notebook_detail(notebook)
+            _print_notebook_detail(notebook_detail)
         return
 
     _handle_error(

@@ -14,7 +14,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Iterable, Sequence, cast
 
 from inspire import __version__
 
@@ -96,12 +96,12 @@ def _stash_logger_state(logger: logging.Logger) -> None:
 def _restore_logger_state(logger: logging.Logger) -> None:
     previous_level = getattr(logger, _DEBUG_PREV_LEVEL, _MISSING)
     if previous_level is not _MISSING:
-        logger.setLevel(previous_level)
+        logger.setLevel(cast(int | str, previous_level))
         delattr(logger, _DEBUG_PREV_LEVEL)
 
     previous_propagate = getattr(logger, _DEBUG_PREV_PROPAGATE, _MISSING)
     if previous_propagate is not _MISSING:
-        logger.propagate = previous_propagate
+        logger.propagate = cast(bool, previous_propagate)
         delattr(logger, _DEBUG_PREV_PROPAGATE)
 
 

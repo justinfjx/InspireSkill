@@ -1,4 +1,5 @@
 import json
+import shlex
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -411,6 +412,80 @@ def test_wrap_in_bash():
 
     # Whitespace handling
     assert wrap_in_bash("  bash -c 'foo'  ") == "  bash -c 'foo'  "
+
+
+def test_build_remote_logged_command_tees_output_and_sets_pipefail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from inspire.cli.utils import job_submit as job_submit_module
+
+    monkeypatch.setattr(job_submit_module, "_now_log_timestamp", lambda: "20260508T010203Z")
+    config = config_module.Config(
+        username="user",
+        password="pass",
+        target_dir="/train/user space",
+        remote_env={"WANDB_MODE": "offline"},
+    )
+
+    command, log_path = job_submit_module.build_remote_logged_command(
+        config,
+        command="bash -c 'python train.py'",
+        name="train/a",
+    )
+
+    assert log_path == "/train/user space/.inspire/training_master_train_a_20260508T010203Z.log"
+    outer = shlex.split(command)
+    assert outer[:4] == ["bash", "-o", "pipefail", "-c"]
+    script = outer[4]
+    assert "export WANDB_MODE=offline && export PYTHONUNBUFFERED=1 && " in script
+    assert "mkdir -p '/train/user space/.inspire' && " in script
+    assert ": > '/train/user space/.inspire/training_master_train_a_20260508T010203Z.log'" in script
+    assert "cd '/train/user space' && " in script
+    assert "{ bash -c 'python train.py' 2> >(" in script
+    assert "tee -a '/train/user space/.inspire/training_master_train_a_20260508T010203Z.log' >&2" in script
+    assert "| tee -a '/train/user space/.inspire/training_master_train_a_20260508T010203Z.log'" in script
+    assert "> \"${log_path}\" 2>&1" not in command
+
+
+def test_build_remote_logged_command_preserves_user_pythonunbuffered() -> None:
+    from inspire.cli.utils import job_submit as job_submit_module
+
+    config = config_module.Config(
+        username="user",
+        password="pass",
+        target_dir="/train/user",
+        remote_env={"PYTHONUNBUFFERED": "0"},
+    )
+
+    command, _ = job_submit_module.build_remote_logged_command(
+        config,
+        command="bash -c 'python train.py'",
+        name="train",
+    )
+
+    script = shlex.split(command)[4]
+    assert "export PYTHONUNBUFFERED=0 && " in script
+    assert "export PYTHONUNBUFFERED=1 && " not in script
+
+
+def test_build_remote_logged_command_without_target_dir_keeps_existing_behavior() -> None:
+    from inspire.cli.utils import job_submit as job_submit_module
+
+    config = config_module.Config(
+        username="user",
+        password="pass",
+        target_dir=None,
+        remote_env={"FOO": "bar"},
+    )
+
+    command, log_path = job_submit_module.build_remote_logged_command(
+        config,
+        command="bash -c 'python train.py'",
+        name="train",
+    )
+
+    assert command == "export FOO=bar && bash -c 'python train.py'"
+    assert log_path is None
 
 
 def test_job_status_human_output_hides_raw_id(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):

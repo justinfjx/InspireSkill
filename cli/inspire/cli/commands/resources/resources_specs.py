@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 import click
 
@@ -50,8 +50,9 @@ def _group_name(group: dict, fallback: str) -> str:
     return str(group.get("name") or group.get("logic_compute_group_name") or fallback).strip()
 
 
-def _extract_gpu_type(price: dict) -> str:
-    gpu_info = price.get("gpu_info") if isinstance(price.get("gpu_info"), dict) else {}
+def _extract_gpu_type(price: dict[str, Any]) -> str:
+    gpu_info_payload = price.get("gpu_info")
+    gpu_info: dict[str, Any] = gpu_info_payload if isinstance(gpu_info_payload, dict) else {}
     return str(
         gpu_info.get("gpu_type_display")
         or gpu_info.get("gpu_type")
@@ -316,7 +317,7 @@ def list_specs(
         # Show workspace column when more than one workspace was queried.
         multi_ws = len({r.get("workspace_name") for r in rows}) > 1
         if multi_ws:
-            headers = ("Workspace", "Usage", "Compute Group", "GPU", "CPU", "MemGiB")
+            headers: tuple[str, ...] = ("Workspace", "Usage", "Compute Group", "GPU", "CPU", "MemGiB")
             widths = [18, 9, 26, 10, 6, 8]
             aligns = ["left", "left", "left", "left", "right", "right"]
         else:

@@ -209,7 +209,7 @@ def run_ssh_command_streaming(
 
     _config, bridge, proxy_cmd = _resolve_bridge_and_proxy(bridge_name, config)
     ssh_cmd = _build_ssh_base_args(bridge=bridge, proxy_cmd=proxy_cmd)
-    popen_stdin = subprocess.PIPE
+    popen_stdin: int | None = subprocess.PIPE
     if pass_stdin:
         ssh_cmd.append(_wrap_remote_command(command))
         popen_stdin = None
@@ -243,6 +243,9 @@ def run_ssh_command_streaming(
         errors="replace",
         env=_build_ssh_process_env(),
     )
+    stdout = process.stdout
+    if stdout is None:
+        raise RuntimeError("SSH process stdout pipe was not created")
 
     # Feed the command via stdin so it never appears in the process cmdline.
     if not pass_stdin:
@@ -271,12 +274,12 @@ def run_ssh_command_streaming(
 
             # Read from a single path (readline only) so lines cannot be emitted twice.
             if process.poll() is not None:
-                line = process.stdout.readline()
+                line = stdout.readline()
             else:
-                ready, _, _ = select.select([process.stdout], [], [], 1.0)
+                ready, _, _ = select.select([stdout], [], [], 1.0)
                 if not ready:
                     continue
-                line = process.stdout.readline()
+                line = stdout.readline()
 
             if line:
                 logger.debug("run_ssh_command_streaming line=%s", line.rstrip("\n"))

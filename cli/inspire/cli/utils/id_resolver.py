@@ -88,8 +88,8 @@ def resolve_partial_id(
             + ", ".join(ids),
             EXIT_VALIDATION_ERROR,
             hint=(
-                f"Rename one of the duplicates, or for destructive cleanup pass "
-                f"`--pick <N>` (1-indexed) on a v3-style command."
+                "Rename one of the duplicates, or for destructive cleanup pass "
+                "`--pick <N>` (1-indexed) on a v3-style command."
             ),
         )
 

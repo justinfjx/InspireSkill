@@ -67,7 +67,8 @@ def _parse_model(item: dict[str, Any]) -> ModelInfo:
     """Flatten the `/model/list` item shape (`{model: {...}, ...}`) into `ModelInfo`."""
     if not isinstance(item, dict):
         return ModelInfo(model_id="", name="")
-    inner = item.get("model") if isinstance(item.get("model"), dict) else item
+    model_payload = item.get("model")
+    inner: dict[str, Any] = model_payload if isinstance(model_payload, dict) else item
     return ModelInfo(
         model_id=str(inner.get("model_id") or inner.get("id") or ""),
         name=str(inner.get("name") or inner.get("model_name") or ""),

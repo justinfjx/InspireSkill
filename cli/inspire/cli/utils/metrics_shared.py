@@ -607,7 +607,11 @@ def build_metrics_command(
         if chart_path is not None and open_after:
             _open_file(chart_path)
 
-    metrics_cmd.params[0].help = f"{resource_label} name (from `inspire {resource_name} list`)."
+    setattr(
+        metrics_cmd.params[0],
+        "help",
+        f"{resource_label} name (from `inspire {resource_name} list`).",
+    )
     return metrics_cmd
 
 

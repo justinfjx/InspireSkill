@@ -103,10 +103,10 @@ def _ensure_rtunnel_binary(config: TunnelConfig) -> Path:
             else:
                 with tarfile.open(tmp.name, "r:gz") as tar:
                     # Extract the rtunnel binary (should be the only file or named rtunnel*)
-                    for member in tar.getmembers():
-                        if member.isfile() and "rtunnel" in member.name:
+                    for tar_member in tar.getmembers():
+                        if tar_member.isfile() and "rtunnel" in tar_member.name:
                             # Extract to a temp location first
-                            extracted = tar.extractfile(member)
+                            extracted = tar.extractfile(tar_member)
                             if extracted:
                                 config.rtunnel_bin.write_bytes(extracted.read())
                                 config.rtunnel_bin.chmod(0o755)

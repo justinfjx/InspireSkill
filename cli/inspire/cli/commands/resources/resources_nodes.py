@@ -159,7 +159,15 @@ def list_nodes(
         click.echo("")
         click.echo("📊 Full-Free 8-GPU Nodes by Compute Group")
         if show_workspace:
-            headers = ("Workspace", "Group", "Full Free", "Ready", "Total", "Free GPUs", "")
+            headers: tuple[str, ...] = (
+                "Workspace",
+                "Group",
+                "Full Free",
+                "Ready",
+                "Total",
+                "Free GPUs",
+                "",
+            )
             widths = [16, 25, 10, 8, 8, 10, 2]
             aligns = ["left", "left", "right", "right", "right", "right", "left"]
         else:
@@ -169,7 +177,7 @@ def list_nodes(
 
         total_full_free = 0
         total_free_gpus = 0
-        table_rows = []
+        table_rows: list[tuple[object, ...]] = []
         for row in filtered:
             name = row["group_name"]
             full_free = row["full_free_nodes"]

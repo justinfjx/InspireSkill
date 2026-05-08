@@ -97,10 +97,10 @@ def _collect_context(cfg: Config) -> dict[str, Any]:
         name = str(group.get("name") or "").strip()
         if not name:
             continue
-        entry: dict[str, Any] = {"name": name}
+        group_entry: dict[str, Any] = {"name": name}
         gpu = str(group.get("gpu_type") or "").strip()
         if gpu:
-            entry["gpu_type"] = gpu
+            group_entry["gpu_type"] = gpu
         workspace_ids = group.get("workspace_ids") or []
         workspace_names = [
             ws_name_for_id[ws_id]
@@ -110,10 +110,10 @@ def _collect_context(cfg: Config) -> dict[str, Any]:
         if workspace_names:
             # compute_groups usually live in a single workspace; flatten to a
             # scalar when that's true.
-            entry["workspace"] = (
+            group_entry["workspace"] = (
                 workspace_names[0] if len(workspace_names) == 1 else workspace_names
             )
-        compute_groups_view.append(entry)
+        compute_groups_view.append(group_entry)
     compute_groups_view.sort(key=lambda e: (e.get("gpu_type", ""), e["name"]))
 
     return {

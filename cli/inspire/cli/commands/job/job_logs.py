@@ -24,6 +24,7 @@ from typing import Optional
 import click
 
 from inspire.bridge.tunnel import (
+    TunnelConfig,
     TunnelNotAvailableError,
     _test_ssh_connection,
     is_tunnel_available,
@@ -233,19 +234,22 @@ def _follow_logs_via_ssh(
             bufsize=1,
             universal_newlines=True,
         )
+        stdout = process.stdout
+        if stdout is None:
+            raise RuntimeError("SSH process stdout pipe was not created")
 
         last_status_check = time.time()
 
         while True:
             if process.poll() is not None:
-                for line in process.stdout:
+                for line in stdout:
                     click.echo(line, nl=False)
                 break
 
-            ready, _, _ = select.select([process.stdout], [], [], 1.0)
+            ready, _, _ = select.select([stdout], [], [], 1.0)
 
             if ready:
-                line = process.stdout.readline()
+                line = stdout.readline()
                 if line:
                     click.echo(line, nl=False)
                 elif process.poll() is not None:
@@ -255,14 +259,14 @@ def _follow_logs_via_ssh(
             if current_time - last_status_check >= status_check_interval:
                 last_status_check = current_time
                 try:
-                    result = api.get_job_detail(job_id)
-                    job_data = result.get("data", {})
+                    status_result = api.get_job_detail(job_id)
+                    job_data = status_result.get("data", {})
                     current_status = job_data.get("status", "UNKNOWN")
 
                     if current_status in terminal_statuses:
                         final_status = current_status
                         time.sleep(3)
-                        process.stdout.close()
+                        stdout.close()
                         break
                 except Exception:
                     pass
@@ -317,7 +321,7 @@ def _find_connected_tunnel_bridges(
 
 def _resolve_tunnel_preflight_target(
     bridge_name: Optional[str],
-) -> tuple[Optional[str], object | None, bool]:
+) -> tuple[Optional[str], TunnelConfig | None, bool]:
     """Resolve the bridge/config tuple used by SSH availability preflight."""
     try:
         tunnel_config = load_tunnel_config()
@@ -794,6 +798,7 @@ def logs(
 
     job_id = resolve_job_id(ctx, job, all_workspaces=all_workspaces)
 
+    resolved_log_path: str
     if remote_log_path:
         resolved_log_path = remote_log_path.strip()
         if not resolved_log_path:
@@ -824,8 +829,10 @@ def logs(
                 ),
             )
             return
-        resolved_log_path = _resolve_latest_log_via_ssh(glob_pattern, bridge_name=bridge)
-        if not resolved_log_path:
+        resolved_candidate = _resolve_latest_log_via_ssh(glob_pattern, bridge_name=bridge)
+        if resolved_candidate:
+            resolved_log_path = resolved_candidate
+        else:
             if follow:
                 # `_follow_logs_via_ssh` polls for the file's existence with
                 # its own wait loop — pass the glob pattern through so it

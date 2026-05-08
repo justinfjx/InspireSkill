@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -157,7 +158,7 @@ def _show_json(
     compact: bool,
     filter_category: str | None,
 ) -> None:
-    result = {
+    result: dict[str, Any] = {
         "config_files": {
             "global": str(global_path) if global_path else None,
             "project": str(project_path) if project_path else None,

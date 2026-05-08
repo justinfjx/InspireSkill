@@ -150,6 +150,23 @@ if (( INSTALL_CLI )); then
   if [[ -n "$INSPIRE_BIN" ]]; then
     ok "$(INSPIRE_SKIP_UPDATE_CHECK=1 "$INSPIRE_BIN" --version 2>/dev/null || echo "$PACKAGE installed")"
   fi
+
+  log "installing Playwright Chromium for SSO login"
+  if command -v uv >/dev/null 2>&1; then
+    if uvx --from "$SPEC" playwright install chromium >/dev/null; then
+      ok "Playwright Chromium installed"
+    else
+      warn "couldn't install Playwright Chromium automatically; run: uvx --from $PACKAGE playwright install chromium"
+    fi
+  elif command -v playwright >/dev/null 2>&1; then
+    if playwright install chromium >/dev/null; then
+      ok "Playwright Chromium installed"
+    else
+      warn "couldn't install Playwright Chromium automatically; run: playwright install chromium"
+    fi
+  else
+    warn "couldn't find a Playwright CLI to install Chromium automatically."
+  fi
 fi
 
 # ---- fetch SKILL.md + references/ ------------------------------------------

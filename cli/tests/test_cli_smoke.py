@@ -1,5 +1,3 @@
-import importlib
-from types import SimpleNamespace
 
 from click.testing import CliRunner
 

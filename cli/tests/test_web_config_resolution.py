@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 from inspire.cli.utils.notebook_cli import get_base_url
-from inspire.config import Config
 from inspire.platform.web.browser_api.notebooks import _config_compute_groups_fallback
 
 

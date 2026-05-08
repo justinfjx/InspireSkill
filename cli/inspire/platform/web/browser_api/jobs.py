@@ -184,7 +184,7 @@ def list_job_instances(
         "POST",
         _browser_api_path("/train_job/instance_list"),
         referer=f"{_get_base_url()}/jobs/distributedTrainingDetail/{job_id}",
-        body={"job_id": job_id, "page_num": page_num, "page_size": page_size},
+        body={"jobId": job_id, "page_num": page_num, "page_size": page_size},
         timeout=30,
     )
 
