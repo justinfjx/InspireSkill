@@ -61,21 +61,7 @@ uv run inspire hpc create --help
 | 安装、更新、账号初始化或代理 setup | [references/setup/install-and-config.md](references/setup/install-and-config.md)、[references/setup/proxy-setup.md](references/setup/proxy-setup.md) |
 | OpenAPI 合约或 Browser API 端点背景 | [references/dev/openapi.md](references/dev/openapi.md)、[references/dev/browser-api.md](references/dev/browser-api.md) |
 
-## 4. `--quota` 通用格式
-
-`notebook create`、`job create`、`run`、`hpc create`、`ray create --head-quota` 和 Ray worker 的 `quota=` 都使用三元组：
-
-```bash
-<gpu>,<cpu>,<mem>
-```
-
-`mem` 以 GiB 计。CPU-only 写成 `0,<cpu>,<mem>`。三元组必须在当前 workspace 可见规格中唯一匹配；多个 compute group 撞上同一三元组时，加 `--group <name>` 或对应命令的 compute group 参数消歧。先用：
-
-```bash
-inspire resources specs --usage all
-```
-
-## 5. 项目上下文
+## 4. 项目上下文
 
 仓库根可用 `INSPIRE.md` 记录非配置性上下文，建议包含：
 

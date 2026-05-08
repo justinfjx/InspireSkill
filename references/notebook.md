@@ -27,7 +27,7 @@ inspire notebook scp --help
 inspire notebook exec <name> "cd <repo> && export X=1 && ./run.sh"
 ```
 
-超过 $$20$$ 分钟的任务写成远端后台进程和 sentinel 文件，再从本机轮询，不要让 `exec` 同步等待。
+超过 20 分钟的任务写成远端后台进程和 sentinel 文件，再从本机轮询，不要让 `exec` 同步等待。
 
 ## 3. SSH bootstrap
 
@@ -109,10 +109,10 @@ du -sh --max-depth=1 <dir>
 | 形状 | 策略 |
 | --- | --- |
 | 顶层 fan-out 大且大小均匀 | `find <root> -mindepth 1 -maxdepth 1 -print0 \| xargs -0 -n 1 -P 16 rm -rf --` |
-| 一两个巨型子树 | 下钻一两层再 fan-out，否则并行度实际只有 $$1$$ 路 |
+| 一两个巨型子树 | 下钻一两层再 fan-out，否则并行度实际只有 1 路 |
 | 百万级小文件 | 优先 GNU `find -delete` 或 `rsync --delete-after empty/ target/`，减少 fork 和 metadata 压力 |
 
-超过 $$20$$ 分钟的操作一律 `nohup ... &` + sentinel 文件，本地轮询远端 sentinel；不要让 `notebook exec` 同步挂住。并行度不要无脑拉到 $$64$$ 以上，GPFS metadata server 是共享资源，`-P 16` 通常已经够。
+超过 20 分钟的操作一律 `nohup ... &` + sentinel 文件，本地轮询远端 sentinel；不要让 `notebook exec` 同步挂住。并行度不要无脑拉到 64 以上，GPFS metadata server 是共享资源，`-P 16` 通常已经够。
 
 ## 5. 基底 notebook 与镜像
 

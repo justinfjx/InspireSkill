@@ -14,15 +14,15 @@
 
 ## 2. 优先级
 
-`--priority` 是 $$1$$ 到 $$10$$ 的数字，平台映射为三档：
+`--priority` 是 1 到 10 的数字，平台映射为三档：
 
 | 数值 | 平台语义 |
 | --- | --- |
-| $$1$$ 到 $$3$$ | 低优先级，会被高优任务抢占 |
-| $$4$$ | 普通优先级 |
-| $$5$$ 到 $$10$$ | 高优先级，适合稳定训练 |
+| 1 到 3 | 低优先级，会被高优任务抢占 |
+| 4 | 普通优先级 |
+| 5 到 10 | 高优先级，适合稳定训练 |
 
-需要稳定运行时传 $$5$$ 或更高。提交后用人类输出核对：
+需要稳定运行时传 5 或更高。提交后用人类输出核对：
 
 ```bash
 inspire job status <name>
@@ -47,7 +47,7 @@ HPC 关键约束：
 2. `--compute-group "<name>"` 按 name 传。
 3. Slurm 级参数超出节点规格时可能静默排队。
 4. `--image` 必须是完整 Docker 地址，并带可用 Slurm 环境；通用基底是 `docker.sii.shaipower.online/inspire-studio/unified-base:v2`。
-5. 平台自身吃约 $$0.3$$ 核 CPU 和 $$384$$ MB 内存，应用层并发压到 `cpus-per-task - 4` 或更低。
+5. 平台自身吃约 0.3 核 CPU 和 384 MB 内存，应用层并发压到 `cpus-per-task - 4` 或更低。
 
 CPU 空间里只有 `HPC-可上网区资源-2` 支持 `inspire hpc create`。该组的 `500GB` 规格可能静默排队；真需要大内存交互处理时，退化成在 `CPU资源-2` 开 notebook。
 
@@ -102,7 +102,7 @@ Ray 特有坑：
 
 - 镜像必须带 Ray runtime。
 - `--head-quota` 和 worker `quota=` 用 Ray 专属配额表。
-- `min` 和 `max` 都必须大于等于 $$1$$。
+- `min` 和 `max` 都必须大于等于 1。
 - driver 不退出，集群就一直占配额；长守护任务要接受手动 stop 的运维模型。
 
 ## 5. 事件优先
@@ -124,8 +124,8 @@ inspire ray events <name> --tail 50
 | `slurmctld BackOff` | 镜像不带 Slurm 运行环境 |
 | `steps=-/0` | 正文没用 `srun` 启动程序 |
 | `nodes=[]` | 调度未分配；可能是配额 / 优先级问题 |
-| `status=SUCCEEDED` 但目录 / `stdout.log` / 报告为空 | CPU 并发或内存贴边；应用层应留 `cpus-per-task - 4` 和约 $$384$$ MB 内存余量 |
-| `quota match failed` / $$0$$ 候选 | `--quota gpu,cpu,mem` 在当前 workspace 找不到对应规格。用 `inspire resources specs --usage hpc` 重选；多组撞名时加 `--group <name>` 消歧 |
+| `status=SUCCEEDED` 但目录 / `stdout.log` / 报告为空 | CPU 并发或内存贴边；应用层应留 `cpus-per-task - 4` 和约 384 MB 内存余量 |
+| `quota match failed` / 0 候选 | `--quota gpu,cpu,mem` 在当前 workspace 找不到对应规格。用 `inspire resources specs --usage hpc` 重选；多组撞名时加 `--group <name>` 消歧 |
 | `image not found` | 镜像地址不完整；必须是 `host/namespace/name:tag` 全形式 |
 | `429` | 已内置退避；持续失败就等几分钟 |
 
