@@ -17,10 +17,10 @@ description: "Execution-first Inspire platform playbook for agents driving the i
 | 实时事实源 | `job list`、`notebook list`、`resources specs/list/nodes` 等状态查询以平台实时结果为准。本地 cache 只能当 SSH 会话、事件副本等非权威辅助信息。 |
 | 资源申请 | 先查实时空余，再按真实需求申请。不要因为模型保守而主动缩小规模；只有调度语义、项目配额或实时空余明确不足时才降档。 |
 | 默认 workspace | 默认只主动使用 `CPU 资源空间` 和 `分布式训练空间`。其它 workspace 需要仓库级 `INSPIRE.md` 或用户明确指定。 |
-| 优先级 | `--priority` 接受 $$1$$ 到 $$10$$。$$1$$ 到 $$3$$ 是低优先级，$$4$$ 是普通优先级，$$5$$ 到 $$10$$ 是高优先级。需要稳定运行时传 $$5$$ 或更高，并用 `inspire job status <name>` 核对人类输出中的优先级。 |
+| 优先级 | `--priority` 接受 1 到 10。1 到 3 是低优先级，4 是普通优先级，5 到 10 是高优先级。需要稳定运行时传 5 或更高，并用 `inspire job status <name>` 核对人类输出中的优先级。 |
 | 排错入口 | 任务 PENDING、CREATING 过久或 FAILED 原因不明时，第一步查 `inspire <res> events <name>`。不要凭猜测重提。 |
 | 清理 | 终态且不再需要的资源用 `<res> delete <name> --yes` 清理；running 先 stop。不确定是否仍有人使用时跳过。 |
-| 大操作 | 共享盘大规模 `mv`、`cp`、`rm` 前先看文件量和大小分布。超过 $$20$$ 分钟的远程操作用后台任务和 sentinel 文件，不要让 `notebook exec` 长时间同步挂住。 |
+| 大操作 | 共享盘大规模 `mv`、`cp`、`rm` 前先看文件量和大小分布。超过 20 分钟的远程操作用后台任务和 sentinel 文件，不要让 `notebook exec` 长时间同步挂住。 |
 
 ## 2. 基础命令入口
 
