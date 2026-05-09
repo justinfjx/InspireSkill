@@ -20,7 +20,14 @@ inspire notebook scp --help
 `inspire notebook exec <name> "<cmd>"` 是一次性独立子进程。两次调用之间不共享 cwd 或环境变量。需要连续状态时，把状态放在同一条命令里：
 
 ```bash
-inspire notebook exec <name> "cd <repo> && export X=1 && ./run.sh"
+inspire notebook exec <name> --cwd me:<repo> "export X=1 && ./run.sh"
+```
+
+不传 `--cwd` 时，CLI 默认使用 `me` path alias；没有 `me` 时才落到远端 `$HOME`。路径 alias 支持 `me`、`me:<subdir>` 和 `me/<subdir>` 形式。需要长期使用的子目录可以先登记成专用 alias：
+
+```bash
+inspire notebook set-path <name> /inspire/ssd/project/<topic>/<user>/<repo> as repo
+inspire notebook exec <name> --cwd repo "pwd"
 ```
 
 超过 20 分钟的任务写成远端后台进程和 sentinel 文件，再从本机轮询，不要让 `exec` 同步等待。
@@ -78,8 +85,8 @@ nohup "$RT_BIN" 22222 31337 >/tmp/rtunnel-server.log 2>&1 &
 | 文件流转类型 | 做法 |
 | --- | --- |
 | 独立 repo 日常同步 | 本地 `git push`，远端 `git pull` |
-| 多仓库工作区 | 通过 `inspire init --discover` 配好项目远端工作目录，多个 repo 并列放置 |
-| 非 Git 文件 | `notebook scp`，远端路径优先写绝对路径 |
+| 多仓库工作区 | 通过 `inspire init --discover` 配好 `me`，多个 repo 并列放在 `me:<repo>` |
+| 非 Git 文件 | `notebook scp`，远端路径优先写 path alias，例如 `me:<repo>/file` |
 | 目标计算组不可上网但共享路径可见 | 在同一路径的可上网区 notebook 做 git 操作，离线训练实例只读共享盘结果 |
 
 `notebook scp` 不是源码同步工具。源码走 `git push` + 远端 `git pull`，否则容易慢且不一致。
@@ -88,9 +95,16 @@ nohup "$RT_BIN" 22222 31337 >/tmp/rtunnel-server.log 2>&1 &
 
 ```bash
 git push origin <branch>
-inspire notebook exec <notebook-name> "cd <repo> && git pull && git log -1 --oneline"
-inspire notebook ssh <notebook-name>
-inspire notebook exec <notebook-name> "hostname"
+inspire notebook exec <notebook-name> --cwd me:<repo> "git pull && git log -1 --oneline"
+inspire notebook ssh <notebook-name> --cwd me:<repo>
+inspire notebook exec <notebook-name> --cwd me "hostname"
+```
+
+少量非 Git 文件用 alias 传，不要回到绝对路径：
+
+```bash
+inspire notebook scp <notebook-name> ./config.yaml me:<repo>/config.yaml
+inspire notebook scp <notebook-name> --download me:<repo>/outputs/ ./outputs/ -r
 ```
 
 大规模 `mv` / `cp` / `rm` 前先探形状：

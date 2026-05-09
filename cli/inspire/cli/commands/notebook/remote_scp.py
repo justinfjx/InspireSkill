@@ -81,11 +81,11 @@ def bridge_scp(
 
     \b
     Examples:
-        inspire notebook scp my-notebook ./model.py /tmp/model.py
-        inspire notebook scp my-notebook ./data/ /tmp/data/ -r
-        inspire notebook scp my-notebook -d /tmp/results.tar.gz ./results.tar.gz
-        inspire notebook scp my-notebook -d /tmp/checkpoints/ ./checkpoints/ -r
-        inspire notebook scp my-notebook ./bundle.tar /tmp/
+        inspire notebook scp my-notebook ./model.py me:repo/model.py
+        inspire notebook scp my-notebook ./data/ me:repo/data/ -r
+        inspire notebook scp my-notebook -d me:repo/results.tar.gz ./results.tar.gz
+        inspire notebook scp my-notebook -d me:repo/checkpoints/ ./checkpoints/ -r
+        inspire notebook scp my-notebook ./bundle.tar me:
     """
     from inspire.cli.utils.id_resolver import reject_id_at_boundary
 

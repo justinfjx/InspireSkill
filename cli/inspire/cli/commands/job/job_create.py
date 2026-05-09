@@ -301,7 +301,7 @@ def create(
 
     \b
     Examples:
-        inspire job create -n pr-123 -q 4,80,800 -c "cd /path && bash train.sh"
+        inspire job create -n pr-123 -q 4,80,800 -c "bash repo/train.sh"
         inspire job create -n test -q 1,20,200 -c "python train.py" --priority 9
         inspire job create -n test -q 4,80,800 -c "python train.py" --group H200
 

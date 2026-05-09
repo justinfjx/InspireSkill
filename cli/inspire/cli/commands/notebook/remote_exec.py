@@ -688,13 +688,13 @@ def exec_command(
 
     \b
     Examples:
-        inspire notebook exec my-notebook "uv venv .venv"
+        inspire notebook exec my-notebook --cwd me:repo "uv venv .venv"
         inspire notebook exec my-notebook --cwd me "pwd"
-        inspire notebook exec my-notebook "pip install torch" --timeout 600
+        inspire notebook exec my-notebook --cwd me:repo "pip install torch" --timeout 600
         inspire notebook exec my-notebook --stdin -- bash -s < scripts/bootstrap.sh
-        inspire notebook exec my-notebook "uv venv .venv" \\
+        inspire notebook exec my-notebook --cwd me:repo "uv venv .venv" \\
             --artifact-path .venv --download ./local
-        inspire notebook exec my-notebook "python train.py" --no-wait
+        inspire notebook exec my-notebook --cwd me:repo "python train.py" --no-wait
         inspire notebook exec my-notebook "hostname"
     """
     from inspire.cli.utils.id_resolver import reject_id_at_boundary

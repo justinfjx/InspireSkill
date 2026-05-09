@@ -4,13 +4,15 @@
 
 默认先在 `CPU 资源空间` 起可上网 notebook，安装项目依赖、Slurm/Ray/训练依赖，并保存成项目镜像。这样后续 notebook、job、HPC、Ray 都复用同一基底，减少冷启动和重复安装。
 
+仓库远端路径默认从 `me` path alias 开始；多个 repo 并列时用 `me:<repo>`。如果需要更短名字，先用 `inspire notebook set-path ... as repo` 写入仓库级 alias。
+
 ```bash
 inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
   --name <name>-base --image docker.sii.shaipower.online/inspire-studio/unified-base:v2 \
   --project <P> --wait
 
-inspire notebook ssh <name>-base
-inspire notebook exec <name>-base "python --version && nvidia-smi || true"
+inspire notebook ssh <name>-base --cwd me
+inspire notebook exec <name>-base --cwd me:<repo> "python --version && nvidia-smi || true"
 inspire notebook install-deps <name>-base --slurm --ray
 inspire image save <name>-base -n <img> -v v1 --public --wait
 inspire image set-default --job <URL> --notebook <URL>
@@ -53,22 +55,24 @@ Ray 示例见 [compute-workloads.md](compute-workloads.md)。
 ```bash
 inspire notebook create --workspace 分布式训练空间 --group H100 -q 1,20,200 \
   --name <name>-debug --image <ref> --project <P> --wait
-inspire notebook ssh <name>-debug
-inspire notebook exec <name>-debug "nvidia-smi"
+inspire notebook ssh <name>-debug --cwd me:<repo>
+inspire notebook exec <name>-debug --cwd me:<repo> "nvidia-smi"
 ```
 
 多节点训练：
 
 ```bash
 inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
-  -c 'bash train.sh' --workspace 分布式训练空间 --group H100 \
+  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group H100 \
   --image <ref> --priority 5
 ```
+
+`job create` / `run` 没有 `--cwd` 参数；配置了 `me` alias 时，CLI 会在远端先进入 `me` 根目录再执行命令。因此示例里的 `<repo>/train.sh` 是相对 `me` 的路径。
 
 快速提交并跟日志：
 
 ```bash
-inspire run 'bash train.sh' -q 8,160,1800 --nodes 2 \
+inspire run 'bash <repo>/train.sh' -q 8,160,1800 --nodes 2 \
   --workspace 分布式训练空间 --group H100 --image <ref> --watch
 ```
 

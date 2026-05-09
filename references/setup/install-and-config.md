@@ -71,7 +71,7 @@ inspire config show --compact
 
 `inspire account add` 会询问平台 username、password、base URL、代理和是否设为活动账号。结果写入 `~/.inspire/accounts/<name>/config.toml`，包含身份、`base_url`、代理等。
 
-账号配置不包含远端工作目录。远端路径通过项目级 `[path_aliases]` 管理，`init --discover` 会写入默认 alias。
+账号配置不包含远端工作目录。远端路径通过项目级 `[path_aliases]` 管理，`init --discover` 会写入默认 alias，例如 `me`、`public`、`global-me` 以及按存储池区分的 `ssd.me` / `hdd.me` / `qb-ilm2.me`。
 
 ## 5. 项目级初始化
 
@@ -89,6 +89,14 @@ inspire resources list --all --include-cpu
 - 当前仓库项目上下文：`./.inspire/config.toml`
 
 CLI 会拒绝账号 config.toml 中出现 `[paths]`，避免项目级路径污染所有仓库。
+
+初始化后，远端命令和传文件优先使用 alias：
+
+```bash
+inspire notebook exec <name> --cwd me "pwd"
+inspire notebook exec <name> --cwd me:<repo> "git pull"
+inspire notebook scp <name> ./config.yaml me:<repo>/config.yaml
+```
 
 ## 6. 多账号
 

@@ -8,6 +8,16 @@
 
 `job list`、name-to-ID 解析和状态判断都应使用平台实时结果，不把本地历史 cache 当事实来源。
 
+配置了 `me` path alias 时，`job create` / `run` 会在远端先进入 `me` 根目录，并把 stdout/stderr 捕获到 `me/.inspire/` 供 `job logs` 查询。训练 repo 建议放在 `me:<repo>`；job 命令里写相对 `me` 的路径：
+
+```bash
+inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
+  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group H100 \
+  --image <ref> --priority 5
+```
+
+`job create` / `run` 本身不解析 `me:<repo>`；alias 解析发生在 CLI 参数层，例如 `notebook exec --cwd me:<repo>` 和 `notebook scp ... me:<repo>/file`。
+
 ## 2. 优先级
 
 `--priority` 是 1 到 10 的数字，平台映射为三档：

@@ -13,7 +13,7 @@ description: "Execution-first Inspire platform playbook for agents driving the i
 | --- | --- |
 | 输出观察面 | Agent 默认使用人类格式。人类输出更短，隐藏低价值 raw ID，适合直接决策。`--json` 是脚本接口，只在写脚本、接 `jq` 或必须消费结构化字段时使用。 |
 | 代理配置 | 代理通过 `inspire account add`、账号级 config、`inspire config show` 和 `inspire config check` 管理。任务命令直接写 `inspire <cmd>`，CLI 会读取持久配置。 |
-| 项目路径 | 项目远端路径通过 `inspire init --discover` 写入仓库级 `.inspire/config.toml`。日常命令直接用 notebook name、job name 和配置内路径。 |
+| 项目路径 | 项目远端路径只通过仓库级 `[path_aliases]` 表达。`inspire init --discover` 会写入 `me`、`public`、`global-me` 和按存储池区分的 alias；`notebook exec` / `shell` 默认用 `me`，临时切目录用 `--cwd me:<subdir>`，新增持久 alias 用 `inspire notebook set-path ... as <alias>`。 |
 | 实时事实源 | `job list`、`notebook list`、`resources specs` / `list` / `nodes` 等状态查询以平台实时结果为准。本地 cache 只能存放 SSH 会话、事件副本等非权威辅助信息。 |
 | 资源申请 | 先查实时空余，再按真实需求申请。不要因为模型保守而主动缩小规模；只有调度语义、项目配额或实时空余明确不足时才降档。 |
 | 默认 workspace | 默认只主动使用 `CPU 资源空间` 和 `分布式训练空间`。其它 workspace 需要仓库级 `INSPIRE.md` 或用户明确指定。 |
