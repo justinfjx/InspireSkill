@@ -1,6 +1,4 @@
-"""Notebook / Interactive instance commands (unified entry for all
-remote-access operations — what used to live under `bridge` and `tunnel`
-is now reachable here under the same notebook group).
+"""Notebook / Interactive instance commands.
 
 Usage:
     inspire notebook list
@@ -8,10 +6,10 @@ Usage:
     inspire notebook top
     inspire notebook create --quota 1,20,200
     inspire notebook stop <name>
-    inspire notebook ssh <notebook>             # first-time bootstrap (or reconnect)
+    inspire notebook ssh <notebook>             # establish cached connection
     inspire notebook exec <notebook> "<cmd>"
     inspire notebook scp <src> <dst>
-    inspire notebook connections                # list cached SSH connections
+    inspire notebook connections                # list cached notebook connections
     inspire notebook refresh <notebook>
     inspire notebook forget <notebook>
 """
@@ -35,13 +33,13 @@ from .notebook_events import events as notebook_events
 from .notebook_lifecycle import lifecycle as notebook_lifecycle
 from .notebook_metrics import notebook_metrics
 
-# Remote operations on a cached notebook connection (formerly `inspire bridge *`).
+# Remote operations on a cached notebook connection.
 from .install_deps import install_deps_cmd
 from .remote_exec import exec_command as _remote_exec
 from .remote_scp import bridge_scp as _remote_scp
 from .remote_shell import bridge_ssh as _remote_shell
 
-# Local cache management (formerly `inspire tunnel *`).
+# Local notebook connection cache management.
 from .connections_cmd import tunnel_list as _connections
 from .forget_cmd import tunnel_remove as _forget
 from .refresh_cmd import tunnel_update as _refresh
@@ -55,7 +53,7 @@ def notebook():
     \b
     Examples:
         inspire notebook list                          # List all instances
-        inspire notebook ssh <notebook>                # Bootstrap SSH (cached by notebook name)
+        inspire notebook ssh <notebook>                # Establish cached connection
         inspire notebook exec <notebook> "nvidia-smi"  # Run a command on a cached notebook
         inspire notebook metrics <notebook> --window 30m
     """
@@ -69,7 +67,7 @@ notebook.add_command(create_notebook_cmd)       # create
 notebook.add_command(stop_notebook_cmd)         # stop
 notebook.add_command(start_notebook_cmd)        # start
 notebook.add_command(delete_notebook_cmd)       # delete
-notebook.add_command(ssh_notebook_cmd)          # ssh  (bootstrap or reconnect, keyed on notebook name)
+notebook.add_command(ssh_notebook_cmd)          # ssh
 notebook.add_command(notebook_top)              # top
 notebook.add_command(notebook_events)           # events (K8s scheduling / pod lifecycle)
 notebook.add_command(notebook_lifecycle)        # lifecycle (run-cycle timeline; /run_index/list)

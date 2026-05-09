@@ -315,7 +315,7 @@ def try_exec_via_ssh_tunnel(
                     ctx,
                     "TunnelError",
                     "No cached notebook connection for SSH execution.",
-                    hint="Bootstrap one with: inspire notebook ssh <notebook>",
+                    hint="Create one with: inspire notebook ssh <notebook>",
                 )
 
             resolved_bridge_name = bridge.name
@@ -679,8 +679,8 @@ def exec_command(
 ) -> None:
     """Execute a command on a cached notebook.
 
-    Uses SSH tunnel for command execution. Workflow transport is only used when
-    artifact options are requested.
+    Uses the cached notebook connection for command execution. Workflow
+    transport is only used when artifact options are requested.
 
     NOTEBOOK is the cached notebook name (omit to use the default).
     COMMAND is the shell command to run remotely (in --cwd, the `me` path alias, or $HOME).
@@ -691,7 +691,7 @@ def exec_command(
         inspire notebook exec my-notebook --cwd me:repo "uv venv .venv"
         inspire notebook exec my-notebook --cwd me "pwd"
         inspire notebook exec my-notebook --cwd me:repo "pip install torch" --timeout 600
-        inspire notebook exec my-notebook --stdin -- bash -s < scripts/bootstrap.sh
+        inspire notebook exec my-notebook --stdin -- bash -s < scripts/setup.sh
         inspire notebook exec my-notebook --cwd me:repo "uv venv .venv" \\
             --artifact-path .venv --download ./local
         inspire notebook exec my-notebook --cwd me:repo "python train.py" --no-wait

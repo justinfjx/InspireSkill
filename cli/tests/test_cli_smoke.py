@@ -36,11 +36,14 @@ def test_notebook_help_includes_key_subcommands() -> None:
     assert "set-default" not in result.output
 
 
-def test_notebook_ssh_help_mentions_bootstrap_no_save_as() -> None:
+def test_notebook_ssh_help_is_black_box_no_save_as() -> None:
     runner = CliRunner()
     result = runner.invoke(cli_main, ["notebook", "ssh", "--help"])
     assert result.exit_code == 0
-    assert "bootstrap" in result.output.lower()
+    assert "establishes and\n  caches the connection" in result.output
+    assert "bootstrap" not in result.output.lower()
+    assert "rtunnel" not in result.output.lower()
+    assert "sshd" not in result.output.lower()
     assert "--save-as" not in result.output
     assert "--alias" not in result.output
 
@@ -78,6 +81,4 @@ def test_job_logs_help_mentions_ssh_only() -> None:
     result = runner.invoke(cli_main, ["job", "logs", "--help"])
     assert result.exit_code == 0
     assert "over SSH" in result.output
-    assert "cached notebook tunnel" in result.output
-
-
+    assert "cached notebook connection" in result.output

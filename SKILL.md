@@ -44,8 +44,9 @@ uv run inspire hpc create --help
 | 场景 | 手册 |
 | --- | --- |
 | 选择 workspace、compute group、quota、项目配额、存储池、path alias，或解释路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) |
-| 创建、连接、执行、传文件、诊断、暴露 notebook 容器端口，或处理 SSH bootstrap | [references/notebook.md](references/notebook.md) |
-| 提交、观察指标或排查 GPU job、HPC、Ray、serving | [references/compute-workloads.md](references/compute-workloads.md) |
+| 创建、连接、执行、传文件，或准备 notebook 基底环境 | [references/notebook.md](references/notebook.md) |
+| 把 notebook 容器内 HTTP 服务暴露给浏览器、SDK 或小组成员 | [references/notebook-service-proxy.md](references/notebook-service-proxy.md) |
+| 提交 GPU job、HPC、Ray、serving，或观察事件、日志和指标 | [references/compute-workloads.md](references/compute-workloads.md) |
 | 一个项目要从环境准备、数据处理推进到训练 | [references/workflows.md](references/workflows.md) |
 | 浏览、注册、保存、设置默认或清理镜像 | [references/image-management.md](references/image-management.md) |
 | 浏览模型仓库，判断 model registry 和 serving 的关系 | [references/model.md](references/model.md) |

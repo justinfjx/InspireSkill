@@ -72,7 +72,7 @@ def tunnel_list(ctx: Context, no_check: bool) -> None:
         else:
             click.echo("No cached notebook connections.")
             click.echo("")
-            click.echo("Bootstrap one with: inspire notebook ssh <notebook>")
+            click.echo("Create one with: inspire notebook ssh <notebook>")
         return
 
     # Check SSH connectivity unless --no-check

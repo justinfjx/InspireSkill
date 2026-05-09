@@ -325,7 +325,7 @@ def _format_human_output(payload: dict[str, Any]) -> str:
 @click.option(
     "--no-check",
     is_flag=True,
-    help="Skip tunnel preflight checks and run nvidia-smi directly.",
+    help="Skip connection preflight checks and run nvidia-smi directly.",
 )
 @click.option(
     "--json",

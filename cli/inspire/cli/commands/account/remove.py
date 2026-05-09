@@ -13,14 +13,14 @@ from inspire.accounts import AccountError, remove_account
 def remove(name: str, assume_yes: bool) -> None:
     """Permanently delete an account's local directory.
 
-    Removes ``~/.inspire/accounts/<name>/`` (config.toml, tunnel bridges,
-    login cache, rtunnel cache). Platform-side resources (notebooks, jobs,
+    Removes ``~/.inspire/accounts/<name>/`` (config.toml, cached notebook
+    connections, login cache). Platform-side resources (notebooks, jobs,
     images) tied to that login keep running — clean them up first if needed.
     """
     if not assume_yes:
         click.confirm(
             f"Delete account {name!r} and all its local files "
-            "(config.toml, SSH tunnel bridges, login cache)?",
+            "(config.toml, cached notebook connections, login cache)?",
             abort=True,
         )
     try:

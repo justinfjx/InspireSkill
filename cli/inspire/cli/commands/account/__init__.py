@@ -19,8 +19,8 @@ def account() -> None:
     """Manage Inspire accounts.
 
     Each account lives in its own directory under
-    ``~/.inspire/accounts/<name>/`` with its own config.toml, SSH tunnel
-    bridges, and login cache. Switch the active account with
+    ``~/.inspire/accounts/<name>/`` with its own config.toml, cached
+    notebook connections, and login cache. Switch the active account with
     ``inspire account use <name>``; inspect with ``inspire account list``.
     """
 

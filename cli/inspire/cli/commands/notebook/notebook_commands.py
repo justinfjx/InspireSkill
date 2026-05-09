@@ -238,8 +238,8 @@ def create_notebook_cmd(
         inspire notebook create -q 0,4,32                   # CPU-only: 4 CPU + 32 GiB
         inspire notebook create -q 1,20,200 --group H200
         inspire notebook create -q 1,20,200 --shm-size 64
-        inspire notebook create --post-start 'bash /workspace/bootstrap.sh'
-        inspire notebook create --post-start-script scripts/notebook_bootstrap.sh
+        inspire notebook create --post-start 'bash /workspace/setup.sh'
+        inspire notebook create --post-start-script scripts/notebook_setup.sh
         inspire notebook create --post-start none --no-wait
         inspire notebook create --priority 5
     """
@@ -449,8 +449,8 @@ def start_notebook_cmd(
     Examples:
         inspire notebook start ring-8h100-test
         inspire notebook start ring-8h100-test --wait
-        inspire notebook start ring-8h100-test --post-start 'bash /workspace/bootstrap.sh'
-        inspire notebook start ring-8h100-test --post-start-script scripts/notebook_bootstrap.sh
+        inspire notebook start ring-8h100-test --post-start 'bash /workspace/setup.sh'
+        inspire notebook start ring-8h100-test --post-start-script scripts/notebook_setup.sh
         inspire notebook start ring-8h100-test --post-start none
     """
     if post_start and post_start_script:
@@ -830,13 +830,13 @@ def list_notebooks(
     "--port",
     default=31337,
     show_default=True,
-    help="rtunnel server listen port inside notebook",
+    help="Advanced: connection service port inside notebook",
 )
 @click.option(
     "--ssh-port",
     default=22222,
     show_default=True,
-    help="sshd port inside notebook",
+    help="Advanced: SSH service port inside notebook",
 )
 @click.option(
     "--command",
@@ -860,7 +860,7 @@ def list_notebooks(
     "setup_timeout",
     default=300,
     show_default=True,
-    help="Timeout in seconds for rtunnel setup to complete",
+    help="Timeout in seconds for notebook connection setup",
 )
 @pass_context
 def ssh_notebook_cmd(
@@ -875,17 +875,16 @@ def ssh_notebook_cmd(
     debug_playwright: bool,
     setup_timeout: int,
 ) -> None:
-    """SSH into a notebook instance via rtunnel ProxyCommand.
+    """Open an SSH session to a notebook instance.
 
-    The positional argument is the notebook name. First call bootstraps
-    the rtunnel / SSH toolchain and caches the connection under that
-    same name; later calls reconnect (auto-rebuilding the tunnel if it
-    dropped). One notebook keeps one cached SSH connection — there is
-    no separate alias concept.
+    The positional argument is the notebook name. The first call establishes
+    and caches the connection under that same name; later calls reconnect
+    automatically. One notebook keeps one cached SSH connection — there is no
+    separate alias concept.
 
     \b
     Examples:
-        inspire notebook ssh <notebook-name>                  # bootstrap (or reconnect)
+        inspire notebook ssh <notebook-name>
         inspire notebook ssh <notebook-name> --command "hostname"
     """
     from inspire.accounts import normalize_environment

@@ -38,13 +38,13 @@ inspire image set-default --job <URL> --notebook <URL>
 
 正式放量前先跑接近生产规模的 probe。小规模通过不代表正式规模稳定。
 
-HPC 和 Ray 的资源模型、示例与异常排查看 [compute-workloads.md](compute-workloads.md)。
+HPC 和 Ray 的资源模型、示例与状态判断看 [compute-workloads.md](compute-workloads.md)。
 
 ## 3. 阶段 C：分布式训练空间
 
 训练空间多数节点不可上网。依赖、权重和数据集先在可上网空间下载到共享盘，再进训练空间。
 
-单节点调试：先用 `inspire notebook create` 在训练空间起 notebook；连接、执行和事件诊断看 [notebook.md](notebook.md)。
+单节点调试：先用 `inspire notebook create` 在训练空间起 notebook；连接、执行和事件观察看 [notebook.md](notebook.md)。
 
 多节点训练命令和异常判断看 [compute-workloads.md](compute-workloads.md)。快速提交并跟日志用 `inspire run`：
 

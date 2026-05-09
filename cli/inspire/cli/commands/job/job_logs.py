@@ -1,16 +1,15 @@
-"""Job logs command — SSH tunnel only.
+"""Job logs command over SSH.
 
 `inspire job logs <name>` cats / tails / follows the remote log file via
-the SSH tunnel of a cached notebook (any one with shared-FS access; pick
-explicitly with ``--notebook``). The log path uses the convention
+a cached notebook connection (any one with shared-FS access; pick explicitly
+with ``--notebook``). The log path uses the convention
 ``<remote_cwd>/.inspire/training_master_<sanitized_name>_<timestamp>.log``;
 ``inspire job logs`` resolves the latest match via SSH ``ls -1t`` so a
 re-submitted name shows the most recent run, not a clobbered file. Pass
 ``--remote-log-path`` to override (e.g. for jobs created outside the CLI).
 
-Bulk mode and the legacy GitHub-workflow fallback were removed. The SSH
-tunnel kit is universal; see ``references/notebook.md`` for the SSH bootstrap
-model. The workflow path was already declared deprecated.
+Bulk mode and the legacy GitHub-workflow fallback were removed. Use
+``inspire notebook ssh <name>`` once to create the cached notebook connection.
 """
 
 from __future__ import annotations
@@ -666,9 +665,9 @@ def _run_job_logs_web_single_job(
 @click.option(
     "--notebook",
     help=(
-        "Notebook name whose cached SSH tunnel should be used. Required when more "
-        "than one is cached and the default bridge is ambiguous. "
-        "Bootstrap with `inspire notebook ssh <notebook-name>` first. "
+        "Notebook name whose cached SSH connection should be used. Required when more "
+        "than one is cached and the default connection is ambiguous. "
+        "Run `inspire notebook ssh <notebook-name>` first. "
         "No short alias — `-n` is reserved for --tail."
     ),
 )
@@ -730,7 +729,7 @@ def logs(
 ) -> None:
     """Tail / cat the remote log file for a training job over SSH.
 
-    Requires a cached notebook tunnel (`inspire notebook ssh <name>`).
+    Requires a cached notebook connection (`inspire notebook ssh <name>`).
     The log path defaults to the convention written by `inspire run` /
     `inspire job create`
     (``<me>/.inspire/training_master_<name>.log``);

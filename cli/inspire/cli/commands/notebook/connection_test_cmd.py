@@ -37,14 +37,14 @@ def tunnel_test(ctx: Context, notebook: str) -> None:
                     "ConfigError",
                     "No cached notebook connection",
                     EXIT_CONFIG_ERROR,
-                    hint="Bootstrap one with: inspire notebook ssh <notebook>",
+                    hint="Create one with: inspire notebook ssh <notebook>",
                 ),
                 err=True,
             )
         else:
             click.echo(
                 human_formatter.format_error(
-                    "No cached notebook connection. Bootstrap one with: "
+                    "No cached notebook connection. Create one with: "
                     "inspire notebook ssh <notebook>"
                 ),
                 err=True,

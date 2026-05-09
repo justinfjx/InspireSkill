@@ -195,7 +195,7 @@ def _resolve_notebook(notebook: str, tunnel_config: TunnelConfig):
     if bridge is None:
         raise click.UsageError(
             f"No cached notebook connection for {notebook!r}. "
-            "Bootstrap one with: inspire notebook ssh <notebook>"
+            "Create one with: inspire notebook ssh <notebook>"
         )
     return bridge
 

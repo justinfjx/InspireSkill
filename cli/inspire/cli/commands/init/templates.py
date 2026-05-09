@@ -112,7 +112,7 @@ denylist = ["*.tmp", ".git/*"]
 [notebook]
 # quota = "1,20,200"  # gpu,cpu,mem (GiB); must match a resource spec in the workspace
 # image = "pytorch:latest"
-# post_start = "bash /workspace/bootstrap.sh"  # none | shell command
+# post_start = "bash /workspace/setup.sh"  # none | shell command
 
 [remote_env]
 # Environment variables exported before remote commands run.

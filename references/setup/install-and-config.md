@@ -36,7 +36,7 @@ curl -fsSL .../install.sh | bash -s -- --no-cli
 curl -fsSL .../install.sh | bash -s -- --no-schedule
 ```
 
-常见问题：
+安装后检查：
 
 - 装完后 `inspire: command not found`：运行 `exec $SHELL` 或开新终端。
 - `installer failed` / 包索引超时：先确认本机网络和代理；必要时在工具配置或 shell profile 中持久设置 Python 包索引，再重跑安装脚本。不要把一次性环境变量前缀写进任务命令示例。
@@ -52,7 +52,7 @@ inspire update --skill-only   # 仅刷 SKILL.md / references/
 ```
 
 `inspire update` 会自动识别当前安装由 `uv tool` 还是 `pipx` 管理，并调用对应升级命令。
-如果默认 PyPI 因网络或镜像问题超时，命令会自动尝试常见 PyPI 镜像；仍失败时，优先检查 Clash 虚拟/TUN 网卡是否开启，或手动配置 `UV_DEFAULT_INDEX` / `PIP_INDEX_URL`。
+如果默认 PyPI 因网络或镜像问题超时，命令会自动尝试常见 PyPI 镜像。网络受限环境可提前检查 Clash 虚拟/TUN 网卡，或持久配置 `UV_DEFAULT_INDEX` / `PIP_INDEX_URL`。
 
 从 v3.0.3 之前的版本升级时，先重跑一次安装脚本：
 

@@ -55,8 +55,8 @@ def _build_remote_shell_command(*, remote_cwd: Optional[str], env_exports: str) 
 def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> None:
     """Open an interactive SSH shell to a cached notebook.
 
-    Requires a cached notebook connection with a reachable SSH tunnel.
-    Bootstrap one with ``inspire notebook ssh <notebook>``.
+    Requires a cached notebook connection. Create one with
+    ``inspire notebook ssh <notebook>``.
 
     \b
     Example:
@@ -100,7 +100,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
             ctx,
             "TunnelError",
             "No cached notebook connection.",
-            hint="Bootstrap one with: inspire notebook ssh <notebook>",
+            hint="Create one with: inspire notebook ssh <notebook>",
         )
         raise RuntimeError("unreachable")
 
