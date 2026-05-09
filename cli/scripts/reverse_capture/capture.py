@@ -5,7 +5,7 @@ End-to-end flow:
 1. Log in via CAS → Keycloak → qz.sii.edu.cn (or reuse a cached `storage_state`).
 2. Attach request/response listeners to the browser context.
 3. Systematically navigate candidate frontend routes (notebook list, train list,
-   HPC list, model library, ...), scroll, switch tabs, click first table rows,
+   HPC list, model repository, ...), scroll, switch tabs, click first table rows,
    open `+ 新建` modals (then ESC without submitting).
 4. Dump every captured XHR to JSONL for post-hoc analysis.
 
@@ -376,6 +376,7 @@ DEFAULT_ROUTES: list[tuple[str, str]] = [
     ("train_list", "/jobs/distributedTraining"),
     ("hpc_list", "/jobs/highPerformanceComputing"),
     ("notebook_list", "/jobs/interactiveModeling"),
+    ("model_repository", "/jobs/modelService"),
     ("inference_list", "/jobs/modelDeployment"),
     ("projects", "/projects"),
     ("resources", "/resources"),
@@ -454,7 +455,15 @@ def main() -> int:
             ),
         }
         if args.storage_state:
-            ctx_kw["storage_state"] = json.loads(Path(args.storage_state).read_text())
+            storage_payload = json.loads(Path(args.storage_state).read_text())
+            # InspireSkill's account cache stores metadata plus Playwright's
+            # storage_state under a top-level key. Plain Playwright dumps are
+            # still accepted unchanged.
+            if isinstance(storage_payload, dict) and isinstance(
+                storage_payload.get("storage_state"), dict
+            ):
+                storage_payload = storage_payload["storage_state"]
+            ctx_kw["storage_state"] = storage_payload
 
         context = browser.new_context(**ctx_kw)
 

@@ -49,7 +49,7 @@ uv run inspire hpc create --help
 | 提交 GPU job、HPC、Ray、serving，或观察事件、日志和指标 | [references/compute-workloads.md](references/compute-workloads.md) |
 | 一个项目要从环境准备、数据处理推进到训练 | [references/workflows.md](references/workflows.md) |
 | 浏览、注册、保存、设置默认或清理镜像 | [references/image-management.md](references/image-management.md) |
-| 浏览模型仓库，判断 model registry 和 serving 的关系 | [references/model.md](references/model.md) |
+| 浏览或注册模型仓库条目，判断 model registry 和 serving 的关系 | [references/model.md](references/model.md) |
 | 安装、更新、账号、项目初始化、代理 setup | [references/setup/install-and-config.md](references/setup/install-and-config.md)、[references/setup/proxy-setup.md](references/setup/proxy-setup.md) |
 
 开发者手册：

@@ -93,7 +93,9 @@ from .projects import (
 )
 from .models import (
     ModelInfo,
+    create_model,
     get_model_detail,
+    list_model_version_records,
     list_model_versions,
     list_models,
 )
@@ -104,10 +106,14 @@ from .users import (
 )
 from .servings import (
     ServingInfo,
+    create_serving,
+    delete_serving,
     get_serving_configs,
     get_serving_detail,
     list_serving_user_project,
     list_servings,
+    start_serving,
+    stop_serving,
 )
 
 __all__ = [
@@ -191,13 +197,19 @@ __all__ = [
     "wait_for_notebook_running",
     # Servings (inference / model deployment)
     "ServingInfo",
+    "create_serving",
+    "delete_serving",
     "get_serving_configs",
     "get_serving_detail",
     "list_serving_user_project",
     "list_servings",
+    "start_serving",
+    "stop_serving",
     # Model registry
     "ModelInfo",
+    "create_model",
     "get_model_detail",
+    "list_model_version_records",
     "list_model_versions",
     "list_models",
     # User utilities

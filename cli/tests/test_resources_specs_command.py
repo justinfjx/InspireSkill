@@ -138,6 +138,8 @@ def test_default_usage_all_queries_all_three_schedule_types(
             return [_make_price(qid="q-dsw", gpu=0, cpu=4, mem=16)]
         if kwargs["schedule_config_type"] == "SCHEDULE_CONFIG_TYPE_TRAIN":
             return [_make_price(qid="q-job", gpu=0, cpu=16, mem=64)]
+        if kwargs["schedule_config_type"] == "SCHEDULE_CONFIG_TYPE_SERVE":
+            return [_make_price(qid="q-serving", gpu=0, cpu=18, mem=72)]
         if kwargs["schedule_config_type"] == "SCHEDULE_CONFIG_TYPE_HPC":
             return [_make_price(qid="q-hpc", gpu=0, cpu=8, mem=32)]
         return [_make_price(qid="q-ray", gpu=0, cpu=2, mem=8)]
@@ -153,19 +155,24 @@ def test_default_usage_all_queries_all_three_schedule_types(
     assert result.exit_code == 0
     payload = json.loads(result.output)
     rows_by_usage = {row["usage"]: row for row in payload["data"]["specs"]}
-    assert set(rows_by_usage) == {"notebook", "job", "hpc", "ray"}
+    assert set(rows_by_usage) == {"notebook", "job", "serving", "hpc", "ray"}
     # Each row carries the (gpu, cpu, mem) triple — no spec_id surfaced.
     assert (
         rows_by_usage["notebook"]["cpu_count"],
         rows_by_usage["notebook"]["memory_size_gib"],
     ) == (4, 16)
     assert (rows_by_usage["job"]["cpu_count"], rows_by_usage["job"]["memory_size_gib"]) == (16, 64)
+    assert (rows_by_usage["serving"]["cpu_count"], rows_by_usage["serving"]["memory_size_gib"]) == (
+        18,
+        72,
+    )
     assert (rows_by_usage["hpc"]["cpu_count"], rows_by_usage["hpc"]["memory_size_gib"]) == (8, 32)
     assert (rows_by_usage["ray"]["cpu_count"], rows_by_usage["ray"]["memory_size_gib"]) == (2, 8)
     assert sorted(set(seen_types)) == sorted(
         [
             "SCHEDULE_CONFIG_TYPE_DSW",
             "SCHEDULE_CONFIG_TYPE_TRAIN",
+            "SCHEDULE_CONFIG_TYPE_SERVE",
             "SCHEDULE_CONFIG_TYPE_HPC",
             "SCHEDULE_CONFIG_TYPE_RAY_JOB",
         ]

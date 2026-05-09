@@ -18,10 +18,14 @@ import pytest
 from inspire.platform.web.browser_api import servings as servings_module
 from inspire.platform.web.browser_api.servings import (
     ServingInfo,
+    create_serving,
+    delete_serving,
     get_serving_configs,
     get_serving_detail,
     list_serving_user_project,
     list_servings,
+    start_serving,
+    stop_serving,
 )
 
 
@@ -141,6 +145,29 @@ def test_list_servings_falls_back_to_list_key_when_inference_servings_missing(
     assert items[0].inference_serving_id == "sv-1"  # falls back from `id`
 
 
+def test_list_servings_supports_current_filter_fields(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch, {"code": 0, "data": {"inference_servings": [], "total": 0}}, record
+    )
+
+    list_servings(
+        workspace_id="ws-given",
+        my_serving=False,
+        keyword="qwen",
+        project_ids=["project-1"],
+        statuses=["RUNNING"],
+        session=_FakeSession(),
+    )
+
+    assert record["body"]["filter_by"] == {
+        "my_serving": False,
+        "keyword": "qwen",
+        "project_id": ["project-1"],
+        "status": ["RUNNING"],
+    }
+
+
 def test_list_servings_raises_on_nonzero_code(monkeypatch) -> None:
     _install_fake_request(monkeypatch, {"code": 1234, "message": "bad"}, {})
     with pytest.raises(ValueError, match="API error: bad"):
@@ -188,7 +215,7 @@ def test_list_serving_user_project_posts_workspace_id(monkeypatch) -> None:
     assert record["body"] == {"workspace_id": "ws-xx"}
 
 
-def test_get_serving_detail_uses_query_param(monkeypatch) -> None:
+def test_get_serving_detail_uses_current_path_endpoint(monkeypatch) -> None:
     record: dict[str, Any] = {}
     _install_fake_request(
         monkeypatch, {"code": 0, "data": {"status": "RUNNING"}}, record
@@ -196,10 +223,100 @@ def test_get_serving_detail_uses_query_param(monkeypatch) -> None:
     data = get_serving_detail("sv-xyz", session=_FakeSession())
     assert data == {"status": "RUNNING"}
     assert record["method"] == "GET"
-    assert "inference_serving_id=sv-xyz" in record["url"]
+    assert record["url"].endswith("/inference_servings/sv-xyz")
 
 
 def test_get_serving_detail_raises_on_error(monkeypatch) -> None:
     _install_fake_request(monkeypatch, {"code": 404, "message": "not found"}, {})
     with pytest.raises(ValueError, match="API error: not found"):
         get_serving_detail("sv-missing", session=_FakeSession())
+
+
+def test_create_serving_posts_current_web_ui_payload(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(
+        monkeypatch,
+        {"code": 0, "data": {"inference_serving_id": "sv-new"}},
+        record,
+    )
+
+    result = create_serving(
+        workspace_id="ws-1",
+        project_id="project-1",
+        name="demo-svc",
+        logic_compute_group_id="lcg-1",
+        model_id="model-1",
+        model_version=1,
+        mirror_id="image-1",
+        command="python -m http.server 8000",
+        port=8000,
+        description="demo",
+        replicas=2,
+        node_num_per_replica=1,
+        shm_gi=16,
+        task_priority=1,
+        custom_domain="demo-svc",
+        resource_spec_price={
+            "cpu_type": "CPU_TYPE_INTEL",
+            "cpu_count": 18,
+            "gpu_type": "NVIDIA_H200_SXM_141G",
+            "gpu_count": 1,
+            "memory_size_gib": 200,
+            "logic_compute_group_id": "lcg-1",
+            "quota_id": "quota-1",
+        },
+        session=_FakeSession(),
+    )
+
+    assert result == {"inference_serving_id": "sv-new"}
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/inference_servings/create")
+    assert record["body"] == {
+        "workspace_id": "ws-1",
+        "project_id": "project-1",
+        "inference_serving_type": "CUSTOM",
+        "name": "demo-svc",
+        "logic_compute_group_id": "lcg-1",
+        "model_id": "model-1",
+        "model_version": 1,
+        "mirror_id": "image-1",
+        "command": "python -m http.server 8000",
+        "port": 8000,
+        "description": "demo",
+        "replicas": 2,
+        "node_num_per_replica": 1,
+        "task_priority": 1,
+        "resource_spec_price": {
+            "cpu_type": "CPU_TYPE_INTEL",
+            "cpu_count": 18,
+            "gpu_type": "NVIDIA_H200_SXM_141G",
+            "gpu_count": 1,
+            "memory_size_gib": 200,
+            "logic_compute_group_id": "lcg-1",
+            "quota_id": "quota-1",
+        },
+        "custom_domain": "demo-svc",
+        "shm_gi": 16,
+    }
+
+
+def test_serving_actions_use_v2_action_endpoint(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(monkeypatch, {"code": 0, "data": {"ok": True}}, record)
+
+    assert stop_serving("sv-1", session=_FakeSession()) == {"ok": True}
+    assert record["method"] == "POST"
+    assert record["url"].endswith("/api/v2/inference_serving?Action=StopServing")
+    assert record["body"] == {"inference_serving_id": "sv-1", "version": 0}
+
+    assert start_serving("sv-1", session=_FakeSession()) == {"ok": True}
+    assert record["url"].endswith("/api/v2/inference_serving?Action=StartServing")
+
+
+def test_delete_serving_uses_current_path_endpoint(monkeypatch) -> None:
+    record: dict[str, Any] = {}
+    _install_fake_request(monkeypatch, {"code": 0, "data": {"ok": True}}, record)
+
+    assert delete_serving("sv-1", session=_FakeSession()) == {"ok": True}
+    assert record["method"] == "DELETE"
+    assert record["url"].endswith("/inference_servings/sv-1")

@@ -4,7 +4,14 @@ from __future__ import annotations
 
 import click
 
-from .serving_commands import configs_serving, list_serving, status_serving, stop_serving
+from .serving_commands import (
+    configs_serving,
+    create_serving,
+    delete_serving,
+    list_serving,
+    status_serving,
+    stop_serving,
+)
 from .serving_metrics import serving_metrics
 
 
@@ -12,25 +19,24 @@ from .serving_metrics import serving_metrics
 def serving() -> None:
     """Manage inference servings (model deployment).
 
-    Covers the observable lifecycle of model deployment services: list,
-    status, available configs, resource metrics, and stop.
+    Covers model deployment services: create, list, status, available configs,
+    resource metrics, stop, and delete.
 
     \b
     Examples:
+        inspire serving create --name demo --model my-model --workspace 分布式训练空间 --group H200-2号机房 --quota 1,18,200 --image sandbox-base:ubuntu24.04-py3.12-1.0.0 --command 'python serve.py' --port 8000 --priority 1
         inspire serving list
         inspire serving status <serving-name>
+        inspire serving delete <serving-name>
         inspire serving metrics <serving-name> --window 30m
-
-    `create` is intentionally not wrapped — deployment configuration is
-    platform-specific (model, port, replicas, custom domain, ...). Use the
-    platform deployment page for creation, then return here for observation
-    and stop.
     """
 
 
+serving.add_command(create_serving)
 serving.add_command(list_serving)
 serving.add_command(status_serving)
 serving.add_command(stop_serving)
+serving.add_command(delete_serving)
 serving.add_command(configs_serving)
 serving.add_command(serving_metrics)  # metrics (资源视图 time-series; per-replica pods)
 

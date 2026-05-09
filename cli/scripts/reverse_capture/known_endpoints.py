@@ -88,7 +88,10 @@ KNOWN: set[tuple[str, str]] = {
     ("POST", "/api/v1/inference_servings/list"),
     ("POST", "/api/v1/inference_servings/user_project/list"),
     ("GET", "/api/v1/inference_servings/configs/workspace/{id}"),
-    ("GET", "/api/v1/inference_servings/detail"),
+    ("GET", "/api/v1/inference_servings/{id}"),
+    ("POST", "/api/v1/inference_servings/create"),
+    ("DELETE", "/api/v1/inference_servings/{id}"),
+    ("POST", "/api/v2/inference_serving"),
 
     # --- SSH keys ---
     ("POST", "/api/v1/ssh/list"),

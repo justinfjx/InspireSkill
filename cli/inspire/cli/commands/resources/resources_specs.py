@@ -24,11 +24,13 @@ from .table import render_table
 _USAGE_SCHEDULE_TYPES = {
     "notebook": ("SCHEDULE_CONFIG_TYPE_DSW",),
     "job": ("SCHEDULE_CONFIG_TYPE_TRAIN",),
+    "serving": ("SCHEDULE_CONFIG_TYPE_SERVE",),
     "hpc": ("SCHEDULE_CONFIG_TYPE_HPC",),
     "ray": ("SCHEDULE_CONFIG_TYPE_RAY_JOB",),
     "all": (
         "SCHEDULE_CONFIG_TYPE_DSW",
         "SCHEDULE_CONFIG_TYPE_TRAIN",
+        "SCHEDULE_CONFIG_TYPE_SERVE",
         "SCHEDULE_CONFIG_TYPE_HPC",
         "SCHEDULE_CONFIG_TYPE_RAY_JOB",
     ),
@@ -37,6 +39,7 @@ _USAGE_SCHEDULE_TYPES = {
 _SCHEDULE_TYPE_USAGE = {
     "SCHEDULE_CONFIG_TYPE_DSW": "notebook",
     "SCHEDULE_CONFIG_TYPE_TRAIN": "job",
+    "SCHEDULE_CONFIG_TYPE_SERVE": "serving",
     "SCHEDULE_CONFIG_TYPE_HPC": "hpc",
     "SCHEDULE_CONFIG_TYPE_RAY_JOB": "ray",
 }
@@ -77,7 +80,7 @@ def _usage_from_schedule_type(schedule_config_type: str) -> str:
 
 
 def _usage_sort_key(usage: str) -> int:
-    order = {"hpc": 0, "notebook": 1, "job": 2, "ray": 3}
+    order = {"hpc": 0, "notebook": 1, "job": 2, "serving": 3, "ray": 4}
     return order.get(usage, 99)
 
 
@@ -123,7 +126,9 @@ def _query_workspace_specs(
                 schedule_config_type=schedule_config_type,
                 session=session,
             )
-            usage_label = _usage_from_schedule_type(schedule_config_type)
+            usage_label = "serving" if usage == "serving" else _usage_from_schedule_type(
+                schedule_config_type
+            )
 
             if not prices:
                 if include_empty:
@@ -225,12 +230,13 @@ def _name_to_id(session, config: Config, ws_name: str) -> str:  # noqa: ANN001
 @click.option("--group", default=None, help="Filter by compute group name (partial match)")
 @click.option(
     "--usage",
-    type=click.Choice(["all", "notebook", "job", "hpc", "ray"], case_sensitive=False),
+    type=click.Choice(
+        ["all", "notebook", "job", "serving", "hpc", "ray"], case_sensitive=False
+    ),
     default="all",
     show_default=True,
     help=(
-        "Spec family to query. 'all' returns notebook + job (TRAIN) + "
-        "hpc + ray; narrow with the others."
+        "Spec family to query. 'serving' uses the model-deployment SERVE spec family."
     ),
 )
 @click.option("--include-empty", is_flag=True, help="Include compute groups that return no specs")
@@ -244,18 +250,17 @@ def list_specs(
     include_empty: bool,
     json_output_local: bool,
 ) -> None:
-    """Discover resource specs for notebook / HPC / Ray creation.
+    """Discover resource specs for notebook / job / serving / HPC / Ray creation.
 
     Default sweeps every workspace the account can see; pass
-    ``--workspace <name>`` to pin to one. ``--usage`` defaults to ``all``
-    so notebook + job + hpc + ray quotas surface together; narrow when
-    you only care about one family.
+    ``--workspace <name>`` to pin to one. ``--usage`` defaults to ``all``;
+    narrow when you only care about one family.
 
     Each row carries human-readable names (workspace, compute group,
     GPU type) plus the (gpu, cpu, memory) triple. Feed the triple back
     via ``--quota gpu,cpu,mem`` to ``inspire notebook create`` /
-    ``job create`` / ``run`` / ``ray create --head-quota`` /
-    ``--worker quota=...``.
+    ``job create`` / ``run`` / ``serving create`` /
+    ``ray create --head-quota`` / ``--worker quota=...``.
     """
 
     ctx.json_output = bool(ctx.json_output or json_output_local)
@@ -325,7 +330,7 @@ def list_specs(
             aligns = ["left", "left", "left", "right", "right"]
 
         click.echo("")
-        click.echo("Resource Specs (for notebook / hpc / ray / job / run create)")
+        click.echo("Resource Specs (for notebook / job / serving / hpc / ray / run create)")
         table_rows = []
         for row in rows:
             gpu_desc = f"{row['gpu_count']}x{row['gpu_type'] or 'CPU'}"

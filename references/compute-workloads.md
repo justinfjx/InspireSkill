@@ -192,11 +192,24 @@ Ray 任务以 `ray events`、`ray status` 和日志作为观察面；metrics 入
 
 ## 8. 模型部署：`serving`
 
-`inspire serving` 面向模型部署服务，普通训练 / 预处理任务不要走它。创建部署需要 `inference_serving.create` 或等价权限；CLI 负责观察和停止已存在的服务，创建部署走平台部署页面。
+`inspire serving` 面向模型部署服务，普通训练 / 预处理任务不要走它。创建部署需要 `inference_serving.create` 或等价权限；CLI 可创建、观察、查看指标、停止和删除服务。
 
-命令列表、参数和单命令功能以 CLI help 为准。先用 `inspire serving --help` 看可用子命令；需要列部署、看状态、停止服务、查看可用配置或读取指标时，再分别查 `inspire serving <subcommand> --help`。
+命令列表、参数和单命令功能以 CLI help 为准。先用 `inspire serving --help` 看可用子命令；创建前用 `inspire serving configs --workspace <WORKSPACE>` 看部署约束，用 `inspire resources specs --usage serving --workspace <WORKSPACE>` 找可用 `--quota gpu,cpu,mem`。
 
-创建部署的参数过多且强绑定平台表单，CLI 暂不覆盖，直接用平台部署页面创建；服务启动后再用 `serving list`、`serving status`、`serving metrics` 和 `serving stop` 做观察和止损。
+创建合同来自网页端 `/jobs/modelDeployment` 的“自定义部署”表单：镜像按可见名称或 `name:tag` 解析成平台 `mirror_id`，资源规格按 serving 专用 `SCHEDULE_CONFIG_TYPE_SERVE` 查询并提交为 `resource_spec_price`。不要用旧 OpenAPI 的 `image_type`、Docker URL 和 `spec_id` 形态来判断 CLI 行为。
+
+创建部署示例：
+
+```bash
+inspire serving create --name <name> --model <model-name> --model-version 1 \
+  --workspace <WORKSPACE> --project <PROJECT> --group <COMPUTE_GROUP> \
+  --quota 1,18,200 --image sandbox-base:ubuntu24.04-py3.12-1.0.0 \
+  --command "python serve.py" --port 8000 --priority 1 --dry-run
+```
+
+确认 payload 后去掉 `--dry-run` 提交。服务启动后再用 `serving list`、`serving status`、`serving metrics`、`serving stop` 和 `serving delete` 做观察和止损。
+
+优先级与网页一致：`1` 到 `3` 是低优先级，`4` 是普通优先级，`5` 到 `10` 是高优先级。低优先级部署在资源紧张时可能被高优任务回收。
 
 服务已启动但吞吐、显存或副本负载不明时，用 `inspire serving metrics <name>` 看每个 replica 的资源曲线：
 
