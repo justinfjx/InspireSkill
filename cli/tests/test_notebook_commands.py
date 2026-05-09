@@ -1173,16 +1173,28 @@ def test_run_notebook_ssh_command_uses_non_interactive_executor(
         "setup_notebook_rtunnel",
         lambda **kwargs: (_ for _ in ()).throw(AssertionError("should not be called")),
     )
-    monkeypatch.setattr(
-        ssh_flow_module.subprocess,
-        "run",
-        lambda args, capture_output, timeout, text: subprocess.CompletedProcess(
-            args,
-            0,
-            stdout="ok\n",
-            stderr="",
-        ),
-    )
+    probe: dict[str, object] = {}
+
+    def fake_probe_run(
+        args: list[str],
+        *,
+        stdin=None,
+        capture_output: bool,
+        timeout: int,
+        text: bool,
+    ) -> subprocess.CompletedProcess:
+        probe.update(
+            {
+                "args": args,
+                "stdin": stdin,
+                "capture_output": capture_output,
+                "timeout": timeout,
+                "text": text,
+            }
+        )
+        return subprocess.CompletedProcess(args, 0, stdout="ok\n", stderr="")
+
+    monkeypatch.setattr(ssh_flow_module.subprocess, "run", fake_probe_run)
 
     ssh_flow_module.run_notebook_ssh(
         Context(),
@@ -1201,6 +1213,7 @@ def test_run_notebook_ssh_command_uses_non_interactive_executor(
     assert streamed["config"] is fake_tunnel_config
     assert streamed["timeout"] == 300
     assert streamed["pass_stdin"] is True
+    assert probe["stdin"] is subprocess.DEVNULL
 
 
 def test_run_notebook_ssh_name_uses_cached_bridge_metadata(
@@ -1278,7 +1291,11 @@ def test_run_notebook_ssh_name_uses_cached_bridge_metadata(
     monkeypatch.setattr(
         ssh_flow_module.subprocess,
         "run",
-        lambda args, capture_output, timeout, text: subprocess.CompletedProcess(
+        lambda args,
+        stdin=None,
+        capture_output=True,
+        timeout=10,
+        text=True: subprocess.CompletedProcess(
             args,
             0,
             stdout="ok\n",
@@ -1404,7 +1421,11 @@ def test_run_notebook_ssh_command_timeout_is_reported(
     monkeypatch.setattr(
         ssh_flow_module.subprocess,
         "run",
-        lambda args, capture_output, timeout, text: subprocess.CompletedProcess(
+        lambda args,
+        stdin=None,
+        capture_output=True,
+        timeout=10,
+        text=True: subprocess.CompletedProcess(
             args,
             0,
             stdout="ok\n",
@@ -1529,7 +1550,11 @@ def test_run_notebook_ssh_command_failure_reports_exit_code_and_grep_hint(
     monkeypatch.setattr(
         ssh_flow_module.subprocess,
         "run",
-        lambda args, capture_output, timeout, text: subprocess.CompletedProcess(
+        lambda args,
+        stdin=None,
+        capture_output=True,
+        timeout=10,
+        text=True: subprocess.CompletedProcess(
             args,
             0,
             stdout="ok\n",
@@ -1806,3 +1831,84 @@ def test_notebook_shell_cwd_uses_path_alias(
         'cd "/inspire/ssd/project/topic/alice/repo" && exec $SHELL -l'
         in str(captured["remote_command"])
     )
+
+
+def test_notebook_shell_without_target_dir_uses_login_home(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = config_module.Config(username="", password="")
+    tunnel_config = tunnel_module.TunnelConfig()
+    tunnel_config.add_bridge(
+        tunnel_module.BridgeProfile(name="gpu-main", proxy_url="https://proxy.example.com")
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        config_module.Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(remote_shell_module, "load_tunnel_config", lambda: tunnel_config)
+    monkeypatch.setattr(remote_shell_module, "is_tunnel_available", lambda *args, **kwargs: True)
+
+    def fake_get_ssh_command_args(bridge_name, config, remote_command=None):  # type: ignore[no-untyped-def]
+        captured["bridge_name"] = bridge_name
+        captured["remote_command"] = remote_command
+        return ["ssh", "root@localhost"]
+
+    monkeypatch.setattr(remote_shell_module, "get_ssh_command_args", fake_get_ssh_command_args)
+    monkeypatch.setattr(remote_shell_module.subprocess, "call", lambda args: 0)
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["notebook", "shell", "gpu-main"])
+
+    assert result.exit_code == EXIT_SUCCESS
+    assert captured["bridge_name"] == "gpu-main"
+    assert captured["remote_command"] is None
+    assert "Working directory: $HOME" in result.output
+
+
+def test_notebook_ssh_cache_hit_without_target_dir_uses_login_home(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import inspire.accounts as accounts_mod
+
+    config = config_module.Config(username="", password="")
+    tunnel_config = tunnel_module.TunnelConfig()
+    tunnel_config.add_bridge(
+        tunnel_module.BridgeProfile(name="gpu-main", proxy_url="https://proxy.example.com")
+    )
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(accounts_mod, "current_account", lambda: None)
+    monkeypatch.setattr(
+        config_module.Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_target_dir=False, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(tunnel_module, "load_tunnel_config", lambda account=None: tunnel_config)
+    monkeypatch.setattr(remote_shell_module, "load_tunnel_config", lambda: tunnel_config)
+    monkeypatch.setattr(remote_shell_module, "is_tunnel_available", lambda *args, **kwargs: True)
+    monkeypatch.setattr(
+        notebook_cmd_module,
+        "run_notebook_ssh",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("should not bootstrap on cache hit")
+        ),
+    )
+
+    def fake_get_ssh_command_args(bridge_name, config, remote_command=None):  # type: ignore[no-untyped-def]
+        captured["bridge_name"] = bridge_name
+        captured["remote_command"] = remote_command
+        return ["ssh", "root@localhost"]
+
+    monkeypatch.setattr(remote_shell_module, "get_ssh_command_args", fake_get_ssh_command_args)
+    monkeypatch.setattr(remote_shell_module.subprocess, "call", lambda args: 0)
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["notebook", "ssh", "gpu-main"])
+
+    assert result.exit_code == EXIT_SUCCESS
+    assert captured["bridge_name"] == "gpu-main"
+    assert captured["remote_command"] is None
+    assert "Working directory: $HOME" in result.output
