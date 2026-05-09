@@ -125,7 +125,7 @@ inspire resources list --all --include-cpu
 <tr>
   <td>
     <h4>🏃 GPU 后台任务（平台名：分布式训练）</h4>
-    平台官方把 <code>job</code> 这一路叫"分布式训练" / distributed training；实际提交接口只要求 GPU 计算资源和启动命令，不强制 payload 必须是训练。<code>inspire job</code> 可用于一张卡、多卡、单节点、多节点等后台 GPU 任务 —— 分布式训练 / 批量推理 / 并发 worker pool 都走这里（<code>hpc</code> 对应 CPU Slurm）。<code>inspire run "&lt;cmd&gt;" --watch</code> 自动选资源组 + 跟 <code>job logs --follow</code>；精细控制优先级 / 节点数用 <code>job create</code>。
+    平台官方把 <code>job</code> 这一路叫"分布式训练" / distributed training；实际提交接口只要求 GPU 计算资源和启动命令，不强制 payload 必须是训练。<code>inspire job</code> 可用于一张卡、多卡、单节点、多节点等后台 GPU 任务 —— 分布式训练 / 批量推理 / 并发 worker pool 都走这里（<code>hpc</code> 对应 CPU Slurm）。<code>inspire run "&lt;cmd&gt;" --watch</code> 自动选资源组 + 跟 <code>job logs --follow</code>；精细控制优先级 / 节点数用 <code>job create</code>，健康度用 <code>job metrics</code> 看 GPU、显存、CPU、内存、I/O 和多 pod 负载是否同步。
   </td>
   <td>
     <h4>📊 资源情报</h4>
@@ -154,8 +154,8 @@ inspire resources list --all --include-cpu
 </tr>
 <tr>
   <td width="50%">
-    <h4>📅 事件 & 生命周期</h4>
-    <code>inspire job events</code> / <code>hpc events</code> / <code>notebook events</code> / <code>ray events</code> 拉平台事件流；<code>notebook lifecycle &lt;name&gt;</code> 看一个实例的多次启停记录 —— 原本要翻 Web UI "详情 → 事件/生命周期"两个 tab 才看得全。
+    <h4>📈 指标、事件 & 生命周期</h4>
+    <code>notebook metrics</code> / <code>job metrics</code> / <code>hpc metrics</code> / <code>serving metrics</code> 拉 Web UI <code>资源视图</code> 同源时间序列，默认输出 PNG 趋势图，<code>--no-plot --sparkline</code> 适合终端快速判断；<code>job events</code> / <code>hpc events</code> / <code>notebook events</code> / <code>ray events</code> 拉平台事件流，<code>notebook lifecycle &lt;name&gt;</code> 看一个实例的多次启停记录。
   </td>
   <td width="50%">
     <h4>🗝 多账号（一账号一目录）</h4>

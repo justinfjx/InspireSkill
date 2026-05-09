@@ -57,6 +57,7 @@ def notebook():
         inspire notebook list                          # List all instances
         inspire notebook ssh <notebook>                # Bootstrap SSH (cached by notebook name)
         inspire notebook exec <notebook> "nvidia-smi"  # Run a command on a cached notebook
+        inspire notebook metrics <notebook> --window 30m
     """
     pass
 

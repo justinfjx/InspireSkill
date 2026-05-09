@@ -5,7 +5,7 @@ description: "Execution-first Inspire platform CLI usage manual, with on-demand 
 
 # Inspire Skill
 
-`inspire` CLI 的日常资料只描述命令可观察行为：状态、事件、日志、资源余量和配置来源都通过 CLI 实时查询；命令是否存在、参数叫什么、默认值是什么，永远以 CLI help 为准。
+`inspire` CLI 的日常资料只描述命令可观察行为：状态、事件、指标、日志、资源余量和配置来源都通过 CLI 实时查询；命令是否存在、参数叫什么、默认值是什么，永远以 CLI help 为准。
 
 `references/dev/` 只放开发者手册。只有维护 CLI 封装、排查 API 合约或用户明确要求看平台接口时，才加载这些文件。
 
@@ -45,7 +45,7 @@ uv run inspire hpc create --help
 | --- | --- |
 | 选择 workspace、compute group、quota、项目配额、存储池、path alias，或解释路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) |
 | 创建、连接、执行、传文件、诊断、暴露 notebook 容器端口，或处理 SSH bootstrap | [references/notebook.md](references/notebook.md) |
-| 提交或排查 GPU job、HPC、Ray、serving | [references/compute-workloads.md](references/compute-workloads.md) |
+| 提交、观察指标或排查 GPU job、HPC、Ray、serving | [references/compute-workloads.md](references/compute-workloads.md) |
 | 一个项目要从环境准备、数据处理推进到训练 | [references/workflows.md](references/workflows.md) |
 | 浏览、注册、保存、设置默认或清理镜像 | [references/image-management.md](references/image-management.md) |
 | 浏览模型仓库，判断 model registry 和 serving 的关系 | [references/model.md](references/model.md) |

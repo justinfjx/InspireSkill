@@ -22,7 +22,15 @@ from .job_metrics import job_metrics
 
 @click.group()
 def job() -> None:
-    """Manage distributed training jobs."""
+    """Manage distributed training jobs.
+
+    \b
+    Examples:
+        inspire job create --name train-a --quota 8,160,1800 --command "bash train.sh"
+        inspire job logs train-a --follow
+        inspire job metrics train-a --window 30m
+        inspire job events train-a --tail 50
+    """
 
 
 job.add_command(create)

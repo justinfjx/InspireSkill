@@ -11,7 +11,14 @@ from .hpc_metrics import hpc_metrics
 
 @click.group()
 def hpc() -> None:
-    """Manage high-performance computing (HPC) jobs."""
+    """Manage high-performance computing (HPC) jobs.
+
+    \b
+    Examples:
+        inspire hpc create --name prep-a --quota 0,16,64 --command "srun python prep.py"
+        inspire hpc metrics prep-a --metric cpu,mem,disk_read,disk_write --window 2h
+        inspire hpc events prep-a --tail 50
+    """
 
 
 hpc.add_command(list_hpc)

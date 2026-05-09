@@ -9,7 +9,7 @@ def test_root_help_keeps_json_as_script_interface() -> None:
     result = runner.invoke(cli_main, ["--help"])
 
     assert result.exit_code == 0
-    assert "Default human output is the Agent-facing observation surface." in result.output
+    assert "Default human output is the interactive observation surface." in result.output
     assert "Use JSON only for scripts or structured automation." in result.output
 
 

@@ -457,10 +457,11 @@ def build_metrics_command(
     ) -> None:
         """Query historical GPU / CPU / memory / disk / network utilization.
 
-        Backs the 资源视图 tab in the web UI. For multi-pod workloads
-        (distributed training, multi-replica serving) every pod is drawn
-        as its own line — divergence between workers is the signal you're
-        watching for when monitoring "is training still healthy?".
+        Backs the 资源视图 tab in the web UI. Use it after a resource is
+        RUNNING to answer whether it is actually doing work: GPU / CPU /
+        memory pressure, I/O flow, and per-pod / per-task / per-replica balance.
+        Each unit is drawn as its own line in the PNG chart and summarized in
+        the terminal output.
         """
         task_id = name_resolver(ctx, name)
 

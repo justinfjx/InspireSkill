@@ -13,8 +13,14 @@ def serving() -> None:
     """Manage inference servings (model deployment).
 
     Covers the observability + lifecycle surface of `/jobs/modelDeployment`:
-    `list` / `status` / `configs` use the Browser API (SSO session) and
-    `status` / `stop` the OpenAPI (Bearer token) for parity with `job` / `hpc`.
+    `list` / `configs` / `metrics` use the Browser API (SSO session), while
+    `status` / `stop` use the OpenAPI (Bearer token) for parity with `job` / `hpc`.
+
+    \b
+    Examples:
+        inspire serving list
+        inspire serving status <serving-name>
+        inspire serving metrics <serving-name> --window 30m
 
     `create` is intentionally not wrapped — deployment configuration is
     platform-specific (model id, port, replicas, custom domain, ...). Use the
