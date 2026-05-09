@@ -343,7 +343,7 @@ def _collect_workspace_ids_for_lookup(
     active account has discovered (populated by ``inspire init --discover``).
     Empty alias map means the user has not run discover yet — caller emits
     a clear error pointing at it instead of silently widening the scope
-    to whatever workspace the SSO session happened to land on.
+    to whatever workspace the platform session happened to land on.
 
     ``session`` is kept in the signature because the caller passes it for
     parity with other lookup helpers; we don't read its workspace_id.

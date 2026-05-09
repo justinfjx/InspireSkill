@@ -12,8 +12,8 @@ def model() -> None:
     """Browse the platform model registry.
 
     Read-only commands for inspecting models and their versions on the
-    `/modelLibrary` + `/jobs/modelDeployment` pages. Backed entirely by the
-    Browser API — no OpenAPI counterpart exists.
+    platform model registry. Use `serving` for deployed service observation
+    and lifecycle commands.
     """
 
 

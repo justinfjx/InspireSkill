@@ -31,7 +31,7 @@ def _resolve_workspace_id(config: Config, workspace: Optional[str]) -> Optional[
 @click.command("whoami")
 @pass_context
 def whoami_user(ctx: Context) -> None:
-    """Show the logged-in user (via `GET /api/v1/user/detail`)."""
+    """Show the logged-in user."""
     try:
         session = get_web_session()
         info = browser_api_module.get_current_user(session=session) or {}
@@ -56,13 +56,12 @@ def whoami_user(ctx: Context) -> None:
 @click.command("quota")
 @pass_context
 def quota_user(ctx: Context) -> None:
-    """Show the current user's quota (`GET /api/v1/user/quota`).
+    """Show the current user's quota.
 
     \b
-    Note: the /user/quota endpoint is admin-gated on qz.sii.edu.cn. Regular
-    users get `用户不存在` and should use `inspire project list` (which shows
-    per-project remaining budget and GPU caps) instead. The web portal does
-    not expose a quota page for non-admin users.
+    Note: user-level quota is admin-only on qz.sii.edu.cn. Regular users may
+    see `用户不存在`; use `inspire project list` for per-project remaining
+    budget and GPU caps instead.
     """
     try:
         session = get_web_session()
@@ -84,8 +83,8 @@ def quota_user(ctx: Context) -> None:
         if "用户不存在" in msg or "user does not exist" in msg.lower():
             msg = (
                 f"{msg}\n\n"
-                "Hint: /user/quota is admin-gated on qz.sii.edu.cn; regular "
-                "users get this error. Use `inspire project list` for "
+                "Hint: user-level quota is admin-only on qz.sii.edu.cn; regular "
+                "users may see this error. Use `inspire project list` for "
                 "per-project remaining budget and GPU caps."
             )
         _handle_error(ctx, "APIError", msg, EXIT_API_ERROR)
@@ -94,10 +93,10 @@ def quota_user(ctx: Context) -> None:
 @click.command("api-keys")
 @pass_context
 def api_keys_user(ctx: Context) -> None:
-    """List the current user's API keys (`/user/my-api-key/list`).
+    """List the current user's API keys.
 
     Values are not returned by list — only metadata. Create/delete are not
-    wrapped; use the UI at `/userCenter` for those.
+    wrapped; use the platform user center for those.
     """
     try:
         session = get_web_session()

@@ -117,9 +117,9 @@ def _list_workspace_ids(
     Precedence:
       1. ``--workspace`` explicit alias / name
       2. ``-A`` widens to the union of ``[workspaces]`` alias-map values and
-         the SSO session's known workspaces (alias map preferred when present
-         per the v4 contract; SSO list as a backstop when discover hasn't run)
-      3. Default = SSO session's workspace
+         the platform session's known workspaces (alias map preferred when
+         present; live list as a backstop when discover hasn't run)
+      3. Default = platform session's workspace
     """
     if explicit_workspace_id:
         return [explicit_workspace_id]
@@ -618,7 +618,7 @@ def _watch_jobs(
     interval: int,
     active: bool,
 ) -> None:
-    """Continuously poll the web API and re-render the job list."""
+    """Continuously poll live platform results and re-render the job list."""
     api_logger = logging.getLogger("inspire.inspire_api_control")
     original_level = api_logger.level
     api_logger.setLevel(logging.CRITICAL)
@@ -729,7 +729,7 @@ def _watch_jobs(
     show_default=True,
     help="Refresh interval in seconds for --watch",
 )
-@click.option("--web", is_flag=True, help="Accepted for compatibility; list always uses Web API")
+@click.option("--web", is_flag=True, help="Accepted for compatibility; ignored.")
 @click.option("--workspace", default=None, help="Workspace alias or name")
 @click.option(
     "--all-workspaces",
@@ -744,14 +744,14 @@ def _watch_jobs(
     help="Include jobs from all users (default: current user only)",
 )
 @click.option("--created-by", default=None, help="Advanced creator filter")
-@click.option("--page-num", type=int, default=1, show_default=True, help="Web list page number")
-@click.option("--page-size", type=int, default=100, show_default=True, help="Web list page size")
+@click.option("--page-num", type=int, default=1, show_default=True, help="Result page number")
+@click.option("--page-size", type=int, default=100, show_default=True, help="Result page size")
 @click.option(
     "--max-pages",
     type=int,
     default=50,
     show_default=True,
-    help="Max web pages to scan per workspace when --name is set",
+    help="Max result pages to scan per workspace when --name is set",
 )
 @pass_context
 def list_jobs(
@@ -771,11 +771,10 @@ def list_jobs(
     page_size: int,
     max_pages: int,
 ) -> None:
-    """List training jobs from the platform Web API.
+    """List training jobs from the platform.
 
-    Default scope is the active workspace from your SSO session. Pass
-    ``-A`` to fan out across every workspace alias (the union of your
-    account's ``[workspaces]`` values + the SSO-visible workspaces).
+    Default scope is the current workspace. Pass ``-A`` to fan out across
+    every visible workspace.
 
     \b
     Example:
@@ -849,7 +848,7 @@ def list_jobs(
 
 @click.command("status")
 @click.argument("job")
-@click.option("--web", is_flag=True, help="Query the web UI detail API instead of OpenAPI")
+@click.option("--web", is_flag=True, help="Use the platform detail view.")
 @click.option("--workspace", default=None, help="Workspace alias or name")
 @click.option(
     "--all-workspaces",
@@ -858,13 +857,13 @@ def list_jobs(
     help="Resolve the job name across every visible workspace, not just the current one",
 )
 @click.option("--all-users", is_flag=True, help="Include jobs from all users when resolving a name")
-@click.option("--created-by", default=None, help="Advanced creator filter for web job name resolution")
+@click.option("--created-by", default=None, help="Advanced creator filter for job name resolution")
 @click.option(
     "--max-pages",
     type=int,
     default=50,
     show_default=True,
-    help="Max web pages to scan per workspace when resolving a job name",
+    help="Max result pages to scan per workspace when resolving a job name",
 )
 @pass_context
 def status(
@@ -879,8 +878,7 @@ def status(
 ) -> None:
     """Check the status of a training job.
 
-    JOB is the name shown in `inspire job list`. Raw ids are accepted only
-    when web detail mode is requested.
+    JOB is the name shown in `inspire job list`.
 
     \b
     Example:
@@ -943,7 +941,7 @@ def status(
 
 @click.command("instances")
 @click.argument("job")
-@click.option("--web", is_flag=True, help="Accepted for consistency; this command uses Web API")
+@click.option("--web", is_flag=True, help="Accepted for compatibility; ignored.")
 @click.option("--workspace", default=None, help="Workspace alias or name")
 @click.option(
     "--all-workspaces",
@@ -960,7 +958,7 @@ def status(
     type=int,
     default=50,
     show_default=True,
-    help="Max web pages to scan per workspace when resolving a job name",
+    help="Max result pages to scan per workspace when resolving a job name",
 )
 @pass_context
 def instances(
@@ -1089,10 +1087,10 @@ def stop(ctx: Context, job: str, pick: Optional[int], all_workspaces: bool) -> N
 )
 @pass_context
 def delete(ctx: Context, job: str, yes: bool, pick: Optional[int], all_workspaces: bool) -> None:
-    """Permanently delete a training job entry from the platform (Browser API).
+    """Permanently delete a training job entry from the platform.
 
     \b
-    The entry disappears from the distributed-training list in the web UI.
+    The entry disappears from the platform distributed-training list.
     This cannot be undone; if the job is still running, `stop` it first.
 
     \b
@@ -1136,7 +1134,7 @@ def delete(ctx: Context, job: str, yes: bool, pick: Optional[int], all_workspace
 @click.argument("job")
 @click.option("--timeout", type=int, default=14400, help="Timeout in seconds (default: 4 hours)")
 @click.option("--interval", type=int, default=30, help="Poll interval in seconds (default: 30)")
-@click.option("--web", is_flag=True, help="Poll the web UI detail API instead of OpenAPI")
+@click.option("--web", is_flag=True, help="Use the platform detail view while polling.")
 @click.option("--workspace", default=None, help="Workspace alias or name")
 @click.option(
     "--all-workspaces",
@@ -1144,14 +1142,14 @@ def delete(ctx: Context, job: str, yes: bool, pick: Optional[int], all_workspace
     is_flag=True,
     help="Resolve the job name across every visible workspace, not just the current one",
 )
-@click.option("--all-users", is_flag=True, help="Include jobs from all users in web mode")
-@click.option("--created-by", default=None, help="Advanced creator filter for web job name resolution")
+@click.option("--all-users", is_flag=True, help="Include jobs from all users when resolving a name")
+@click.option("--created-by", default=None, help="Advanced creator filter for job name resolution")
 @click.option(
     "--max-pages",
     type=int,
     default=50,
     show_default=True,
-    help="Max web pages to scan per workspace when resolving a job name",
+    help="Max result pages to scan per workspace when resolving a job name",
 )
 @pass_context
 def wait(
@@ -1287,7 +1285,7 @@ def wait(
 
 @click.command("command")
 @click.argument("job")
-@click.option("--web", is_flag=True, help="Read command from the web UI detail API")
+@click.option("--web", is_flag=True, help="Use the platform detail view.")
 @click.option("--workspace", default=None, help="Workspace alias or name")
 @click.option(
     "--all-workspaces",
@@ -1295,14 +1293,14 @@ def wait(
     is_flag=True,
     help="Resolve the job name across every visible workspace, not just the current one",
 )
-@click.option("--all-users", is_flag=True, help="Include jobs from all users in web mode")
-@click.option("--created-by", default=None, help="Advanced creator filter for web job name resolution")
+@click.option("--all-users", is_flag=True, help="Include jobs from all users when resolving a name")
+@click.option("--created-by", default=None, help="Advanced creator filter for job name resolution")
 @click.option(
     "--max-pages",
     type=int,
     default=50,
     show_default=True,
-    help="Max web pages to scan per workspace when resolving a job name",
+    help="Max result pages to scan per workspace when resolving a job name",
 )
 @pass_context
 def show_command(

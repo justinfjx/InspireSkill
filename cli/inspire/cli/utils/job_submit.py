@@ -1,4 +1,4 @@
-"""Shared helpers for submitting jobs via the Inspire OpenAPI client."""
+"""Shared helpers for submitting GPU jobs through the platform client."""
 
 from __future__ import annotations
 

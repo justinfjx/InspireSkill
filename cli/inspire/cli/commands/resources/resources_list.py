@@ -859,12 +859,12 @@ def run_resources_list(
 @click.option(
     "--workspace-name",
     default=None,
-    help="Workspace name override for accurate mode",
+    help="Workspace name override",
 )
 @click.option(
     "--include-cpu",
     is_flag=True,
-    help="Include CPU-only compute groups with CPU and memory totals (accurate mode only)",
+    help="Include CPU-only compute groups with CPU and memory totals",
 )
 @click.option(
     "--watch",
@@ -883,13 +883,13 @@ def run_resources_list(
     "--workspace",
     "-ws",
     is_flag=True,
-    help="Show per-node availability (workspace-scoped, browser API)",
+    help="Show per-node availability for the current workspace",
 )
 @click.option(
     "--global",
     "use_global",
     is_flag=True,
-    help="Deprecated: alias for --workspace (OpenAPI view removed)",
+    help="Deprecated: alias for --workspace",
 )
 @pass_context
 def list_resources(
@@ -905,7 +905,7 @@ def list_resources(
 ) -> None:
     """List compute-group availability across workspaces.
 
-    By default, shows accurate real-time GPU usage via browser API.
+    By default, shows real-time GPU usage.
     Use --include-cpu to include CPU-only compute groups and CPU/memory totals.
     Use --workspace for per-node availability (free/ready nodes).
 

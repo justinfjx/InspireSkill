@@ -1,15 +1,9 @@
 """Shared core for `inspire <notebook|job|hpc|serving> metrics <name>` commands.
 
-All four resource types hit the same Browser-API endpoint
-(``cluster_metric/resource_metric_by_time``) with a different ``task_type``
-discriminator. Factoring the flag stack, time-window parsing, formatting
-and PNG rendering here keeps each per-resource command a thin wrapper that
-only contributes:
-
-- the Click command name registered under its resource group
-- a ``lcg_resolver`` callable (where does `logic_compute_group_id` live in
-  this resource's detail endpoint) so ``--lcg`` stays optional
-- the CLI's display label and positional-arg help text
+The metrics commands expose the same user-facing resource history for
+notebooks, GPU jobs, HPC jobs, and serving deployments. Factoring the flag
+stack, time-window parsing, formatting, and PNG rendering here keeps each
+per-resource command focused on name resolution and display labels.
 
 Multi-pod rendering is the primary motivation: ``inspire job metrics`` on a
 distributed-training run with N workers needs to surface per-worker divergence
@@ -344,7 +338,7 @@ def _open_file(path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 # Signature: (task_id, session) -> lcg | None. Implementations may issue
-# additional HTTP calls (detail endpoints) to locate the field.
+# additional live detail calls to locate the field.
 LcgResolver = Callable[[str, WebSession], Optional[str]]
 
 
@@ -409,7 +403,7 @@ def build_metrics_command(
         "--lcg",
         "logic_compute_group_id",
         default=None,
-        help="Debug override for the compute-group handle; normal use auto-resolves it from the resource name.",
+        help="Advanced: override the compute group when automatic lookup is ambiguous.",
     )
     @click.option(
         "--plot",
@@ -457,11 +451,10 @@ def build_metrics_command(
     ) -> None:
         """Query historical GPU / CPU / memory / disk / network utilization.
 
-        Backs the 资源视图 tab in the web UI. Use it after a resource is
-        RUNNING to answer whether it is actually doing work: GPU / CPU /
-        memory pressure, I/O flow, and per-pod / per-task / per-replica balance.
-        Each unit is drawn as its own line in the PNG chart and summarized in
-        the terminal output.
+        Use it after a resource is RUNNING to answer whether it is actually
+        doing work: GPU / CPU / memory pressure, I/O flow, and per-pod /
+        per-task / per-replica balance. Each unit is drawn as its own line in
+        the PNG chart and summarized in the terminal output.
         """
         task_id = name_resolver(ctx, name)
 
@@ -509,9 +502,9 @@ def build_metrics_command(
                     f"Unable to resolve compute group for {resource_name} {name!r}.",
                     EXIT_CONFIG_ERROR,
                     hint=(
-                        "Auto-resolution reads the resource detail endpoint. Make sure the "
-                        "resource exists and you have access, or rerun with --json if you "
-                        "are debugging the raw API contract."
+                        "Make sure the resource exists, you have access, and the command "
+                        "can infer its compute group; otherwise pass --lcg as an advanced "
+                        "override."
                     ),
                 )
                 return

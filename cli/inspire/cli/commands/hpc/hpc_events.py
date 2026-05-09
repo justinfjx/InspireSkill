@@ -1,20 +1,7 @@
-"""`inspire hpc events <id>` — events for an HPC (Slurm) job.
+"""`inspire hpc events <name>` — platform events for an HPC (Slurm) job.
 
-Payload comes from Browser API `POST /api/v1/hpc_jobs/events/list` via
-`browser_api.hpc_jobs.list_hpc_job_events`. Output is cached to
-`~/.inspire/events/<job_id>.events.json` on every successful fetch.
-
-**Only job-level events are exposed** — confirmed empirically that the
-platform does not populate per-pod events for HPC tasks (``object_type=
-"instance"`` with real pod names returns 0 across launcher / slurmctld /
-slurmd). Hence no ``--instance`` flag; train jobs have richer per-pod
-events available via ``inspire job events --instance``.
-
-HPC events lack the K8s-native ``type`` field (Normal / Warning) that
-train events carry — the column renders blank for HPC, so no ``--type``
-filter either. Useful fields are ``reason`` (e.g. ``CreatedSlurmCluster``,
-``DeletedSlurmJobSubmitter``), ``message``, and
-``first_timestamp`` / ``last_timestamp``.
+HPC currently exposes job-level events only, so there is no ``--instance``
+flag. The useful fields are reason, message, and first / last timestamp.
 """
 
 from __future__ import annotations
@@ -40,7 +27,7 @@ from inspire.platform.web.browser_api.hpc_jobs import list_hpc_job_events
 @click.option(
     "--from-cache",
     is_flag=True,
-    help="Read from `~/.inspire/events/<id>.events.json` and skip the live fetch.",
+    help="Read the last cached events and skip the live fetch.",
 )
 @click.option(
     "--reason",

@@ -589,7 +589,7 @@ def _discover_workspace_aliases() -> dict[str, str]:
 
 
 def _ensure_playwright_browser() -> None:
-    """Check that the Playwright Chromium browser is installed; offer to install it."""
+    """Check that the local browser runtime is installed; offer to install it."""
     import subprocess
     import sys
 
@@ -604,12 +604,9 @@ def _ensure_playwright_browser() -> None:
         pass
 
     click.echo()
-    click.echo(
-        "Playwright Chromium browser is required for SSO authentication "
-        "(one-time ~150 MB download)."
-    )
+    click.echo("A local browser runtime is required for platform login (one-time ~150 MB download).")
     if not click.confirm("Install Chromium now?", default=True):
-        click.echo("Cannot proceed without a browser for SSO login.")
+        click.echo("Cannot proceed without a browser for platform login.")
         raise SystemExit(1)
 
     result = subprocess.run(

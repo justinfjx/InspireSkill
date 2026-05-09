@@ -1,27 +1,9 @@
 """`inspire notebook events <name>` — lifecycle timeline for a notebook instance.
 
-Payload comes from Browser API `POST /api/v1/notebook/events` via
-`browser_api.notebooks.list_notebook_events`. Output is cached to
-`~/.inspire/events/<notebook_id>.events.json` on every successful fetch.
-
-**Shape differs from train / HPC events**: the platform returns a
-platform-level **lifecycle timeline** (free-form `content` string + epoch-ms
-`created_at`), not raw K8s events. So typical messages look like
-"Successfully assigned … to qb-prod-…", "Pulling image …", "Started
-container …", "Notebook stopped from user timedShutdown", etc. There is no
-K8s-native `type` (Normal/Warning) or structured `reason`. The wrapper
-synthesizes `message` ← `content` and `last_timestamp` ← `created_at` so the
-shared renderer in `cli.utils.events` can print them the same way as
-`inspire job events`; `--type` / `--reason` filters are accepted for
-symmetry but will rarely match (both fields are blank).
-
-The platform GC's events for long-terminated notebooks, so an empty list is
-a normal steady-state response for old DELETED / STOPPED instances — not an
-error.
-
-Notebooks run as a single pod; there is no per-instance events endpoint and
-thus no `--instance` flag. If you need deeper pod-level diagnostics, fall
-back to `inspire notebook status <name>`.
+Notebook events are a platform lifecycle timeline: scheduling, image pulls,
+container start, stop, save, and related messages. The platform may return an
+empty list for long-terminated notebooks; that is a normal steady state, not
+an error. Notebooks run as one instance, so there is no ``--instance`` flag.
 """
 
 from __future__ import annotations
@@ -46,7 +28,7 @@ from inspire.platform.web.browser_api.notebooks import list_notebook_events
 @click.option(
     "--from-cache",
     is_flag=True,
-    help="Read the cached payload (written by the last live fetch) and skip the network.",
+    help="Read the last cached events and skip the live fetch.",
 )
 @click.option(
     "--type",
@@ -73,7 +55,7 @@ def events(
     reason_filter: Optional[str],
     tail: Optional[int],
 ) -> None:
-    """Show K8s events for a notebook instance (scheduling, image pulls, pod lifecycle).
+    """Show platform events for a notebook instance.
 
     \b
     Examples:

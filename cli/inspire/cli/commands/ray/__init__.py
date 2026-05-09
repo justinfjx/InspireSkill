@@ -1,10 +1,9 @@
 """Ray (弹性计算) commands for Inspire CLI.
 
-Wraps the ``/api/v1/ray_job/*`` Browser API family surfaced by the web UI
-under the "弹性计算" sidebar. The full lifecycle is covered: ``list / status /
-stop / delete / create``. The create body shape was reverse-engineered from
-the SPA's own submit handler (``constant.BP_zw-df.js`` on the ``/jobs/ray``
-route) — see ``browser_api/ray_jobs.create_ray_job`` for the wire contract.
+The command group covers the user-visible Ray lifecycle: list, status,
+events, instances, create, stop, and delete. It intentionally presents the
+platform object as a named elastic cluster instead of exposing transport or
+form details.
 """
 
 from __future__ import annotations

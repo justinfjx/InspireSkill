@@ -3,10 +3,6 @@
 Primary use case: monitoring multi-task Slurm HPC runs. Each task/pod is
 drawn as its own line; divergence exposes bad node placements, hung tasks,
 etc.
-
-Resolver: ``GET /api/v1/hpc_jobs/{id}`` (Browser API REST-style path,
-confirmed 2026-04) returns the HPC detail blob with a top-level
-``logic_compute_group_id`` mirroring the train_job shape.
 """
 
 from __future__ import annotations

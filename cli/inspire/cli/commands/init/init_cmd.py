@@ -291,7 +291,7 @@ def init(
     If no environment variables are detected (or with --template), creates
     a template config with placeholder values.
 
-    Use --discover to login via the web UI, discover accessible projects and
+    Use --discover to log in through the platform browser flow, discover accessible projects and
     compute groups, and write an account-scoped catalog to the global config.
 
     \b

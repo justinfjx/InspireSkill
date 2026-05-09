@@ -492,7 +492,7 @@ def list_projects_cmd(
                 )
         elif not all_workspaces:
             # API-side reduction: prefer a single default project-list query
-            # before probing per-workspace endpoints.
+            # before probing per-workspace platform data.
             projects = _load_project_cache(
                 session=session,
                 mode="default-query",
@@ -644,7 +644,7 @@ def detail_project_cmd(ctx: Context, project: str) -> None:
 @click.command("owners")
 @pass_context
 def owners_project_cmd(ctx: Context) -> None:
-    """List candidate project owners (`GET /api/v1/project/owners`)."""
+    """List candidate project owners."""
     session = require_web_session(ctx, hint="inspire project owners requires a logged-in web session")
     try:
         items = browser_api_module.list_project_owners(session=session)

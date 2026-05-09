@@ -183,7 +183,7 @@ def _cookie_value(session: WebSession, name: str) -> str | None:
 
 
 def build_remote_cmd_headers(session: WebSession) -> dict[str, str]:
-    """Build websocket handshake headers for the remote command endpoint."""
+    """Build websocket handshake headers for the remote command service."""
     base_url = _get_base_url().rstrip("/")
     cookie = _cookie_value(session, "inspire-session")
     if not cookie:

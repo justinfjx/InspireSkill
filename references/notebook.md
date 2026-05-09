@@ -70,11 +70,11 @@ CLI 在容器内跑 bootstrap shell 做两件事：
 | --- | --- |
 | 没能从 `global_public` kit 拿到 rtunnel | 容器里检查 `ls /inspire/hdd/global_public/inspire-skill-bootstrap/v1/rtunnel/linux-amd64/rtunnel`。不存在通常是平台挂载覆盖问题，联系启智平台运维。 |
 | `exec format error` / rtunnel 秒退 | kit 中二进制架构不匹配或文件损坏。上报时附 `uname -m` 和 `file /inspire/hdd/global_public/inspire-skill-bootstrap/v1/rtunnel/linux-*/rtunnel`。 |
-| `dpkg: error processing archive ...` | 容器已有 openssh 组件且版本冲突，可在 Web 终端里手动 `dpkg -i --force-overwrite /inspire/hdd/global_public/inspire-skill-bootstrap/v1/sshd-debs/*.deb`。 |
+| `dpkg: error processing archive ...` | 容器已有 openssh 组件且版本冲突，可在 notebook 终端里手动 `dpkg -i --force-overwrite /inspire/hdd/global_public/inspire-skill-bootstrap/v1/sshd-debs/*.deb`。 |
 | `Privilege separation user sshd does not exist` | 离线 deb 安装没有跑完整 postinst。CLI bootstrap 会补 `useradd -r -M -d /run/sshd -s /usr/sbin/nologin sshd`。 |
 | `/etc/ssh/sshd_config: No such file or directory` | CLI bootstrap 会写最小 config。不要手动写 `Port` / `ListenAddress`，否则会和命令行参数叠加导致 bind 冲突。 |
 
-需要手工复现时，在容器 Web 终端里跑：
+需要手工复现时，在容器终端里跑：
 
 ```bash
 KIT=/inspire/hdd/global_public/inspire-skill-bootstrap/v1
@@ -139,13 +139,13 @@ inspire notebook exec <name> "ss -ltnp | grep ':<container-port>' || true"
 inspire notebook exec <name> "curl -sS -o /tmp/probe.out -w '%{http_code}\n' http://127.0.0.1:<container-port>/health"
 ```
 
-如果本机 `curl https://.../proxy/<port>/...` 因代理、证书或内网网络限制失败，可先用浏览器或 Playwright 在已登录启智的会话中验证同一个 URL；最终共享给他人前，仍要用服务自身 API key 做一次无 key / 有 key 对照测试。
+如果本机 `curl https://.../proxy/<port>/...` 因代理、证书或内网网络限制失败，可先用已登录启智的浏览器验证同一个 URL；最终共享给他人前，仍要用服务自身 API key 做一次无 key / 有 key 对照测试。
 
 ## 5. 事件与指标观察
 
 `inspire notebook events <name>` 看调度、镜像拉取、容器启动、停止、保存镜像等生命周期原因。notebook 卡在 `PENDING`、`CREATING` 或失败时先看 events。
 
-`inspire notebook metrics <name>` 看 Web UI `资源视图` 同源的历史资源曲线，不需要进入容器。适合判断实例是否真的吃到 GPU、CPU / 内存是否贴边、磁盘或网络是否在持续传输。
+`inspire notebook metrics <name>` 看平台 `资源视图` 的历史资源曲线，不需要进入容器。适合判断实例是否真的吃到 GPU、CPU / 内存是否贴边、磁盘或网络是否在持续传输。
 
 常用入口：
 

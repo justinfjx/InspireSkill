@@ -349,7 +349,7 @@ def delete_notebook_cmd(
     yes: bool,
     json_output: bool,
 ) -> None:
-    """Permanently delete a notebook instance (Browser API).
+    """Permanently delete a notebook instance.
 
     \b
     The instance disappears from the platform UI. This cannot be undone;
@@ -513,7 +513,7 @@ def start_notebook_cmd(
                 "NotebookFailed",
                 f"Notebook failed to start: {scrub_raw_ids(e)}",
                 EXIT_API_ERROR,
-                hint=scrub_raw_ids(e.events) or "Check Events tab in web UI for details.",
+                hint=scrub_raw_ids(e.events) or "Check the platform Events tab for details.",
             )
             return
         except TimeoutError as e:

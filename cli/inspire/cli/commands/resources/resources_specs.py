@@ -255,8 +255,7 @@ def list_specs(
     GPU type) plus the (gpu, cpu, memory) triple. Feed the triple back
     via ``--quota gpu,cpu,mem`` to ``inspire notebook create`` /
     ``job create`` / ``run`` / ``ray create --head-quota`` /
-    ``--worker quota=...``; the CLI resolves it to the underlying
-    platform handle.
+    ``--worker quota=...``.
     """
 
     ctx.json_output = bool(ctx.json_output or json_output_local)

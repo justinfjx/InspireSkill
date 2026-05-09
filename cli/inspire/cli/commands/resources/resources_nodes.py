@@ -73,9 +73,8 @@ def list_nodes(
 ) -> None:
     """Show how many FULL 8-GPU nodes are currently free per compute group.
 
-    This uses the browser-only endpoint POST /api/v1/cluster_nodes/list
-    (filtered by logic_compute_group_id), so it accounts for GPU fragmentation
-    across nodes.
+    This accounts for GPU fragmentation across nodes, so it is the right view
+    when a workload needs whole 8-GPU nodes instead of scattered free GPUs.
 
     \b
     Examples:

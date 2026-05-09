@@ -108,7 +108,7 @@ inspire account use <name>
 inspire account current
 ```
 
-每个账号的 config、SSH tunnel bridges 和 SSO session cache 都放在 `~/.inspire/accounts/<name>/` 下；活动账号由 `~/.inspire/current` 选择。
+每个账号的 config、SSH tunnel bridges 和登录缓存都放在 `~/.inspire/accounts/<name>/` 下；活动账号由 `~/.inspire/current` 选择。
 
 ## 7. 代理 setup
 

@@ -1,4 +1,4 @@
-"""Render metric time-series into a PNG chart matching the web UI's 资源视图.
+"""Render metric time-series into a PNG chart matching the platform 资源视图.
 
 Multimodal agents (Claude Code, Codex, Gemini CLI, …) can read the emitted
 PNG directly via their image-capable Read tool, so keeping the visual output
@@ -46,7 +46,7 @@ _METRIC_TITLES: dict[str, str] = {
 # 12-color palette tuned for line distinguishability on white background.
 # Cycled when pod count exceeds length (rare beyond 16-worker jobs).
 _POD_COLORS = (
-    "#4e8ef5",  # blue (matches web UI primary)
+    "#4e8ef5",  # blue (matches platform primary)
     "#f5a623",  # orange
     "#23b889",  # green
     "#d94a5c",  # red
@@ -119,7 +119,7 @@ def render_metrics_png(
 ) -> Path:
     """Render one subplot per requested metric into a single PNG.
 
-    Layout mirrors the web UI's 资源视图 tab: a 2-column grid with one
+    Layout mirrors the platform 资源视图: a 2-column grid with one
     line chart per metric, smooth blue line, horizontal gridlines, y-axis
     as `0%–100%` for rates and human-readable `bytes/s` for I/O, x-axis
     as local-time `MM/DD HH:MM` matching the web display.

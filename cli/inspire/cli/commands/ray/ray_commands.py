@@ -140,7 +140,7 @@ def list_ray(
         elif created_by:
             user_ids = [uid.strip() for uid in created_by.split(",") if uid.strip()]
         else:
-            # Default: scope to the logged-in user, mirroring the web UI's
+            # Default: scope to the logged-in user, mirroring the platform's
             # "我的" tab so a shared workspace doesn't dump everyone's jobs.
             try:
                 me = browser_api_module.get_current_user(session=session)
@@ -199,10 +199,9 @@ def list_ray(
 def status_ray(ctx: Context, name: str) -> None:
     """Show details for a Ray (弹性计算) job.
 
-    NAME is the Ray job name shown in `inspire ray list`. The Ray detail
-    payload nests head + worker specs and elastic instance ranges;
-    ``--json`` surfaces the full structure, plain output shows the
-    top-level status fields.
+    NAME is the Ray job name shown in `inspire ray list`. Plain output shows
+    the top-level status fields; use ``--json`` only when a script needs the
+    full structured response.
     """
     try:
         ray_job_id = _resolve_ray_name(ctx, name)
@@ -494,7 +493,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
 @click.option(
     "--dry-run",
     is_flag=True,
-    help="Preview the request and exit without submitting; with --json, print the raw API body.",
+    help="Preview the create plan and exit without submitting.",
 )
 @pass_context
 def create_ray(
@@ -886,7 +885,7 @@ def delete_ray(ctx: Context, name: str, yes: bool, pick: Optional[int]) -> None:
     """Permanently delete a Ray (弹性计算) job record.
 
     \b
-    The entry disappears from the web UI. This cannot be undone; if the
+    The entry disappears from the platform Ray list. This cannot be undone; if the
     job is still running, `stop` it first so the scheduler releases
     reserved capacity cleanly.
     """

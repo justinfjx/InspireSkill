@@ -104,4 +104,4 @@ inspire notebook exec <name> --cwd repo "pytest -q"
 
 日常看配额、预算和优先级时先查 `inspire project --help`，更细的项目详情和负责人下拉只在确认归属或预算拆分时使用。当前登录身份、workspace 权限码、用户级配额和 API Key 元数据从 `inspire user --help` 选择对应子命令；用户级配额普通账号通常不可用，失败时改看项目列表。
 
-API Key 值只在创建时一次性下发；创建 / 删除走 Web UI `/userCenter`。
+API Key 值只在创建时一次性下发；创建 / 删除走平台用户中心页面。

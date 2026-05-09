@@ -3,10 +3,6 @@
 Multi-replica deployments render one line per replica pod. Useful for
 catching under-utilized replicas or noisy-neighbor situations on shared
 nodes.
-
-Resolver: Browser-API ``GET /api/v1/inference_servings/detail`` returns a
-top-level ``logic_compute_group_id`` (already surfaced by
-:class:`browser_api.servings.ServingInfo`).
 """
 
 from __future__ import annotations

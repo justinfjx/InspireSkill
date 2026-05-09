@@ -13,7 +13,7 @@ def use(name: str) -> None:
     """Switch the active account.
 
     Updates ``~/.inspire/current`` so every subsequent ``inspire`` command
-    resolves its config, SSH tunnel aliases, and SSO session cache under
+    resolves its config, SSH tunnel aliases, and login cache under
     ``~/.inspire/accounts/<name>/``.
     """
     try:

@@ -10,7 +10,7 @@
 
 命令列表、参数和单命令功能以 CLI help 为准。先用 `inspire job --help` 看可用子命令；需要提交、查看、日志、事件、停止、删除或指标时，再分别查 `inspire job <subcommand> --help`。快速提交入口也可查 `inspire run --help`。
 
-`job list`、name-to-ID 解析和状态判断都应使用平台实时结果，不把本地历史 cache 当事实来源。
+`job list` 和状态判断都应使用平台实时结果，不把本地历史 cache 当事实来源。
 
 配置了 `me` path alias 时，`job create` / `run` 会在远端先进入 `me` 根目录，并把 stdout/stderr 捕获到 `me/.inspire/` 供 `job logs` 查询。训练 repo 建议放在 `me:<repo>`；job 命令里写相对 `me` 的路径：
 
@@ -104,7 +104,7 @@ inspire hpc create -n <name>-preprocess \
 #SBATCH --time=*
 ```
 
-`status=SUCCEEDED` 不等于 payload 真跑过。Slurm 作业状态只反映调度器分配和进程退出码，不校验业务产出。每个新 entrypoint 写唯一 fingerprint 到共享盘，再用同项目 notebook 回读确认产出完整。
+`status=SUCCEEDED` 不等于业务逻辑真跑过。Slurm 作业状态只反映调度器分配和进程退出码，不校验业务产出。每个新 entrypoint 写唯一 fingerprint 到共享盘，再用同项目 notebook 回读确认产出完整。
 
 ## 4. Ray 适用边界
 
@@ -146,7 +146,7 @@ inspire ray events <name> --tail 50
 
 `job` 和 `ray` 可以进一步看 pod/instance 级原因；HPC 只暴露 job-level 事件。
 
-任务已启动但健康度不明时查指标。`metrics` 对应 Web UI 的 `资源视图`，适合看 GPU、显存、CPU、内存、磁盘和网络是否持续工作，以及多 pod / 多 task 是否负载均衡：
+任务已启动但健康度不明时查指标。`metrics` 对应平台 `资源视图`，适合看 GPU、显存、CPU、内存、磁盘和网络是否持续工作，以及多 pod / 多 task 是否负载均衡：
 
 ```bash
 inspire job metrics <name> --window 30m
@@ -154,9 +154,9 @@ inspire job metrics <name> --metric gpu,gpu_mem,cpu,mem --sparkline --no-plot
 inspire hpc metrics <name> --metric cpu,mem,disk_read,disk_write --window 2h
 ```
 
-默认 `--metric core` 查询 GPU 使用率、GPU 显存、CPU 和内存；`--metric all` 会加磁盘读写和网络读写。多节点训练重点看每个 pod 的 GPU 和网络曲线是否同步：某个 worker 长期低 GPU、低网络，通常比单条日志更早暴露数据加载、通信或进程卡死问题。CPU HPC 重点看 CPU、内存和磁盘读写；Slurm 显示 `RUNNING` 但指标长期为零时，应回到日志和产出文件确认 payload 是否真的启动。
+默认 `--metric core` 查询 GPU 使用率、GPU 显存、CPU 和内存；`--metric all` 会加磁盘读写和网络读写。多节点训练重点看每个 pod 的 GPU 和网络曲线是否同步：某个 worker 长期低 GPU、低网络，通常比单条日志更早暴露数据加载、通信或进程卡死问题。CPU HPC 重点看 CPU、内存和磁盘读写；Slurm 显示 `RUNNING` 但指标长期为零时，应回到日志和产出文件确认程序是否真的启动。
 
-Ray 目前有底层 Browser API 指标 helper，但 CLI 尚未暴露 `ray metrics`。Ray 任务先用 `ray events`、`ray status` 和日志确认状态。
+Ray 目前尚未暴露 `ray metrics` 子命令。Ray 任务先用 `ray events`、`ray status` 和日志确认状态。
 
 | 工具 | 主要回答 |
 | --- | --- |
@@ -194,11 +194,11 @@ Ray 目前有底层 Browser API 指标 helper，但 CLI 尚未暴露 `ray metric
 
 ## 8. 模型部署：`serving`
 
-`inspire serving` 面向模型部署服务，普通训练 / 预处理任务不要走它。账号需有 `inference_serving.create` 或等价权限；普通账号在 Web UI 上点"部署服务"可能被静默踢回首页，CLI create 也不会可靠。
+`inspire serving` 面向模型部署服务，普通训练 / 预处理任务不要走它。账号需有 `inference_serving.create` 或等价权限；普通账号在平台页面点"部署服务"可能被静默踢回首页，CLI create 也不会可靠。
 
 命令列表、参数和单命令功能以 CLI help 为准。先用 `inspire serving --help` 看可用子命令；需要列部署、看状态、停止服务、查看可用配置或读取指标时，再分别查 `inspire serving <subcommand> --help`。
 
-`list` / `configs` 只在 Browser API；`status` / `stop` OpenAPI 和 Browser API 都有，CLI 优先选 OpenAPI。创建部署的参数过多且强绑定 Web 表单，CLI 暂不覆盖，直接用 Web UI `/jobs/modelDeployment`。
+创建部署的参数过多且强绑定平台表单，CLI 暂不覆盖，直接用平台部署页面创建；服务启动后再用 `serving list`、`serving status`、`serving metrics` 和 `serving stop` 做观察和止损。
 
 服务已启动但吞吐、显存或副本负载不明时，用 `inspire serving metrics <name>` 看每个 replica 的资源曲线：
 

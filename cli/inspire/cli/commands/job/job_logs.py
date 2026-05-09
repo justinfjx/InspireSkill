@@ -6,7 +6,7 @@ explicitly with ``--notebook``). The log path uses the convention
 ``<remote_cwd>/.inspire/training_master_<sanitized_name>_<timestamp>.log``;
 ``inspire job logs`` resolves the latest match via SSH ``ls -1t`` so a
 re-submitted name shows the most recent run, not a clobbered file. Pass
-``--remote-log-path`` to override (e.g. for jobs created from the Web UI).
+``--remote-log-path`` to override (e.g. for jobs created outside the CLI).
 
 Bulk mode and the legacy GitHub-workflow fallback were removed. The SSH
 tunnel kit is universal; see ``references/notebook.md`` for the SSH bootstrap
@@ -660,7 +660,7 @@ def _run_job_logs_web_single_job(
     default=None,
     help=(
         "Explicit remote log file path. Overrides the default project log path. "
-        "Useful for web-UI-created jobs where the path was set by the platform."
+        "Useful for jobs created outside the CLI where the path was set by the platform."
     ),
 )
 @click.option(
@@ -672,7 +672,7 @@ def _run_job_logs_web_single_job(
         "No short alias — `-n` is reserved for --tail."
     ),
 )
-@click.option("--web", is_flag=True, help="Read web UI aggregated logs instead of SSH logs")
+@click.option("--web", is_flag=True, help="Read platform aggregated logs instead of SSH logs")
 @click.option("--workspace", default=None, help="Workspace alias or name")
 @click.option(
     "--all-workspaces",
@@ -693,20 +693,20 @@ def _run_job_logs_web_single_job(
     "--instance",
     "instance_ids",
     multiple=True,
-    help="Web mode: pod instance name to query. Repeat to query multiple pods.",
+    help="Pod instance name to query. Repeat to query multiple pods.",
 )
 @click.option(
     "--since-minutes",
     type=int,
     default=None,
-    help="Web mode: query logs from the last N minutes instead of the job lifetime window",
+    help="Query logs from the last N minutes instead of the job lifetime window",
 )
 @click.option(
     "--web-page-size",
     type=int,
     default=500,
     show_default=True,
-    help="Web mode: max log records fetched from the aggregated log API",
+    help="Max log records fetched from the aggregated log view",
 )
 @pass_context
 def logs(
@@ -853,7 +853,7 @@ def logs(
                     hint=(
                         "The job may not have started writing yet. Pass --follow "
                         "to wait, or pass --remote-log-path if the job uses a "
-                        "non-default path (e.g. created from the Web UI)."
+                        "non-default path (e.g. created outside the CLI)."
                     ),
                 )
                 return

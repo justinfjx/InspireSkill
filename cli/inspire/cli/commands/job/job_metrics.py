@@ -1,12 +1,9 @@
-"""`inspire job metrics <name>` — resource-utilization time series for train_job.
+"""`inspire job metrics <name>` — resource-utilization time series for GPU jobs.
 
 Primary use case: monitoring multi-node distributed training. Every worker
 pod renders as its own line in the PNG chart and gets per-pod stats in the
 text summary so stragglers (`worker-3` stuck at 0% while the others are at
 95%) are immediately visible.
-
-Resolver: POSTs ``/api/v1/train_job/detail`` (Browser API, SSO session)
-and reads the top-level ``logic_compute_group_id`` field.
 """
 
 from __future__ import annotations

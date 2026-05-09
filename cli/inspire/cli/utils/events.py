@@ -1,11 +1,10 @@
 """Shared helpers for `inspire job events` / `inspire hpc events`.
 
-Event payloads from Browser API (`/train_job/job_event_list` and
-`/hpc_jobs/events/list`) share most fields — `reason`, `message`, `from`,
+Platform event records share most fields — `reason`, `message`, `from`,
 `first_timestamp`, `last_timestamp`, `age`, `object_id`, `object_type` —
-but not all. Train jobs carry a K8s-native `type` (`Normal` / `Warning`),
-HPC jobs don't. Both sets are lossy after GC (returning `[]` for
-long-completed jobs is the steady state).
+but not all. Train jobs carry a Kubernetes-style `type` (`Normal` /
+`Warning`), HPC jobs don't. Both sets are lossy after GC (returning `[]`
+for long-completed jobs is the steady state).
 
 Design mirrors `job logs`: fetch live → cache to
 `~/.inspire/events/<id>.events.json` → format for stdout. Re-running with
@@ -199,7 +198,7 @@ def run_events_command(
 ) -> None:
     """Shared entrypoint used by `inspire job events` / `inspire hpc events`.
 
-    `fetch` is the per-job-kind Browser API call returning a list[dict].
+    `fetch` is the per-job-kind platform call returning a list[dict].
     """
     if from_cache:
         cached = read_events_cache(job_id)

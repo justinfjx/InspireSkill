@@ -216,7 +216,7 @@ def list_hpc(
     "--entrypoint",
     "-c",
     required=True,
-    help="Slurm script body (omit #SBATCH headers; use srun for the payload)",
+    help="Slurm script body (omit #SBATCH headers; use srun to launch the program)",
 )
 @click.option(
     "--compute-group",
@@ -230,7 +230,7 @@ def list_hpc(
     required=True,
     help=(
         "Node-level resource spec as 'gpu,cpu,mem' (mem in GiB). The triple "
-        "selects the platform 'compute-spec' (web UI: 计算资源规格), which "
+        "selects the platform compute spec (平台字段：计算资源规格), which "
         "determines per-node CPU/memory/GPU totals. Use 'inspire resources "
         "specs --usage hpc' to see available triples. Slurm-level knobs "
         "below (--cpus-per-task / --memory-per-cpu / --number-of-tasks / "
@@ -256,7 +256,7 @@ def list_hpc(
     type=int,
     default=1,
     show_default=True,
-    help="Number of nodes (web UI: 节点数)",
+    help="Number of nodes (平台字段：节点数)",
 )
 @click.option(
     "--priority",
@@ -272,20 +272,20 @@ def list_hpc(
     type=int,
     default=1,
     show_default=True,
-    help="Slurm --ntasks (web UI: 子任务数量)",
+    help="Slurm --ntasks (平台字段：子任务数量)",
 )
 @click.option(
     "--cpus-per-task",
     type=int,
     default=None,
-    help="Slurm --cpus-per-task (web UI: 单个任务 CPU 核数). "
+    help="Slurm --cpus-per-task (平台字段：单个任务 CPU 核数). "
     "Default: derive from --quota cpu count",
 )
 @click.option(
     "--memory-per-cpu",
     type=int,
     default=None,
-    help="Slurm --mem-per-cpu in GiB (web UI: 每 CPU 使用内存 GB). "
+    help="Slurm --mem-per-cpu in GiB (平台字段：每 CPU 使用内存 GB). "
     "Default: derive from --quota mem / --quota cpu",
 )
 @click.option(
@@ -321,7 +321,7 @@ def create_hpc(
         tell slurm how to subdivide each node.
 
     ``-c/--entrypoint`` must be the Slurm script body. Do not include
-    ``#SBATCH`` headers; use ``srun`` to launch the payload.
+    ``#SBATCH`` headers; use ``srun`` to launch the program.
     """
     try:
         from inspire.cli.utils.quota_resolver import (
@@ -529,7 +529,7 @@ def delete_hpc(ctx: Context, name: str, yes: bool, pick: Optional[int]) -> None:
     """Permanently delete an HPC job entry (pass the job name).
 
     \b
-    The entry disappears from the HPC list in the web UI. This cannot be
+    The entry disappears from the platform HPC list. This cannot be
     undone; if the job is still running, `stop` it first.
 
     \b

@@ -12,9 +12,8 @@ from .serving_metrics import serving_metrics
 def serving() -> None:
     """Manage inference servings (model deployment).
 
-    Covers the observability + lifecycle surface of `/jobs/modelDeployment`:
-    `list` / `configs` / `metrics` use the Browser API (SSO session), while
-    `status` / `stop` use the OpenAPI (Bearer token) for parity with `job` / `hpc`.
+    Covers the observable lifecycle of model deployment services: list,
+    status, available configs, resource metrics, and stop.
 
     \b
     Examples:
@@ -23,8 +22,9 @@ def serving() -> None:
         inspire serving metrics <serving-name> --window 30m
 
     `create` is intentionally not wrapped — deployment configuration is
-    platform-specific (model id, port, replicas, custom domain, ...). Use the
-    Web UI at `/jobs/modelDeployment` or drive the OpenAPI directly.
+    platform-specific (model, port, replicas, custom domain, ...). Use the
+    platform deployment page for creation, then return here for observation
+    and stop.
     """
 
 

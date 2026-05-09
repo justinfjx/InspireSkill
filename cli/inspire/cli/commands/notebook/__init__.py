@@ -68,7 +68,7 @@ notebook.add_command(notebook_status)           # status
 notebook.add_command(create_notebook_cmd)       # create
 notebook.add_command(stop_notebook_cmd)         # stop
 notebook.add_command(start_notebook_cmd)        # start
-notebook.add_command(delete_notebook_cmd)       # delete (Browser API)
+notebook.add_command(delete_notebook_cmd)       # delete
 notebook.add_command(ssh_notebook_cmd)          # ssh  (bootstrap or reconnect, keyed on notebook name)
 notebook.add_command(notebook_top)              # top
 notebook.add_command(notebook_events)           # events (K8s scheduling / pod lifecycle)

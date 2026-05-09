@@ -1,17 +1,9 @@
-"""`inspire job events <id>` — K8s events for a distributed training job.
+"""`inspire job events <name>` — platform events for a GPU job.
 
-Two modes:
-
-* **Default (job-level)** — `POST /api/v1/train_job/job_event_list`, returns
-  controller-level events (pytorchjob-controller reporting `Unschedulable`
-  / `SetPodTemplateSchedulerName` etc.).
-* **`--instance <pod>` (per-pod)** — `POST /api/v1/train_job/events/list`
-  with `object_type=instance`, returns scheduler view on specific pods
-  (`FailedScheduling` / `Scheduled` / `Pulling` / `Started`).
-
-Both paths cache to `~/.inspire/events/<job_id>.events.json` (per-instance
-writes into `<job_id>__<pod>.events.json` so multiple pods don't clobber
-each other).
+The command supports job-level events and optional per-pod events via
+``--instance`` / ``--all-instances``. Human output is meant for diagnosis:
+scheduling failures, image pulls, container starts, and related lifecycle
+messages. The cached copy is an offline fallback for the same named job.
 """
 
 from __future__ import annotations
@@ -46,7 +38,7 @@ from .job_commands import WebJobResolutionError, _close_web_client, _resolve_web
 @click.option(
     "--from-cache",
     is_flag=True,
-    help="Read from `~/.inspire/events/<id>.events.json` and skip the live fetch.",
+    help="Read the last cached events and skip the live fetch.",
 )
 @click.option(
     "--type",
@@ -72,25 +64,25 @@ from .job_commands import WebJobResolutionError, _close_web_client, _resolve_web
 @click.option(
     "--all-instances",
     is_flag=True,
-    help="In web mode, fetch per-pod events for every instance in the job.",
+    help="Fetch per-pod events for every instance in the job.",
 )
 @click.option(
     "--tail",
     type=int,
     help="Show only the last N events (applied after --type / --reason).",
 )
-@click.option("--web", is_flag=True, help="Resolve the job via the web UI API")
-@click.option("--workspace", default=None, help="Workspace alias or name (web mode)")
+@click.option("--web", is_flag=True, help="Use the platform detail view.")
+@click.option("--workspace", default=None, help="Workspace alias or name")
 @click.option(
     "--all-workspaces",
     "-A",
     is_flag=True,
-    help="Search all visible workspaces when resolving a web job name",
+    help="Search all visible workspaces when resolving a job name",
 )
 @click.option(
     "--all-users",
     is_flag=True,
-    help="Include jobs from all users when resolving a web job name",
+    help="Include jobs from all users when resolving a job name",
 )
 @click.option(
     "--created-by", default=None, help="Advanced creator filter for web job name resolution"

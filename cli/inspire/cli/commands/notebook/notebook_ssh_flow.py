@@ -655,7 +655,7 @@ def run_notebook_ssh(
             "NotebookFailed",
             f"Notebook failed to start: {e}",
             EXIT_API_ERROR,
-            hint=e.events or "Check Events tab in web UI for details.",
+            hint=e.events or "Check the platform Events tab for details.",
         )
         return
     except TimeoutError as e:

@@ -29,7 +29,7 @@ def resolve_job_id(
     only ever see names don't start guessing with ``rj-`` / ``job-``
     prefixes they saw elsewhere.
 
-    Default scope is the SSO session's workspace. ``all_workspaces=True``
+    Default scope is the platform session's workspace. ``all_workspaces=True``
     widens the search across every value in the account's ``[workspaces]``
     alias map (populated by ``inspire init --discover``).
     """
@@ -87,9 +87,9 @@ def _search_web_jobs_by_name(
     *,
     all_workspaces: bool,
 ) -> list[tuple[str, str]]:
-    """Exact-name match against the web API's job list.
+    """Exact-name match against the live platform job list.
 
-    Default scope: the SSO session's workspace × current user. With
+    Default scope: the platform session's workspace × current user. With
     ``all_workspaces=True``: every value in the account's ``[workspaces]``
     alias map (curated via ``inspire init --discover``).
 

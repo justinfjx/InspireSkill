@@ -1,9 +1,4 @@
-"""`inspire notebook metrics <name>` — thin wrapper around the shared metrics core.
-
-Provides the notebook-specific ``logic_compute_group_id`` resolver (Browser-API
-notebook detail → ``start_config.logic_compute_group_id``) and delegates
-everything else to :func:`inspire.cli.utils.metrics_shared.build_metrics_command`.
-"""
+"""`inspire notebook metrics <name>` — notebook resource-utilization history."""
 
 from __future__ import annotations
 
@@ -16,13 +11,7 @@ from inspire.platform.web.session import WebSession
 
 
 def _resolve_notebook_lcg(task_id: str, session: WebSession) -> Optional[str]:
-    """Pull ``logic_compute_group_id`` from the notebook detail payload.
-
-    The live field is ``start_config.logic_compute_group_id`` (verified 2026-04
-    via ``GET /api/v1/notebook/{id}``). The top-level ``logic_compute_group.*``
-    object exists but platform-side leaves its ID fields empty — keep a
-    defensive fallback in case they populate it later.
-    """
+    """Pull ``logic_compute_group_id`` from the notebook detail payload."""
     detail = browser_api_module.get_notebook_detail(notebook_id=task_id, session=session)
     if not isinstance(detail, dict):
         return None

@@ -1,19 +1,9 @@
 """`inspire notebook lifecycle <name>` — coarse run-cycle timeline.
 
-Payload comes from Browser API `POST /api/v1/run_index/list` via
-`browser_api.notebooks.list_notebook_runs`. Each entry is one
-start → stop cycle: notebooks can be re-started after being auto-recycled
-or manually stopped, so a long-lived instance typically accumulates 3-10
-run records.
-
-This complements `inspire notebook events <name>`, which returns the
-*fine-grained* K8s-ish timeline (scheduling, image pulls, preemption,
-container start, image-save phases). The events tab and the run-index
-tab are rendered by different components on the web portal — the web
-`生命周期` tab uses `/run_index/list`; our `events` command uses
-`/notebook/events`.
-
-The ongoing run has `end_time = ""`.
+Each row is one start to stop cycle. This complements
+``inspire notebook events <name>``, which shows the fine-grained lifecycle
+messages for scheduling, image pulls, preemption, container start, and image
+save phases. The ongoing run has an empty end time.
 """
 
 from __future__ import annotations
