@@ -3,7 +3,8 @@
 `qz.sii.edu.cn` Browser API（`/api/v1/*`）没有公开合约，平台会静默改字段 / 改路径。
 这个目录里的工具是**用来重新测一遍现状**的：Playwright 跑一个无头 Chromium，
 模拟用户点一圈前端，把每条 `/api/v1/*` 请求/响应吐成 JSONL，然后和 `known_endpoints.py`
-里的清单做 diff。
+里的清单做 diff。`known_endpoints.py` 是 diff 基线，不是可直接实现的 API 合同；能否写 CLI 仍以
+`references/dev/browser-api.md` 里的闭环状态、wrapper 测试和必要 live smoke 为准。
 
 ## 什么时候用它
 
@@ -17,7 +18,7 @@
 | 文件 | 用途 |
 | --- | --- |
 | [capture.py](capture.py) | 主抓包脚本。CAS 登录 → 导航候选路由 → 读-only 交互 → JSONL 输出。严格避开任何 `创建/删除/停止/保存/提交` 按钮 |
-| [known_endpoints.py](known_endpoints.py) | 已知端点集 + 归一化（UUID / `ws-` / `nb-` 前缀都折成 `{id}`）+ `STALE_SINCE_2026_04` 退役清单 |
+| [known_endpoints.py](known_endpoints.py) | 抓包 diff 用的已知端点集 + 归一化（UUID / `ws-` / `nb-` 前缀都折成 `{id}`）+ `STALE_SINCE_2026_04` 退役清单；允许包含候选 / 未解端点 |
 | [analyze.py](analyze.py) | 读 JSONL，打印三段：NEW 端点 / KNOWN now 404 / KNOWN not triggered |
 
 ## 准备
@@ -90,7 +91,7 @@ uv run python scripts/reverse_capture/analyze.py /tmp/bapi.jsonl /tmp/bapi-gpu.j
 
 输出会告诉你：
 - **NEW 端点**：这些当前 known set 里没有；如果确认是新的稳定接口，手动加到
-  `known_endpoints.py` 并考虑在 CLI / `references/dev/browser-api.md` 里暴露。
+  `known_endpoints.py`，并在 `references/dev/browser-api.md` 里标清证据状态。只有 body、响应、Referer 和 destructive 语义闭环后，才考虑 CLI wrapper。
 - **KNOWN now 404**：后端很可能退役；往 `STALE_SINCE_2026_04` 里挪，并在 CLI 里改走
   替代路径（参考 [notebooks.py 在 2026-04 的迁移](../../inspire/platform/web/browser_api/notebooks.py)）。
 - **KNOWN not triggered**：导航没点到 / 是 destructive endpoint。前者可以加路由，

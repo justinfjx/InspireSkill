@@ -1,8 +1,11 @@
-"""Known Browser API endpoints — source of truth for diffing captures.
+"""Known Browser API endpoints for diffing captures.
 
 Update this list whenever a new endpoint is added to `references/dev/browser-api.md`
 or wrapped by the CLI. The diffing tool (`analyze.py`) compares freshly-captured
 traffic against this set to surface newly-appeared or newly-dead endpoints.
+This file is not an implementation contract: it may include observed but
+unwrapped endpoints whose body schema is not closed yet. Use
+`references/dev/browser-api.md` for the evidence state of each endpoint family.
 """
 
 from __future__ import annotations
