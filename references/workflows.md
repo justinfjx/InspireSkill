@@ -8,7 +8,7 @@
 
 > 下述示例中的 `<GROUP>`、`<WORKSPACE>`、`<IMAGE_URL>` 仅为占位格式。实际值以 `inspire resources specs` 和 `inspire config context` 的实时输出为准。
 
-仓库远端路径默认从 `me` path alias 开始；多个 repo 并列时用 `me:<repo>`。如果需要更短名字，先用 `inspire notebook set-path ... as repo` 写入仓库级 alias。
+仓库远端路径默认从 `me` path alias 开始；多个 repo 并列时用 `me:<repo>`。如果需要更短名字，先用 `inspire notebook path set repo <remote-path>` 写入项目级 alias。
 
 基底 notebook 准备看 [notebook.md](notebook.md)，镜像固化和可见性看 [image-management.md](image-management.md)。一次性临时任务可以跳过 `image save`。
 

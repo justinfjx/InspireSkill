@@ -45,7 +45,7 @@ from inspire.cli.utils.notebook_post_start import (
     resolve_notebook_post_start_spec,
 )
 from inspire.cli.utils.tunnel_reconnect import rebuild_notebook_bridge_profile
-from inspire.config import ConfigError, write_project_path_alias
+from inspire.config import ConfigError
 from inspire.config.workspaces import select_workspace_id
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web import session as web_session_module
@@ -952,65 +952,10 @@ def ssh_notebook_cmd(
     )
 
 
-@click.command("set-path")
-@click.argument("notebook")
-@click.argument("remote_path")
-@click.argument("as_keyword")
-@click.argument("alias")
-@pass_context
-def set_path_alias_cmd(
-    ctx: Context,
-    notebook: str,
-    remote_path: str,
-    as_keyword: str,
-    alias: str,
-) -> None:
-    """Store a project-level remote path alias for notebook commands.
-
-    \b
-    Example:
-        inspire notebook set-path my-notebook /inspire/ssd/project/topic/user as me
-        inspire notebook exec my-notebook --cwd me "pwd"
-        inspire notebook scp my-notebook ./out.tar me:out.tar
-    """
-    from inspire.cli.utils.id_resolver import reject_id_at_boundary
-
-    _ = reject_id_at_boundary(
-        ctx,
-        notebook,
-        resource_type="notebook",
-        list_command="inspire notebook connections",
-    )
-    if as_keyword != "as":
-        raise click.UsageError("Expected syntax: inspire notebook set-path <name> <path> as <alias>")
-
-    try:
-        config_path = write_project_path_alias(alias=alias, remote_path=remote_path)
-    except ConfigError as e:
-        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-        return
-
-    if ctx.json_output:
-        click.echo(
-            json_formatter.format_json(
-                {
-                    "alias": alias,
-                    "path": remote_path,
-                    "config_path": str(config_path),
-                }
-            )
-        )
-        return
-
-    click.echo(f"Path alias '{alias}' = {remote_path}")
-    click.echo(f"Updated {config_path}")
-
-
 __all__ = [
     "create_notebook_cmd",
     "list_notebooks",
     "notebook_status",
-    "set_path_alias_cmd",
     "ssh_notebook_cmd",
     "start_notebook_cmd",
     "stop_notebook_cmd",

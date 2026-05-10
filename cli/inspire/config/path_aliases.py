@@ -117,7 +117,7 @@ def resolve_remote_path_alias(
     if require_absolute_or_alias and not text.startswith("/"):
         raise ConfigError(
             f"Unknown path alias or relative remote path: '{text}'. "
-            "Use an absolute path or define it with `inspire notebook set-path`."
+            "Use an absolute path or define it with `inspire notebook path set`."
         )
 
     return text, False
@@ -149,16 +149,56 @@ def project_path_alias_config_path() -> Path:
     return _find_project_config() or Path.cwd() / PROJECT_CONFIG_DIR / CONFIG_FILENAME
 
 
+def load_project_path_alias_data() -> tuple[Path, dict[str, Any]]:
+    """Load the nearest project config used for path alias writes."""
+    config_path = project_path_alias_config_path()
+    if config_path.exists():
+        return config_path, _load_toml(config_path)
+    return config_path, {}
+
+
+def load_project_path_aliases() -> tuple[Path, dict[str, str]]:
+    """Return project-scoped remote path aliases from the nearest project config."""
+    config_path, data = load_project_path_alias_data()
+    return config_path, normalize_path_alias_map(data.get(PATH_ALIASES_SECTION, {}))
+
+
+def _delete_alias_from_section(section: dict[str, Any], alias: str) -> bool:
+    if alias in section:
+        section.pop(alias, None)
+        return True
+
+    parts = alias.split(".")
+    if len(parts) <= 1:
+        return False
+
+    parents: list[tuple[dict[str, Any], str]] = []
+    current: Any = section
+    for part in parts[:-1]:
+        if not isinstance(current, dict) or part not in current:
+            return False
+        parents.append((current, part))
+        current = current.get(part)
+
+    if not isinstance(current, dict) or parts[-1] not in current:
+        return False
+    current.pop(parts[-1], None)
+
+    for parent, key in reversed(parents):
+        child = parent.get(key)
+        if isinstance(child, dict) and not child:
+            parent.pop(key, None)
+        else:
+            break
+    return True
+
+
 def write_project_path_alias(*, alias: str, remote_path: str) -> Path:
     """Write one path alias to the nearest project config and return its path."""
     alias = validate_path_alias(alias)
     remote_path = validate_remote_alias_path(remote_path)
 
-    config_path = project_path_alias_config_path()
-    if config_path.exists():
-        data = _load_toml(config_path)
-    else:
-        data = {}
+    config_path, data = load_project_path_alias_data()
 
     section = data.get(PATH_ALIASES_SECTION)
     if not isinstance(section, dict):
@@ -173,10 +213,33 @@ def write_project_path_alias(*, alias: str, remote_path: str) -> Path:
     return config_path
 
 
+def delete_project_path_alias(alias: str) -> Path:
+    """Delete one path alias from the nearest project config."""
+    alias = validate_path_alias(alias)
+    config_path, data = load_project_path_alias_data()
+    section = data.get(PATH_ALIASES_SECTION)
+    if not isinstance(section, dict) or not _delete_alias_from_section(section, alias):
+        _, aliases = load_project_path_aliases()
+        available = ", ".join(sorted(aliases)) or "(none)"
+        raise ConfigError(f"Unknown path alias: {alias!r}. Available: {available}")
+
+    if not section:
+        data.pop(PATH_ALIASES_SECTION, None)
+
+    from inspire.cli.commands.init.toml_helpers import _toml_dumps
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(_toml_dumps(data), encoding="utf-8")
+    return config_path
+
+
 __all__ = [
     "DEFAULT_REMOTE_CWD_ALIAS",
     "PATH_ALIASES_SECTION",
     "default_remote_cwd",
+    "delete_project_path_alias",
+    "load_project_path_alias_data",
+    "load_project_path_aliases",
     "normalize_path_alias_map",
     "project_path_alias_config_path",
     "resolve_remote_cwd",

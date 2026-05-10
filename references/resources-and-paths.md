@@ -91,10 +91,11 @@ inspire notebook exec <name> --cwd me:<repo> "git pull"
 inspire notebook scp <name> ./config.yaml me:<repo>/config.yaml
 ```
 
-需要给常用子目录命名时，从任意可达 notebook 记录 alias：
+需要给常用子目录命名时，通过项目级 path alias 命令记录：
 
 ```bash
-inspire notebook set-path <name> /inspire/ssd/project/<topic>/<user>/<repo> as repo
+inspire notebook path set repo /inspire/ssd/project/<topic>/<user>/<repo>
+inspire notebook path list
 inspire notebook exec <name> --cwd repo "pytest -q"
 ```
 

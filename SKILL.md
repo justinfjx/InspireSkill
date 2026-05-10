@@ -30,7 +30,7 @@ uv run inspire hpc create --help
 
 `inspire --help` 的 `Commands` 区给出当前版本真实命令组；`inspire <command-group> --help` 给出该组所有子命令；`inspire <command-group> <subcommand> --help` 给出参数、默认值、必填项和注意事项。
 
-`workspace`、`project`、`group`、`quota` 和 `image` 没有隐式默认值。需要复用条件组时，先查 `inspire <command-group> profile --help`，用 `inspire notebook/job/hpc/ray/serving profile set <name> ...` 保存 workload profile；创建命令显式传 `--profile <name>`，batch 条目写 `profile = "<name>"`。Path alias 只表示远端路径，不能当作 workload profile。
+`workspace`、`project`、`group`、`quota` 和 `image` 没有隐式默认值。需要复用条件组时，先查 `inspire <command-group> profile --help`，用 `inspire notebook/job/hpc/ray/serving profile set <name> ...` 保存 workload profile；创建命令显式传 `--profile <name>`，batch 条目写 `profile = "<name>"`。Path alias 只表示远端路径，用 `inspire notebook path --help` 管理，不能当作 workload profile。
 
 每次任务按这个顺序走：
 

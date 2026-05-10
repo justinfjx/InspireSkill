@@ -27,11 +27,11 @@ from .notebook_commands import (
     list_notebooks,
     notebook_id_cmd,
     notebook_status,
-    set_path_alias_cmd,
     ssh_notebook_cmd,
     start_notebook_cmd,
     stop_notebook_cmd,
 )
+from .path_aliases import path_aliases_cmd
 from .top import notebook_top
 from .notebook_events import events as notebook_events
 from .notebook_lifecycle import lifecycle as notebook_lifecycle
@@ -79,7 +79,7 @@ notebook.add_command(notebook_top)              # top
 notebook.add_command(notebook_events)           # events (K8s scheduling / pod lifecycle)
 notebook.add_command(notebook_lifecycle)        # lifecycle (run-cycle timeline; /run_index/list)
 notebook.add_command(notebook_metrics)          # metrics (资源视图 time-series, no SSH needed)
-notebook.add_command(set_path_alias_cmd)        # set-path (project remote path aliases)
+notebook.add_command(path_aliases_cmd)          # path (project remote path aliases)
 
 # Remote operations on a cached notebook connection.
 notebook.add_command(_remote_exec,  name="exec")

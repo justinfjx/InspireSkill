@@ -28,7 +28,7 @@ inspire notebook exec <name> --cwd me:<repo> "export X=1 && ./run.sh"
 不传 `--cwd` 时，CLI 默认使用 `me` path alias；没有 `me` 时才落到远端 `$HOME`。路径 alias 支持 `me`、`me:<subdir>` 和 `me/<subdir>` 形式。需要长期使用的子目录可以先登记成专用 alias：
 
 ```bash
-inspire notebook set-path <name> /inspire/ssd/project/<topic>/<user>/<repo> as repo
+inspire notebook path set repo /inspire/ssd/project/<topic>/<user>/<repo>
 inspire notebook exec <name> --cwd repo "pwd"
 ```
 

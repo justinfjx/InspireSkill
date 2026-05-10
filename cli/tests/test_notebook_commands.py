@@ -1762,31 +1762,60 @@ def test_ssh_notebook_cache_hit_invokes_reconnect_with_notebook_kwarg(
     assert captured["notebook"] == "gpu-main"
 
 
-def test_notebook_set_path_writes_project_path_alias(
+def test_notebook_path_commands_manage_project_path_alias(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     monkeypatch.chdir(tmp_path)
 
     runner = CliRunner()
-    result = runner.invoke(
+    set_result = runner.invoke(
         cli_main,
         [
             "notebook",
-            "set-path",
-            "main-notebook",
-            "/inspire/ssd/project/topic/alice/",
-            "as",
+            "path",
+            "set",
             "me",
+            "/inspire/ssd/project/topic/alice/",
         ],
     )
 
-    assert result.exit_code == EXIT_SUCCESS
+    assert set_result.exit_code == EXIT_SUCCESS
     config_path = tmp_path / ".inspire" / "config.toml"
     assert config_path.exists()
     content = config_path.read_text(encoding="utf-8")
     assert "[path_aliases]" in content
     assert 'me = "/inspire/ssd/project/topic/alice/"' in content
+
+    list_result = runner.invoke(cli_main, ["notebook", "path", "list"])
+    assert list_result.exit_code == EXIT_SUCCESS
+    assert "Project path aliases" in list_result.output
+    assert "me" in list_result.output
+    assert "/inspire/ssd/project/topic/alice/" in list_result.output
+
+    show_result = runner.invoke(cli_main, ["notebook", "path", "show", "me"])
+    assert show_result.exit_code == EXIT_SUCCESS
+    assert "Path alias: me" in show_result.output
+    assert "/inspire/ssd/project/topic/alice/" in show_result.output
+
+    delete_result = runner.invoke(cli_main, ["notebook", "path", "delete", "me", "--yes"])
+    assert delete_result.exit_code == EXIT_SUCCESS
+    assert "Deleted path alias: me" in delete_result.output
+    assert "[path_aliases]" not in config_path.read_text(encoding="utf-8")
+
+
+def test_notebook_help_uses_path_group_instead_of_set_path() -> None:
+    runner = CliRunner()
+
+    notebook_help = runner.invoke(cli_main, ["notebook", "--help"])
+    assert notebook_help.exit_code == EXIT_SUCCESS
+    assert "path" in notebook_help.output
+    assert "set-path" not in notebook_help.output
+
+    path_help = runner.invoke(cli_main, ["notebook", "path", "--help"])
+    assert path_help.exit_code == EXIT_SUCCESS
+    assert "Manage project-level remote path aliases." in path_help.output
+    assert "not bound to any one notebook instance" in path_help.output
 
 
 def test_notebook_exec_cwd_uses_path_alias(
