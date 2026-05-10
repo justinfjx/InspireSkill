@@ -158,15 +158,6 @@ def test_ray_and_serving_batch_help_keeps_scope_small() -> None:
     assert "Condition fields may" in serving_output
 
 
-def test_status_catalog_help_marks_diagnostic_scope() -> None:
-    result = CliRunner().invoke(cli_main, ["job", "status-catalog", "--help"])
-    output = _one_line(result.output)
-
-    assert result.exit_code == 0
-    assert "Maintainer diagnostic" in output
-    assert "Use `job status <name>` for normal job inspection" in output
-
-
 def test_events_help_has_no_cache_mode() -> None:
     for args in (
         ["job", "events", "--help"],

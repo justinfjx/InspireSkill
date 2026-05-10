@@ -49,7 +49,6 @@ _STATUS_ALIAS_MAP = {
     "FAILED": {"FAILED", "job_failed"},
     "CANCELLED": {"CANCELLED", "job_cancelled", "job_stopped"},
 }
-_KNOWN_JOB_STATUSES = frozenset().union(*_STATUS_ALIAS_MAP.values())
 
 
 class WebJobResolutionError(Exception):
@@ -490,84 +489,6 @@ def _format_job_list(rows: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _build_status_catalog(rows: list[dict]) -> list[dict]:
-    buckets: dict[str, dict] = {}
-    for row in rows:
-        status = scrub_raw_ids(str(row.get("status") or "UNKNOWN"))
-        bucket = buckets.setdefault(
-            status,
-            {
-                "name": "known" if status in _KNOWN_JOB_STATUSES else "unknown",
-                "status": status,
-                "count": 0,
-                "job_names": [],
-            },
-        )
-        bucket["count"] += 1
-        job_name = scrub_raw_ids(str(row.get("name") or "N/A"))
-        if job_name and job_name not in bucket["job_names"] and len(bucket["job_names"]) < 5:
-            bucket["job_names"].append(job_name)
-
-    return sorted(
-        buckets.values(),
-        key=lambda x: (x["name"] != "unknown", -int(x["count"]), str(x["status"])),
-    )
-
-
-def _format_status_catalog(rows: list[dict]) -> str:
-    if not rows:
-        return "No job statuses found."
-
-    name_w = max(len("Name"), *(len(str(r["name"])) for r in rows))
-    status_w = max(len("Status"), *(len(str(r["status"])) for r in rows))
-    count_w = max(len("Count"), *(len(str(r["count"])) for r in rows))
-    header = f"{'Name':<{name_w}}  {'Status':<{status_w}}  {'Count':>{count_w}}"
-    sep = "-" * len(header)
-    lines = ["Job Status Catalog", header, sep]
-    for row in rows:
-        lines.append(
-            f"{str(row['name']):<{name_w}}  "
-            f"{scrub_raw_ids(str(row['status'])):<{status_w}}  "
-            f"{int(row['count']):>{count_w}}"
-        )
-    lines.append(sep)
-    unknown_total = sum(int(r["count"]) for r in rows if r["name"] == "unknown")
-    lines.append(f"Unknown: {unknown_total} job(s)")
-    return "\n".join(lines)
-
-
-def _scan_status_catalog_jobs(
-    *,
-    config: Config,
-    workspace: Optional[str],
-    all_workspaces: bool,
-    page_size: int,
-    max_pages: int,
-) -> tuple[list[dict], list[dict]]:
-    session = get_web_session()
-    explicit_workspace_id = _resolve_explicit_workspace(config, workspace, session)
-    creator_id = _current_user_id(session)
-
-    workspace_ids = _list_workspace_ids(
-        config,
-        session,
-        explicit_workspace_id=explicit_workspace_id,
-        all_workspaces=all_workspaces,
-    )
-    return _scan_web_jobs_round_robin(
-        session=session,
-        workspace_ids=workspace_ids,
-        creator_id=creator_id,
-        api_status=None,
-        allowed_statuses=None,
-        name=None,
-        page_num=1,
-        page_size=page_size,
-        max_pages=max_pages,
-        limit=0,
-    )
-
-
 def _list_web_jobs(
     *,
     config: Config,
@@ -894,73 +815,6 @@ def list_jobs(
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
     except Exception as e:
         _handle_error(ctx, "Error", str(e), EXIT_GENERAL_ERROR)
-
-
-@click.command("status-catalog")
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Search every visible workspace",
-)
-@click.option("--page-size", type=int, default=100, show_default=True, help="Result page size")
-@click.option(
-    "--max-pages",
-    type=int,
-    default=50,
-    show_default=True,
-    help="Max result pages to scan per workspace",
-)
-@pass_context
-def status_catalog(
-    ctx: Context,
-    workspace: Optional[str],
-    all_workspaces: bool,
-    page_size: int,
-    max_pages: int,
-) -> None:
-    """Maintainer diagnostic for platform status drift.
-
-    Scans live job list pages and groups status strings into values the CLI
-    already knows and values that may need formatter / wait-logic updates. Use
-    `job status <name>` for normal job inspection.
-    """
-    try:
-        config, _ = Config.from_files_and_env(require_credentials=False)
-        try:
-            rows, scanned = _scan_status_catalog_jobs(
-                config=config,
-                workspace=workspace,
-                all_workspaces=all_workspaces,
-                page_size=page_size,
-                max_pages=max_pages,
-            )
-        finally:
-            _close_web_client()
-        catalog = _build_status_catalog(rows)
-        unknown = [row for row in catalog if row["name"] == "unknown"]
-
-        if ctx.json_output:
-            click.echo(
-                json_formatter.format_json(
-                    {
-                        "source": "web",
-                        "statuses": catalog,
-                        "unknown_statuses": unknown,
-                        "scanned": scanned,
-                    }
-                )
-            )
-        else:
-            click.echo(_format_status_catalog(catalog))
-
-    except ConfigError as e:
-        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-    except (SessionExpiredError, ValueError) as e:
-        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
-    except Exception as e:
-        _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
 
 
 @click.command("id")
@@ -1632,7 +1486,6 @@ __all__ = [
     "show_command",
     "show_id",
     "status",
-    "status_catalog",
     "stop",
     "delete",
     "wait",

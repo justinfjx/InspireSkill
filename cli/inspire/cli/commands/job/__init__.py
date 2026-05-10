@@ -15,7 +15,6 @@ from .job_commands import (
     show_command,
     show_id,
     status,
-    status_catalog,
     stop,
     wait,
 )
@@ -47,7 +46,6 @@ job.add_command(logs)
 job.add_command(events)
 job.add_command(instances)
 job.add_command(list_jobs)
-job.add_command(status_catalog)
 job.add_command(shell)
 job.add_command(stop)
 job.add_command(delete)
