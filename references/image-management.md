@@ -11,7 +11,7 @@ inspire image <subcommand> --help
 
 ## 1. 镜像在工作流中的位置
 
-镜像是把“已经装好的运行环境”带到其它 workspace / compute group 的方式。目标训练空间不可上网时，常见做法是在可上网 CPU notebook 里安装依赖和运行 smoke test，然后 `image save` 成项目镜像，再用于 GPU notebook、job、HPC、Ray 或 serving。
+镜像是把“已经装好的运行环境”从 `CPU资源空间` 的准备盒带到 `分布式训练空间` 或其它 compute group 的方式。`分布式训练空间` 不可上网时，常见做法是在 `CPU资源空间` 的可上网 CPU notebook 里安装依赖和运行 smoke test，然后 `image save` 成项目镜像，再用于 GPU notebook、job、HPC、Ray 或 serving。只缺平台内包时先看 SII 内部源；它可能在无公网 group 里直接可用。
 
 镜像不负责保存数据集、权重和 checkpoint；这些应放在共享盘路径里，用 path alias 管理。
 

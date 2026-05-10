@@ -52,7 +52,7 @@
 
 ## 为什么比社区里其它启智 CLI 更值得用？
 
-启智社区还有两条独立维护的 CLI：[EmbodiedForge/Inspire-cli](https://github.com/EmbodiedForge/Inspire-cli) 和 [tianyilt/qzcli_tool](https://github.com/tianyilt/qzcli_tool)。差异主要在能力覆盖广度——能不能在离线训练空间零配置 SSH、能不能拿到事件 / 生命周期 / GPU 利用率这些观测信号、能不能端到端编排 notebook + HPC + Ray + serving。
+启智社区还有两条独立维护的 CLI：[EmbodiedForge/Inspire-cli](https://github.com/EmbodiedForge/Inspire-cli) 和 [tianyilt/qzcli_tool](https://github.com/tianyilt/qzcli_tool)。差异主要在能力覆盖广度——能不能在 `分布式训练空间` 这类离线 GPU 空间零配置 SSH、能不能拿到事件 / 生命周期 / GPU 利用率这些观测信号、能不能端到端编排 notebook + HPC + Ray + serving。
 
 | 维度 | [Inspire-cli](https://github.com/EmbodiedForge/Inspire-cli) | [qzcli_tool](https://github.com/tianyilt/qzcli_tool) | **InspireSkill** |
 | --- | --- | --- | --- |
@@ -182,7 +182,7 @@ inspire resources list --all --include-cpu
 
 ## 自定义 SKILL.md / INSPIRE.md
 
-SKILL.md 装完是一份**通用 playbook**。资源条件不要写成隐式默认值；把 `workspace`、`project`、`group`、`quota` 和 `image` 组合成 workload profile，并在 `inspire notebook/job/hpc/... create --profile <name>` 或 batch 文件里显式使用。如果你的主战场是启智的国产卡 workspace `CI-情境智能-国产卡` / `CI-情境智能-国产卡-ssd3`，或小组自己划走的专属资源开发空间，两条口子做定制：
+SKILL.md 装完是一份**通用 playbook**。日常 workspace 基本就是 `CPU资源空间` 和 `分布式训练空间`；资源条件不要写成隐式默认值，把 `workspace`、`project`、`group`、`quota` 和 `image` 组合成 workload profile，并在 `inspire notebook/job/hpc/... create --profile <name>` 或 batch 文件里显式使用。如果你的主战场是启智的国产卡分区、`CI-情境智能` 工作空间，或小组自己划走的专属资源开发空间，两条口子做定制：
 
 1. **项目级（推荐）**：改仓库根的 `INSPIRE.md`，并用 `inspire <workload> profile set <name> ...` 保存条件组；`Path Conventions` 只写 remote path alias。`INSPIRE.md` 属于你的 repo，不会被 `inspire update` 覆写，也方便跟组内协作。
 2. **Harness 级**：直接编辑 `~/.claude/skills/inspire/SKILL.md` 和同目录 `references/`（Codex / Gemini / OpenClaw / OpenCode 同理），改按需加载入口或对应使用手册。注意：`inspire update` **默认会覆盖 SKILL.md 和 references/**；维护了本地改动后用 `inspire update --cli-only` 只升级 CLI 不动 skill 文件，想合并上游变更时再手动 diff。

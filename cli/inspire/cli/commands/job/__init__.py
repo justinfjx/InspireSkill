@@ -30,8 +30,9 @@ def job() -> None:
 
     Use `job create` for non-interactive GPU work: distributed training,
     multi-node training, batch inference, or a fixed pool of GPU workers.
-    Prepare code, data, and dependencies on shared storage before submitting,
-    especially when the target training workspace has no internet egress.
+    Prepare code, data, and dependencies on shared storage before submitting.
+    For 分布式训练空间 or another GPU area without internet egress, public
+    downloads should be prepared first; SII internal mirrors may still work.
 
     \b
     Examples:

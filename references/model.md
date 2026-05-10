@@ -44,10 +44,10 @@ inspire model <subcommand> --help
 
 ```bash
 inspire model list
-inspire model list --workspace <WORKSPACE>
+inspire model list --workspace 分布式训练空间
 inspire model status <model-name>
 inspire model versions <model-name>
-inspire model register --name <model-name> --source-path <REMOTE_PATH> --workspace <WORKSPACE> --project <PROJECT>
+inspire model register --name <model-name> --source-path <REMOTE_PATH> --workspace 分布式训练空间 --project <PROJECT>
 ```
 
 ## 4. 限制

@@ -46,9 +46,9 @@ def notebook():
     Notebooks are the interactive workbench: use them to prepare project
     environments, download data or weights into shared storage, run quick
     probes, expose temporary HTTP services, and open SSH / exec / scp access
-    by notebook name. For offline GPU training spaces, prepare dependencies
-    in an internet-enabled CPU notebook first, then reuse the shared paths or
-    save the notebook as an image.
+    by notebook name. For 分布式训练空间 or another offline GPU area,
+    prepare public downloads in an internet-enabled CPU资源空间 notebook first;
+    for package installs, check the SII internal mirrors before falling back.
 
     \b
     Examples:

@@ -8,11 +8,11 @@
 
 | 阶段 | 目标 | 典型入口 | 验收 |
 | --- | --- | --- | --- |
-| A. 联网准备 | 下载代码、依赖、数据、权重，形成可复用镜像或共享盘布局 | 可上网 CPU notebook、`image save` | 远端 repo 可更新，依赖可导入，数据 / 权重路径可读，镜像 `READY` |
+| A. 联网准备 | 下载代码、依赖、数据、权重，形成可复用镜像或共享盘布局 | `CPU资源空间` 的可上网 CPU notebook、`image save` | 远端 repo 可更新，依赖可导入，数据 / 权重路径可读，镜像 `READY` |
 | B. CPU 处理 | 预处理、清洗、评测、打包、索引构建 | HPC，必要时 Ray | 小规模 probe 通过，正式规模产物完整，有 fingerprint |
 | C. GPU 训练 / 部署 | 单节点调试、多节点训练、serving | GPU notebook、job、serving | 日志推进，metrics 有负载，产物 / 服务 smoke 通过 |
 
-核心原则：联网和依赖准备尽量前置到可上网 CPU notebook；训练空间只负责读共享盘、拉已准备镜像、运行目标程序。
+核心原则：联网和依赖准备尽量前置到 `CPU资源空间` 的可上网 CPU notebook；`分布式训练空间` 只负责读共享盘、拉已准备镜像、运行目标程序。国产卡分区、`CI-情境智能` 工作空间或其它小组专属空间只在任务明确要求特殊硬件 / 特殊权限时使用。
 
 ## 2. 阶段 A：可上网 CPU Notebook 准备
 
@@ -20,13 +20,13 @@
 
 ```bash
 inspire resources specs --usage notebook --workspace CPU资源空间 --include-empty
-inspire resources specs --usage notebook --workspace <CPU_WORKSPACE> --group <INTERNET_CPU_GROUP>
+inspire resources specs --usage notebook --workspace CPU资源空间 --group CPU资源-2
 ```
 
 创建准备盒：
 
 ```bash
-inspire notebook create --workspace <CPU_WORKSPACE> --group <INTERNET_CPU_GROUP> -q 0,20,256 \
+inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
   --name <name>-base --image <BASE_IMAGE> --project <PROJECT> --wait
 inspire notebook ssh connect <name>-base
 ```
@@ -67,10 +67,10 @@ inspire image save <name>-base -n <img> -v v1 --public --wait
 HPC 示例：
 
 ```bash
-inspire resources specs --usage hpc --workspace <CPU_WORKSPACE>
+inspire resources specs --usage hpc --workspace CPU资源空间
 inspire hpc create -n <name>-preprocess \
   -c 'srun bash -lc "python <repo>/preprocess.py --out public:dataset-v1"' \
-  --workspace <CPU_WORKSPACE> --project <PROJECT> --group <GROUP> \
+  --workspace CPU资源空间 --project <PROJECT> --group <GROUP> \
   -q 0,20,256 --image <IMAGE> --priority 5
 ```
 
@@ -80,19 +80,19 @@ inspire hpc create -n <name>-preprocess \
 - `inspire hpc metrics <name>-preprocess --metric cpu,mem,disk_read,disk_write --window 2h` 显示资源在工作。
 - 同项目 notebook 回读产物目录，能看到预期文件、大小和 fingerprint。
 
-## 4. 阶段 C：GPU 训练空间
+## 4. 阶段 C：分布式训练空间
 
-训练空间多数节点不可上网。进入训练阶段前，应已经具备：
+`分布式训练空间` 多数节点不可上网。进入训练阶段前，应已经具备：
 
 - 代码在共享盘 repo 中，或镜像内已包含固定代码。
 - 数据和权重在目标项目共享路径可见。
 - 依赖在镜像中，或目标环境无需联网安装。
-- `resources specs --usage job` 能找到目标 `--quota`。
+- `inspire resources specs --usage job --workspace 分布式训练空间` 能找到目标 `--quota`。
 
 单节点调试：
 
 ```bash
-inspire notebook create --workspace <GPU_WORKSPACE> --group <GPU_GROUP> -q 1,20,200 \
+inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP> -q 1,20,200 \
   --name <name>-probe --image <IMAGE> --project <PROJECT> --wait
 inspire notebook ssh connect <name>-probe
 inspire notebook exec <name>-probe --cwd me:<repo> "bash scripts/probe.sh"
@@ -102,7 +102,7 @@ inspire notebook exec <name>-probe --cwd me:<repo> "bash scripts/probe.sh"
 
 ```bash
 inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
-  -c 'bash <repo>/train.sh' --workspace <GPU_WORKSPACE> --group <GPU_GROUP> \
+  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group <GPU_GROUP> \
   --project <PROJECT> --image <IMAGE> --priority 5
 inspire job logs --follow <name>-train
 ```
@@ -130,9 +130,9 @@ inspire job metrics <name>-train --metric gpu,gpu_mem,cpu,mem,net_read,net_write
 
 ```bash
 inspire model register --name <model> --source-path <REMOTE_MODEL_DIR> \
-  --workspace <WORKSPACE> --project <PROJECT>
-inspire model versions <model> --workspace <WORKSPACE>
-inspire serving create --name <service> --model <model> --workspace <WORKSPACE> \
+  --workspace 分布式训练空间 --project <PROJECT>
+inspire model versions <model> --workspace 分布式训练空间
+inspire serving create --name <service> --model <model> --workspace 分布式训练空间 \
   --project <PROJECT> --group <GROUP> --quota 1,18,200 --image <IMAGE> \
   --command "python serve.py" --port 8000 --dry-run
 ```

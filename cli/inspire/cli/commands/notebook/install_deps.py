@@ -242,7 +242,9 @@ def _run_step(label: str, command: str, *, notebook: str, timeout: int) -> int:
         "PyPI index for pip steps. Default mirrors unified-base:v2. "
         "Pass an empty string to skip the explicit --index-url flag and "
         "let pip pick up whatever the image already configures (/etc/pip.conf etc); "
-        "pass 'https://pypi.org/simple' to force upstream PyPI."
+        "pass 'https://pypi.org/simple' to force upstream PyPI. "
+        "For SII internal-only groups, configure pip trusted-host in the notebook "
+        "and pass 'http://nexus.sii.shaipower.online/repository/pypi/simple'."
     ),
 )
 @click.option(
@@ -268,8 +270,9 @@ def install_deps_cmd(
     """One-shot install of hpc/ray runtime deps on a cached notebook.
 
     NOTEBOOK is the notebook name and must already have a cached connection.
-    Run this on an internet-enabled CPU notebook when you need a reusable
-    base image for CPU HPC, Ray, or offline GPU training spaces. After the
+    Run this on a CPU资源空间 notebook when you need a reusable base image for
+    CPU HPC, Ray, or 分布式训练空间 GPU jobs. Public downloads need internet;
+    SII internal mirrors may still work inside internal-only groups. After the
     checks pass, save the notebook as an image with `inspire image save`.
 
     \b

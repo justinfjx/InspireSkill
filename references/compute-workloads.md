@@ -11,11 +11,11 @@
 | 弹性 worker / 长守护 / 流式处理 | `inspire ray` | 需要 Ray driver、head、弹性 worker group |
 | 模型 HTTP 部署 | `inspire serving` | 从已注册模型创建在线服务 |
 
-目标空间不可上网时，先在可上网 CPU notebook 准备共享盘内容或镜像，再提交目标 workload。不要把联网下载、临时安装依赖和拉 Git 放进离线训练 job 的启动命令里。
+日常 workspace 选择直接按用途走：CPU / HPC / 联网准备用 `CPU资源空间`，GPU 训练 / GPU notebook / serving 用 `分布式训练空间`。目标 `分布式训练空间` 不可上网时，先在 `CPU资源空间` 的可上网 CPU notebook 准备共享盘内容或镜像，再提交目标 workload。不要把公网下载和拉 Git 放进离线训练 job 的启动命令里；临时安装包时先判断 SII 内部源是否可用。
 
 ## 2. 通用提交流程
 
-1. `inspire resources specs --usage <job|hpc|ray|serving>` 选择合法 `--quota gpu,cpu,mem`。
+1. GPU job / serving 用 `inspire resources specs --usage <job|serving> --workspace 分布式训练空间` 选择合法 `--quota gpu,cpu,mem`；HPC / CPU Ray 用 `--workspace CPU资源空间`。
 2. `inspire image list` / `image detail` 确认镜像 `READY`。
 3. 用 create 命令提交；复杂条件先 `--dry-run`。
 4. 卡住或失败先看 events；已启动但健康度不明看 metrics；程序行为看 logs 或产出文件。
@@ -38,7 +38,7 @@ inspire job metrics --help
 
 ```bash
 inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
-  -c 'bash <repo>/train.sh' --workspace <WORKSPACE> --group <GROUP> \
+  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group <GROUP> \
   --project <PROJECT> --image <IMAGE> --priority 5
 
 inspire job logs --follow <name>-train
@@ -89,7 +89,7 @@ HPC 关键约束：
 ```bash
 inspire hpc create -n <name>-preprocess \
   -c 'srun bash -lc "python preprocess.py"' \
-  --workspace <WORKSPACE> --project <PROJECT> --group <GROUP> \
+  --workspace CPU资源空间 --project <PROJECT> --group <GROUP> \
   -q 0,20,256 --cpus-per-task 16 --memory-per-cpu 12 \
   --number-of-tasks 1 --instance-count 1 \
   --image <IMAGE>
@@ -101,10 +101,10 @@ inspire hpc create -n <name>-preprocess \
 
 默认不要使用 Ray，除非任务明确需要弹性 worker、长守护、流式处理或异构 worker。固定规模 GPU 走 `job`，固定规模 CPU 走 `hpc`。
 
-Ray 当前只在部分 workspace 和 compute group 可用，使用前先查：
+Ray 当前只在部分 compute group 可用，日常先从 `CPU资源空间` 查：
 
 ```bash
-inspire resources specs --usage ray
+inspire resources specs --usage ray --workspace CPU资源空间
 ```
 
 示例：
@@ -112,7 +112,7 @@ inspire resources specs --usage ray
 ```bash
 inspire ray create -n <name>-pipeline \
   -c 'python driver.py --mode run_and_exit' \
-  --workspace <WORKSPACE> --project <PROJECT> \
+  --workspace CPU资源空间 --project <PROJECT> \
   --head-image <IMAGE> --head-group <GROUP> --head-quota 0,4,16 \
   --worker 'name=w1;image=<IMAGE>;group=<GROUP>;quota=0,4,16;min=1;max=8;shm=32'
 ```
@@ -131,17 +131,17 @@ Ray 特有坑：
 创建前查询：
 
 ```bash
-inspire model list --workspace <WORKSPACE>
-inspire model versions <model-name> --workspace <WORKSPACE>
-inspire serving configs --workspace <WORKSPACE>
-inspire resources specs --usage serving --workspace <WORKSPACE>
+inspire model list --workspace 分布式训练空间
+inspire model versions <model-name> --workspace 分布式训练空间
+inspire serving configs --workspace 分布式训练空间
+inspire resources specs --usage serving --workspace 分布式训练空间
 ```
 
 创建示例：
 
 ```bash
 inspire serving create --name <name> --model <model-name> --model-version 1 \
-  --workspace <WORKSPACE> --project <PROJECT> --group <GROUP> \
+  --workspace 分布式训练空间 --project <PROJECT> --group <GROUP> \
   --quota 1,18,200 --image <IMAGE> \
   --command "python serve.py" --port 8000 --priority 5 --dry-run
 ```
@@ -161,9 +161,9 @@ inspire ray events <name> --tail 50
 需要看实际 pod / component 列表时查 instances，并显式传 workspace：
 
 ```bash
-inspire job instances <name> --workspace <WORKSPACE>
-inspire hpc instances <name> --workspace <WORKSPACE>
-inspire ray instances <name> --workspace <WORKSPACE>
+inspire job instances <name> --workspace 分布式训练空间
+inspire hpc instances <name> --workspace CPU资源空间
+inspire ray instances <name> --workspace CPU资源空间
 ```
 
 任务已启动但健康度不明时查指标。`metrics` 对应平台资源视图，适合看 GPU、显存、CPU、内存、磁盘和网络是否持续工作，以及多 pod / 多 task 是否负载均衡：

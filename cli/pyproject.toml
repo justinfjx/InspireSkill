@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "inspire-skill"
-version = "5.1.1"
+version = "5.1.2"
 description = "CLI for the Inspire training platform: notebook lifecycle, distributed/HPC job submission, SSH tunneling, image and resource ops"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -90,7 +90,7 @@ dev = [
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "5.1.1"
+version = "5.1.2"
 version_files = [
     "inspire/__init__.py:__version__",
     "pyproject.toml:^version"

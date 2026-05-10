@@ -13,7 +13,9 @@ Notebook 是交互工作台，不只是“开一个终端”。常见角色：
 | 远端文件入口 | 用 `exec` / `shell` / `scp` 管理共享盘文件 |
 | 临时服务盒 | 启动 Gradio、FastAPI、OpenAI-compatible API，再通过 notebook proxy 访问 |
 
-目标训练空间不可上网时，不要把 `git clone`、`pip install`、`apt-get` 或权重下载放到目标 GPU notebook / job 里。先在同项目共享路径可见的可上网 CPU notebook 中准备，再把结果留在 `me` / `public` 等共享路径，或保存为镜像。
+`分布式训练空间` 不可上网时，不要把 `git clone`、外部权重下载或访问公网数据源放到目标 GPU notebook / job 里。先在 `CPU资源空间` 的可上网 CPU notebook 中准备，再把结果留在 `me` / `public` 等共享路径，或保存为镜像。安装 Python / Apt / Conda / npm / Maven 包、访问内部 Docker Harbor 或 OSS 时先看 SII 内部源；它和公网不同，在不可上网 compute group 里也可能可用。
+
+日常 workspace 心智模型很简单：`CPU资源空间` 负责 CPU notebook 和联网准备，`分布式训练空间` 负责 GPU notebook 和训练调试。国产卡分区、`CI-情境智能` 工作空间或其它小组专属空间属于特殊硬件 / 特殊项目路径，只有任务明确要求时才切换。
 
 ## 2. CLI Help 查询
 
@@ -31,17 +33,17 @@ inspire notebook install-deps --help
 
 创建 notebook 前先确认三件事：
 
-1. 用 `inspire resources specs --usage notebook --workspace <WORKSPACE>` 选 `--quota gpu,cpu,mem`。
+1. 准备盒用 `inspire resources specs --usage notebook --workspace CPU资源空间` 选 CPU-only `--quota`；GPU 调试盒用 `inspire resources specs --usage notebook --workspace 分布式训练空间` 选 GPU `--quota`。
 2. 确认 `--project <PROJECT>` 是目标项目名；需要看归属或负责人时再查 `inspire project list/detail`。
 3. 用 `inspire image list` / `image detail` 选状态可用的镜像。
 
-联网准备盒通常选择 `CPU资源空间` 或其他 CPU workspace 的可上网 compute group 和 CPU-only quota，例如 `0,20,256`。GPU 调试盒选择目标训练 workspace / compute group 和小规模 GPU quota，例如 `1,20,200`。
+联网准备盒通常选择 `CPU资源空间` 的可上网 compute group 和 CPU-only quota，例如 `0,20,256`。GPU 调试盒选择 `分布式训练空间` 的 H100 / H200 compute group 和小规模 GPU quota，例如 `1,20,200`。
 
 ```bash
-inspire notebook create --workspace <CPU_WORKSPACE> --group <INTERNET_CPU_GROUP> -q 0,20,256 \
+inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
   --name prep-box --image <BASE_IMAGE> --project <PROJECT> --wait
 
-inspire notebook create --workspace <GPU_WORKSPACE> --group <GPU_GROUP> -q 1,20,200 \
+inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP> -q 1,20,200 \
   --name gpu-probe --image <TRAIN_IMAGE> --project <PROJECT> --wait
 ```
 
@@ -80,7 +82,7 @@ inspire notebook shell <name> --cwd me:<repo>
 | 独立 repo 日常同步 | 本地 `git push`，远端 `git pull` |
 | 多仓库工作区 | 通过 `inspire init` 配好 `me`，多个 repo 并列放在 `me:<repo>` |
 | 非 Git 文件 | `notebook scp`，远端路径优先写 alias，例如 `me:<repo>/file` |
-| 目标计算组不可上网但共享路径可见 | 在可上网 CPU notebook 做下载 / git / pip，离线训练实例读取共享盘结果 |
+| `分布式训练空间` 或目标计算组不可上网但共享路径可见 | 在 `CPU资源空间` 的可上网 CPU notebook 做下载 / git / pip，离线训练实例读取共享盘结果 |
 
 `notebook scp` 不是源码同步工具。源码走 `git push` + 远端 `git pull`，否则容易慢且不一致。
 
@@ -101,14 +103,17 @@ inspire notebook scp <notebook-name> --download me:<repo>/outputs/ ./outputs/ -r
 
 ## 6. 基底环境与镜像
 
-项目刚开始时，建议在可上网 CPU 空间用统一基底镜像起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好。验证通过后保存成项目镜像，后续 notebook、job、HPC、Ray 和 serving 复用该镜像。
+项目刚开始时，建议在 `CPU资源空间` 用统一基底镜像起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好。验证通过后保存成项目镜像，后续 notebook、job、HPC、Ray 和 serving 复用该镜像。
 
 ```bash
-inspire notebook create --workspace <CPU_WORKSPACE> --group <INTERNET_CPU_GROUP> -q 0,20,256 \
+inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
   --name base-box --image <BASE_IMAGE> --project <PROJECT> --wait
 
 inspire notebook ssh connect base-box
-inspire notebook exec base-box --cwd me:<repo> "pip install -r requirements.txt && python -m pytest -q"
+inspire notebook exec base-box --cwd me:<repo> \
+  "pip config set global.index-url http://nexus.sii.shaipower.online/repository/pypi/simple && \
+   pip config set global.trusted-host nexus.sii.shaipower.online && \
+   pip install -r requirements.txt && python -m pytest -q"
 inspire notebook install-deps base-box --slurm --ray
 inspire image save base-box -n <IMAGE_NAME> -v v1 --public --wait
 ```
