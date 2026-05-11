@@ -76,8 +76,8 @@ inspire hpc create -n <name>-preprocess \
 
 验收点：
 
-- `inspire hpc events <name>-preprocess --tail 50` 没有持续调度拒绝。
-- `inspire hpc metrics <name>-preprocess --metric cpu,mem,disk_read,disk_write --window 2h` 显示资源在工作。
+- `inspire hpc events <name>-preprocess --workspace CPU资源空间 --tail 50` 没有持续调度拒绝。
+- `inspire hpc metrics <name>-preprocess --workspace CPU资源空间 --metric cpu,mem,disk_read,disk_write --window 2h` 显示资源在工作。
 - 同项目 notebook 回读产物目录，能看到预期文件、大小和 fingerprint。
 
 ## 4. 阶段 C：分布式训练空间
@@ -137,4 +137,4 @@ inspire serving create --name <service> --model <model> --workspace 分布式训
   --command "python serve.py" --port 8000 --dry-run
 ```
 
-确认计划后去掉 `--dry-run`，再用 `serving status`、`serving metrics` 和业务 smoke test 验收。
+确认计划后去掉 `--dry-run`，再用 `serving status <service> --workspace 分布式训练空间`、`serving metrics <service> --workspace 分布式训练空间` 和业务 smoke test 验收。

@@ -247,7 +247,7 @@ def resolve_quota(
 
     if not matches:
         raise QuotaMatchError(
-            f"--quota {spec.display()} matches no spec in the selected workspace."
+            f"--quota {spec.display()} matches no quota row in the selected workspace."
             f"\nAvailable:\n{_format_row_catalog(all_rows)}"
         )
 
@@ -257,7 +257,7 @@ def resolve_quota(
             for m in matches
         ]
         raise QuotaMatchError(
-            f"--quota {spec.display()} matches multiple specs in the selected workspace; "
+            f"--quota {spec.display()} matches multiple quota rows in the selected workspace; "
             "pass --group <full compute group name> to disambiguate. "
             "Use a quota query --group <keyword> only to find the exact name:\n"
             + "\n".join(lines)

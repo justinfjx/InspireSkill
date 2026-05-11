@@ -227,6 +227,7 @@ def _follow_logs_via_ssh(
     tail_lines: int = 50,
     wait_timeout: int = 300,
     bridge_name: Optional[str] = None,
+    status_hint: str = "inspire job status <job-name> --workspace <workspace>",
 ) -> Optional[str]:
     import select
     import subprocess
@@ -285,7 +286,7 @@ def _follow_logs_via_ssh(
 
     if not concrete_log_path:
         click.echo(f"\n\nTimeout: Log file not created after {wait_timeout}s")
-        click.echo("Job may still be queuing. Check status with: inspire job status <job-name>")
+        click.echo(f"Job may still be queuing. Check status with: {status_hint}")
         return None
 
     # Past the wait gate — switch to the concrete path for tail -f.
@@ -440,12 +441,14 @@ def _emit_no_tunnel_error(ctx: Context, *, bridge_name: Optional[str]) -> None:
 def _run_job_logs_single_job(
     ctx: Context,
     *,
+    job: str,
     job_id: str,
     remote_log_path: str,
     tail: int | None,
     head: int | None,
     path: bool,
     follow: bool,
+    workspace: Optional[str],
     bridge_name: Optional[str] = None,
 ) -> None:
     try:
@@ -512,6 +515,7 @@ def _run_job_logs_single_job(
                 remote_log_path=remote_log_path,
                 tail_lines=tail or 50,
                 bridge_name=bridge_name,
+                status_hint=f"inspire job status {job} --workspace {workspace or '<workspace>'}",
             )
 
             if final_status in {"SUCCEEDED", "job_succeeded"}:
@@ -539,8 +543,9 @@ def _run_job_logs_single_job(
                 EXIT_LOG_NOT_FOUND,
                 hint=(
                     "If the job hasn't started yet the log file may not exist. "
-                    "Check `inspire job status` and try again, or pass --remote-log-path "
-                    "if the path differs from the default training_master_<name>.log convention."
+                    f"Check `inspire job status {job} --workspace {workspace or '<workspace>'}` "
+                    "and try again, or pass --remote-log-path if the path differs from the "
+                    "default training_master_<name>.log convention."
                 ),
             )
             return
@@ -729,8 +734,8 @@ def _run_job_logs_web_single_job(
 
 @click.command("logs")
 @click.argument("job")
-@click.option("--tail", "-n", type=int, help="Show last N lines only")
-@click.option("--head", type=int, help="Show first N lines only")
+@click.option("--tail", "-n", type=click.IntRange(1), help="Show last N lines only")
+@click.option("--head", type=click.IntRange(1), help="Show first N lines only")
 @click.option("--path", is_flag=True, help="Just print log path, don't read content")
 @click.option(
     "--follow",
@@ -779,7 +784,7 @@ def _run_job_logs_web_single_job(
 )
 @click.option(
     "--limit",
-    type=int,
+    type=click.IntRange(1),
     default=500,
     show_default=True,
     help="Max platform log records fetched. For SSH logs, use --tail for line count.",
@@ -939,12 +944,14 @@ def logs(
 
     _run_job_logs_single_job(
         ctx,
+        job=job,
         job_id=job_id,
         remote_log_path=resolved_log_path,
         tail=tail,
         head=head,
         path=path,
         follow=follow,
+        workspace=workspace,
         bridge_name=bridge,
     )
 

@@ -682,7 +682,7 @@ def set_image_visibility_cmd(
 )
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )

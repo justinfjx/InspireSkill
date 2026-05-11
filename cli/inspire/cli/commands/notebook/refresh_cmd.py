@@ -16,7 +16,7 @@ from inspire.cli.utils.raw_ids import scrub_raw_ids
 @click.argument("notebook", metavar="NOTEBOOK")
 @click.option("--url", help="Update the proxy URL")
 @click.option("--ssh-user", help="Update the SSH user")
-@click.option("--ssh-port", type=int, help="Update the SSH port")
+@click.option("--ssh-port", type=click.IntRange(1, 65535), help="Update the SSH port")
 @click.option(
     "--has-internet",
     is_flag=True,

@@ -153,7 +153,7 @@ def _workspace_display(session, workspace_id: str) -> str:  # noqa: ANN001
 )
 @click.option(
     "--shm-size",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Shared memory size in GB (default: INSPIRE_SHM_SIZE/job.shm_size, else 32)",
 )
@@ -288,7 +288,7 @@ def stop_notebook_cmd(
 
     \b
     Examples:
-        inspire notebook stop my-notebook
+        inspire notebook stop my-notebook --workspace 分布式训练空间
     """
     json_output = resolve_json_output(ctx, json_output)
 
@@ -337,7 +337,11 @@ def stop_notebook_cmd(
         return
 
     click.echo(f"Notebook '{scrub_raw_ids(notebook)}' is being stopped.")
-    click.echo(f"Use `inspire notebook status {scrub_raw_ids(notebook)}` to check status.")
+    click.echo(
+        "Use "
+        f"`inspire notebook status {scrub_raw_ids(notebook)} --workspace {scrub_raw_ids(workspace)}` "
+        "to check status."
+    )
 
 
 @click.command("delete")
@@ -373,8 +377,8 @@ def delete_notebook_cmd(
 
     \b
     Examples:
-        inspire notebook delete my-notebook
-        inspire notebook delete my-notebook --yes
+        inspire notebook delete my-notebook --workspace 分布式训练空间
+        inspire notebook delete my-notebook --workspace 分布式训练空间 --yes
     """
     json_output = resolve_json_output(ctx, json_output)
 
@@ -585,7 +589,11 @@ def start_notebook_cmd(
         )
         return
 
-    click.echo(f"Use `inspire notebook status {scrub_raw_ids(notebook)}` to check status.")
+    click.echo(
+        "Use "
+        f"`inspire notebook status {scrub_raw_ids(notebook)} --workspace {scrub_raw_ids(workspace)}` "
+        "to check status."
+    )
 
 
 @click.command("status")
@@ -738,10 +746,10 @@ def notebook_id_cmd(
 @click.option(
     "--limit",
     "-n",
-    type=int,
+    type=click.IntRange(1),
     default=20,
     show_default=True,
-    help="Max number of notebooks to show",
+    help="Maximum notebooks to query and display.",
 )
 @click.option(
     "--status",
@@ -890,6 +898,7 @@ def list_notebooks(
 )
 @click.option(
     "--ssh-port",
+    type=click.IntRange(1, 65535),
     default=22222,
     show_default=True,
     help="Advanced: SSH service port inside notebook",
@@ -902,7 +911,7 @@ def list_notebooks(
 )
 @click.option(
     "--command-timeout",
-    type=int,
+    type=click.IntRange(0),
     default=None,
     help="Timeout in seconds for --command execution (default: 300, 0 disables)",
 )
@@ -914,6 +923,7 @@ def list_notebooks(
 @click.option(
     "--timeout",
     "setup_timeout",
+    type=click.IntRange(1),
     default=300,
     show_default=True,
     help="Timeout in seconds for notebook connection setup",

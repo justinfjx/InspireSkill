@@ -852,12 +852,12 @@ def run_resources_list(
 @click.option(
     "--group",
     default=None,
-        help=(
-            "Filter by compute group name keyword/substring; full name is not "
-            "required. Use this to find the exact compute group name required by "
-            "workload create/profile --group."
-        ),
-    )
+    help=(
+        "Filter by compute group name keyword/substring; full name is not "
+        "required. Use this to find the exact compute group name required by "
+        "workload create/profile --group."
+    ),
+)
 @click.option(
     "--include-cpu",
     is_flag=True,
@@ -872,9 +872,10 @@ def run_resources_list(
 @click.option(
     "--interval",
     "-i",
-    type=int,
+    type=click.IntRange(1),
     default=30,
-    help="Watch refresh interval in seconds (default: 30)",
+    show_default=True,
+    help="Watch refresh interval in seconds.",
 )
 @click.option("--limit", "-n", type=click.IntRange(min=1), default=None, help="Maximum rows to show.")
 @pass_context

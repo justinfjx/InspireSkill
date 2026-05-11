@@ -35,8 +35,8 @@ def hpc() -> None:
         inspire hpc quota --workspace CPU资源空间
         inspire hpc create --name prep-a --workspace CPU资源空间 --project CI-情境智能 --group HPC-可上网区资源-2 -q 0,16,64 --image hpc-base:v1 -c "srun python prep.py"
         inspire hpc instances prep-a --workspace CPU资源空间
-        inspire hpc metrics prep-a --metric cpu,mem,disk_read,disk_write --window 2h
-        inspire hpc events prep-a --tail 50
+        inspire hpc metrics prep-a --workspace CPU资源空间 --metric cpu,mem,disk_read,disk_write --window 2h
+        inspire hpc events prep-a --workspace CPU资源空间 --tail 50
     """
 
 

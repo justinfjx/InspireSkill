@@ -107,7 +107,7 @@ def test_resolve_quota_no_match_raises_with_catalog() -> None:
         )
 
     message = str(exc.value)
-    assert "matches no spec" in message
+    assert "matches no quota row" in message
     assert "1,20,200" in message
     assert "H200 Group" in message
 

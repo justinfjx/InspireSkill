@@ -15,6 +15,7 @@ from inspire.cli.context import (
 )
 from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
+from inspire.cli.utils.events import run_events_command
 from inspire.cli.utils.id_resolver import resolve_by_name
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
@@ -307,7 +308,7 @@ def status_ray(ctx: Context, name: str, workspace: str) -> None:
 @click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous — "
     "matches the list order in the AmbiguousName error.",
@@ -527,7 +528,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
 )
 @click.option(
     "--head-shm",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Head shared memory in GiB (optional)",
 )
@@ -783,33 +784,12 @@ def _assemble_create_body(
     return body
 
 
-# ---------------------------------------------------------------------------
-# events
-# ---------------------------------------------------------------------------
-
-
-def _format_ts(raw) -> str:
-    """Format a millis-since-epoch string/int into a short local time."""
-    import datetime as _dt
-
-    if raw in (None, "", 0, "0"):
-        return "-"
-    try:
-        ms = int(raw)
-    except (TypeError, ValueError):
-        return str(raw)[:20]
-    try:
-        return _dt.datetime.fromtimestamp(ms / 1000).strftime("%m-%d %H:%M:%S")
-    except (OSError, ValueError, OverflowError):
-        return str(raw)[:20]
-
-
 @click.command("events")
 @click.argument("name")
 @click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--tail",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Show only the most recent N events (default: all).",
 )
@@ -821,8 +801,17 @@ def _format_ts(raw) -> str:
 @click.option(
     "--type",
     "type_filter",
+    type=click.Choice(["Normal", "Warning"], case_sensitive=False),
     default=None,
-    help="Filter by event type (Normal / Warning).",
+    help="Filter by event type.",
+)
+@click.option("--follow", "-f", is_flag=True, help="Follow the event timeline and print new events.")
+@click.option(
+    "--interval",
+    type=click.IntRange(1),
+    default=5,
+    show_default=True,
+    help="Polling interval in seconds for --follow.",
 )
 @pass_context
 def events_ray(
@@ -832,6 +821,8 @@ def events_ray(
     tail: Optional[int],
     reason: Optional[str],
     type_filter: Optional[str],
+    follow: bool,
+    interval: int,
 ) -> None:
     """Show events for a Ray (弹性计算) job.
 
@@ -845,6 +836,7 @@ def events_ray(
         inspire ray events <ray-name> --workspace CPU资源空间
         inspire ray events <ray-name> --workspace CPU资源空间 --reason FailedScheduling
         inspire ray events <ray-name> --workspace CPU资源空间 --type Warning --tail 10
+        inspire ray events <ray-name> --workspace CPU资源空间 --follow
         inspire --json ray events <ray-name> --workspace CPU资源空间
     """
     try:
@@ -858,31 +850,19 @@ def events_ray(
             workspace=workspace,
             limit=10000,
         )
-        events = browser_api_module.list_ray_job_events(ray_job_id, session=session)
-
-        if reason:
-            events = [e for e in events if (e.get("reason") or "") == reason]
-        if type_filter:
-            events = [e for e in events if (e.get("type") or "") == type_filter]
-        if tail is not None and tail > 0:
-            events = events[-tail:]
-
-        if ctx.json_output:
-            click.echo(json_formatter.format_json({"events": events, "total": len(events)}))
-            return
-
-        if not events:
-            click.echo("No Ray job events found.")
-            return
-
-        for e in events:
-            ts = _format_ts(e.get("last_timestamp") or e.get("first_timestamp"))
-            etype = scrub_raw_ids(e.get("type") or "").ljust(7)
-            reason_str = scrub_raw_ids(e.get("reason") or "").ljust(28)
-            msg = scrub_raw_ids(e.get("message") or "")
-            count = e.get("count")
-            tag = f" (×{count})" if count and int(count) > 1 else ""
-            click.echo(f"{ts}  {etype} {reason_str} {msg}{tag}")
+        run_events_command(
+            ctx,
+            resource_id=ray_job_id,
+            resource_type="ray",
+            resource_name=name,
+            fetch=lambda: browser_api_module.list_ray_job_events(ray_job_id, session=session),
+            json_output_local=False,
+            type_filter=type_filter,
+            reason_filter=reason,
+            tail=tail,
+            follow=follow,
+            interval=interval,
+        )
 
     except (SessionExpiredError, ValueError) as e:
         _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
@@ -900,7 +880,7 @@ def events_ray(
 @click.option(
     "--workspace",
     required=True,
-    help="Workspace name. Required; -A is not accepted.",
+    help="Workspace name.",
 )
 @click.option(
     "--limit",
@@ -916,8 +896,8 @@ def instances_ray(ctx: Context, name: str, workspace: str, limit: int) -> None:
 
     \b
     NAME is resolved within the explicit workspace and current live user.
-    Shows each pod's status; check `inspire ray events <name>` for scheduler
-    reasons when pods remain pending.
+    Shows each pod's status; check `inspire ray events <name> --workspace <workspace>`
+    for scheduler reasons when pods remain pending.
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -975,7 +955,7 @@ def instances_ray(ctx: Context, name: str, workspace: str, limit: int) -> None:
 )
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )

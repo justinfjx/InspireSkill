@@ -12,6 +12,7 @@ source of truth for user-visible diagnostics.
 
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
 
@@ -45,6 +46,7 @@ def filter_events(
     *,
     type_filter: Optional[str] = None,
     reason_filter: Optional[str] = None,
+    keyword_filter: Optional[str] = None,
     tail: Optional[int] = None,
 ) -> list[dict]:
     """Apply optional filters + tail to an events list."""
@@ -55,6 +57,16 @@ def filter_events(
     if reason_filter:
         needle = reason_filter.lower()
         out = [e for e in out if needle in str(e.get("reason", "")).lower()]
+    if keyword_filter:
+        needle = keyword_filter.lower()
+        out = [
+            e
+            for e in out
+            if any(
+                needle in str(e.get(key, "")).lower()
+                for key in ("reason", "message", "from", "type", "content")
+            )
+        ]
     if tail and tail > 0:
         out = out[-tail:]
     return out
@@ -136,6 +148,43 @@ def emit_events(
         render_events_table(events)
 
 
+def _event_key(event: dict) -> tuple[str, ...]:
+    return tuple(
+        str(event.get(key) or "")
+        for key in (
+            "object_id",
+            "object_type",
+            "reason",
+            "message",
+            "from",
+            "first_timestamp",
+            "last_timestamp",
+            "count",
+        )
+    )
+
+
+def _fetch_filtered_events(
+    *,
+    fetch: Callable[[], list[dict]],
+    type_filter: Optional[str],
+    reason_filter: Optional[str],
+    keyword_filter: Optional[str] = None,
+) -> list[dict]:
+    try:
+        events = fetch()
+    except Exception as e:  # defensive: helpers already swallow, but belt-and-suspenders
+        click.secho(f"events fetch failed: {scrub_raw_ids(e)}", fg="red", err=True)
+        events = []
+    return filter_events(
+        events,
+        type_filter=type_filter,
+        reason_filter=reason_filter,
+        keyword_filter=keyword_filter,
+        tail=None,
+    )
+
+
 def run_events_command(
     ctx,
     *,
@@ -146,30 +195,61 @@ def run_events_command(
     json_output_local: bool,
     type_filter: Optional[str],
     reason_filter: Optional[str],
-    tail: Optional[int],
+    keyword_filter: Optional[str] = None,
+    tail: Optional[int] = None,
+    follow: bool = False,
+    interval: int = 5,
 ) -> None:
     """Shared entrypoint used by `inspire job events` / `inspire hpc events`.
 
     `fetch` is the per-job-kind platform call returning a list[dict].
     """
     del resource_id
-    try:
-        events = fetch()
-    except Exception as e:  # defensive: helpers already swallow, but belt-and-suspenders
-        click.secho(f"events fetch failed: {scrub_raw_ids(e)}", fg="red", err=True)
-        events = []
+    json_mode = bool(getattr(ctx, "json_output", False)) or json_output_local
+    if follow and json_mode:
+        raise click.UsageError(
+            "--json --follow is not supported for events. Drop --json to follow, "
+            "or drop --follow for a one-shot JSON fetch."
+        )
 
-    filtered = filter_events(
-        events,
+    filtered = _fetch_filtered_events(
+        fetch=fetch,
         type_filter=type_filter,
         reason_filter=reason_filter,
-        tail=tail,
+        keyword_filter=keyword_filter,
     )
+    initial = filtered[-tail:] if tail and tail > 0 else filtered
+
+    if follow:
+        seen = {_event_key(event) for event in filtered}
+        render_events_table(initial)
+        while True:
+            try:
+                time.sleep(interval)
+            except KeyboardInterrupt:
+                click.echo()
+                return
+            current = _fetch_filtered_events(
+                fetch=fetch,
+                type_filter=type_filter,
+                reason_filter=reason_filter,
+                keyword_filter=keyword_filter,
+            )
+            fresh = []
+            for event in current:
+                key = _event_key(event)
+                if key not in seen:
+                    fresh.append(event)
+                seen.add(key)
+            if not fresh:
+                continue
+            render_events_table(fresh)
+        return
 
     emit_events(
         ctx_json=bool(getattr(ctx, "json_output", False)),
         local_json=json_output_local,
         resource_type=resource_type,
         resource_name=resource_name,
-        events=filtered,
+        events=initial,
     )

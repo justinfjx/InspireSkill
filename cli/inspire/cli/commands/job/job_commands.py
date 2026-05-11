@@ -674,7 +674,14 @@ def _watch_jobs(
 
 
 @click.command("list")
-@click.option("--limit", "-n", type=int, default=0, help="Max jobs to show (0 = all)")
+@click.option(
+    "--limit",
+    "-n",
+    type=click.IntRange(1),
+    default=100,
+    show_default=True,
+    help="Maximum jobs to query and display.",
+)
 @click.option("--status", "-s", help="Filter by status (PENDING, RUNNING, SUCCEEDED, FAILED)")
 @click.option(
     "--active",
@@ -685,7 +692,7 @@ def _watch_jobs(
 @click.option("--watch", "-w", is_flag=True, help="Continuously refresh job list")
 @click.option(
     "--interval",
-    type=int,
+    type=click.IntRange(1),
     default=10,
     show_default=True,
     help="Refresh interval in seconds for --watch",
@@ -711,11 +718,11 @@ def list_jobs(
     \b
     Example:
         inspire job list --workspace 分布式训练空间
-        inspire job list --limit 20 --status RUNNING
-        inspire job list --keyword qwen35
+        inspire job list --workspace 分布式训练空间 --limit 20 --status RUNNING
+        inspire job list --workspace 分布式训练空间 --keyword qwen35
         inspire job list --workspace all --keyword qwen35 --limit 20
-        inspire job list --active
-        inspire job list --watch --active -n 20
+        inspire job list --workspace 分布式训练空间 --active
+        inspire job list --workspace 分布式训练空间 --watch --active -n 20
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -728,7 +735,7 @@ def list_jobs(
                 all_workspaces=False,
                 status=status,
                 name=keyword,
-                page_size=limit or 100,
+                page_size=limit,
                 max_pages=50,
                 limit=limit,
                 interval=interval,
@@ -743,7 +750,7 @@ def list_jobs(
             status=status,
             name=keyword,
             page_num=1,
-            page_size=limit or 100,
+            page_size=limit,
             max_pages=50,
             limit=limit,
         )
@@ -778,7 +785,7 @@ def list_jobs(
 @click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
@@ -938,7 +945,7 @@ def instances(
 @click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
@@ -948,7 +955,7 @@ def stop(ctx: Context, job: str, workspace: Optional[str], pick: Optional[int]) 
 
     \b
     Example:
-        inspire job stop my-training-run
+        inspire job stop my-training-run --workspace 分布式训练空间
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -994,7 +1001,7 @@ def stop(ctx: Context, job: str, workspace: Optional[str], pick: Optional[int]) 
 )
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
@@ -1008,7 +1015,7 @@ def delete(ctx: Context, job: str, workspace: Optional[str], yes: bool, pick: Op
 
     \b
     Example:
-        inspire job delete my-training-run
+        inspire job delete my-training-run --workspace 分布式训练空间
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -1060,8 +1067,18 @@ def delete(ctx: Context, job: str, workspace: Optional[str], yes: bool, pick: Op
 
 @click.command("wait")
 @click.argument("job")
-@click.option("--timeout", type=int, default=14400, help="Timeout in seconds (default: 4 hours)")
-@click.option("--interval", type=int, default=30, help="Poll interval in seconds (default: 30)")
+@click.option(
+    "--timeout",
+    type=click.IntRange(1),
+    default=14400,
+    help="Timeout in seconds (default: 4 hours)",
+)
+@click.option(
+    "--interval",
+    type=click.IntRange(1),
+    default=30,
+    help="Poll interval in seconds (default: 30)",
+)
 @click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @pass_context
 def wait(
@@ -1239,11 +1256,11 @@ def show_command(
 
 @click.command("shell")
 @click.argument("job")
-@click.option("--rank", type=int, default=None, help="Open the running instance with this rank")
+@click.option("--rank", type=click.IntRange(0), default=None, help="Open the running instance with this rank")
 @click.option("--instance", "instance_name", default=None, help="Open this exact instance name")
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth matching job (1-indexed) when multiple jobs share a name",
 )
@@ -1261,10 +1278,10 @@ def shell(
 
     \b
     Examples:
-        inspire job shell my-training-run
-        inspire job shell my-training-run --rank 0
-        inspire job shell my-training-run --instance pytorchjob-worker-0
-        inspire job shell my-training-run --pick 2
+        inspire job shell my-training-run --workspace 分布式训练空间
+        inspire job shell my-training-run --workspace 分布式训练空间 --rank 0
+        inspire job shell my-training-run --workspace 分布式训练空间 --instance pytorchjob-worker-0
+        inspire job shell my-training-run --workspace 分布式训练空间 --pick 2
     """
     if rank is not None and instance_name is not None:
         _handle_error(

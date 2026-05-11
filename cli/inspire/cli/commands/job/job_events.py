@@ -29,12 +29,6 @@ from .job_commands import WebJobResolutionError, _close_web_client, _resolve_web
 @click.command("events")
 @click.argument("job")
 @click.option(
-    "--json",
-    "json_output_local",
-    is_flag=True,
-    help="Output as JSON. Equivalent to top-level `--json`.",
-)
-@click.option(
     "--type",
     "type_filter",
     type=click.Choice(["Normal", "Warning"], case_sensitive=False),
@@ -62,20 +56,29 @@ from .job_commands import WebJobResolutionError, _close_web_client, _resolve_web
 )
 @click.option(
     "--tail",
-    type=int,
+    type=click.IntRange(1),
     help="Show only the last N events (applied after --type / --reason).",
+)
+@click.option("--follow", "-f", is_flag=True, help="Follow the event timeline and print new events.")
+@click.option(
+    "--interval",
+    type=click.IntRange(1),
+    default=5,
+    show_default=True,
+    help="Polling interval in seconds for --follow.",
 )
 @click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @pass_context
 def events(
     ctx: Context,
     job: str,
-    json_output_local: bool,
     type_filter: Optional[str],
     reason_filter: Optional[str],
     instance_ids: tuple[str, ...],
     all_instances: bool,
     tail: Optional[int],
+    follow: bool,
+    interval: int,
     workspace: Optional[str],
 ) -> None:
     """Show events for a training job.
@@ -84,9 +87,10 @@ def events(
     Examples:
       inspire job events <job-name> --workspace 分布式训练空间
       inspire --json job events <job-name> --workspace 分布式训练空间
-      inspire job events <job-name> --type Warning
-      inspire job events <job-name> --reason Unschedulable
-      inspire job events <job-name> --instance <pod-name>
+      inspire job events <job-name> --workspace 分布式训练空间 --type Warning
+      inspire job events <job-name> --workspace 分布式训练空间 --reason Unschedulable
+      inspire job events <job-name> --workspace 分布式训练空间 --instance <pod-name>
+      inspire job events <job-name> --workspace 分布式训练空间 --follow
       inspire job events <job-name> --workspace all --all-instances
     """
     try:
@@ -143,8 +147,10 @@ def events(
         resource_type="job",
         resource_name=job,
         fetch=_fetch_web_events,
-        json_output_local=json_output_local,
+        json_output_local=False,
         type_filter=type_filter,
         reason_filter=reason_filter,
         tail=tail,
+        follow=follow,
+        interval=interval,
     )

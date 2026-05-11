@@ -60,7 +60,7 @@ def _warn_if_remote_path_is_relative(remote_path: str, *, download: bool) -> Non
 @click.argument("destination")
 @click.option("--download", "-d", is_flag=True, help="Download from remote (default is upload)")
 @click.option("--recursive", "-r", is_flag=True, help="Copy directories recursively")
-@click.option("--timeout", "-t", type=int, default=None, help="Timeout in seconds")
+@click.option("--timeout", "-t", type=click.IntRange(1), default=None, help="Timeout in seconds")
 @pass_context
 def bridge_scp(
     ctx: Context,

@@ -292,7 +292,10 @@ def run_job_create(
             click.echo(f"Command:  {scrub_raw_ids(display_cmd)}{suffix}")
             if log_path:
                 click.echo(f"Log file:  {scrub_raw_ids(log_path)}")
-            click.echo(f"\nCheck status with: inspire job status {scrub_raw_ids(name)}")
+            click.echo(
+                "\nCheck status with: "
+                f"inspire job status {scrub_raw_ids(name)} --workspace {scrub_raw_ids(workspace)}"
+            )
             return
 
         if isinstance(result, dict):
@@ -300,7 +303,10 @@ def run_job_create(
             click.echo(human_formatter.format_success(message))
         else:
             click.echo(human_formatter.format_success(f"Job created: {name}"))
-        click.echo(f"Check status with: inspire job status {scrub_raw_ids(name)}")
+        click.echo(
+            "Check status with: "
+            f"inspire job status {scrub_raw_ids(name)} --workspace {scrub_raw_ids(workspace)}"
+        )
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
@@ -340,7 +346,7 @@ def run_job_create(
     help=(
         "Task priority 1-10 (1-3=LOW preemptible, 4=NORMAL, 5-10=HIGH stable). "
         "The selected project's platform policy may cap the requested value. "
-        "Check `inspire job status` for the resolved priority_level."
+        "Check `inspire job status <name> --workspace <workspace>` for the resolved priority_level."
     ),
 )
 @click.option(
@@ -364,7 +370,7 @@ def run_job_create(
 )
 @click.option(
     "--max-time",
-    type=float,
+    type=click.FloatRange(min=0, min_open=True),
     default=DEFAULT_TRAINING_MAX_TIME_HOURS,
     show_default=True,
     help="Max runtime in hours",
@@ -394,7 +400,7 @@ def run_job_create(
 )
 @click.option(
     "--nodes",
-    type=int,
+    type=click.IntRange(1),
     default=1,
     show_default=True,
     help="Number of nodes for multi-node training.",
@@ -446,7 +452,7 @@ def create(
     \b
     Priority:
         The selected project's platform policy may cap the requested priority.
-        Use `inspire job status <name>` to inspect the platform-assigned
+        Use `inspire job status <name> --workspace <workspace>` to inspect the platform-assigned
         priority_level.
     """
     run_job_create(

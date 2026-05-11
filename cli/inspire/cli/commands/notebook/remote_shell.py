@@ -178,7 +178,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                         f"SSH tunnel not available. Notebook '{bridge_name}' is {notebook_status}.",
                         hint=(
                             f"Start it with `inspire notebook start {bridge_name} --workspace <workspace>` if needed, "
-                            f"or wait until `inspire notebook status {bridge_name}` reports "
+                            f"or wait until `inspire notebook status {bridge_name} --workspace <workspace>` reports "
                             "RUNNING, then retry."
                         ),
                     )

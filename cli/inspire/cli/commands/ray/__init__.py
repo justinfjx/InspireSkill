@@ -38,7 +38,7 @@ def ray() -> None:
     Examples:
         inspire ray quota --workspace CPU资源空间
         inspire ray create -n pipeline -c "python driver.py" --workspace CPU资源空间 --project CI-情境智能 --head-image ray-base:v1 --head-group HPC-可上网区资源-2 --head-quota 0,4,16 --worker "name=workers;image=ray-base:v1;group=HPC-可上网区资源-2;quota=0,20,80;min=1;max=4"
-        inspire ray events pipeline --tail 50
+        inspire ray events pipeline --workspace CPU资源空间 --tail 50
         inspire ray instances pipeline --workspace CPU资源空间
     """
 

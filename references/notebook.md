@@ -130,16 +130,16 @@ inspire notebook install-deps <name> --slurm --ray
 
 ## 7. 事件、指标和状态
 
-`inspire notebook events <name>` 看调度、镜像拉取、容器启动、停止、保存镜像等生命周期原因。Notebook 卡在 `PENDING`、`CREATING` 或失败时先看 events。
+`inspire notebook events <name> --workspace <workspace>` 看调度、镜像拉取、容器启动、停止、保存镜像等生命周期原因。Notebook 卡在 `PENDING`、`CREATING` 或失败时先看 events。
 
-`inspire notebook metrics <name>` 看平台资源视图的历史资源曲线，不需要进入容器。适合判断实例是否真的吃到 GPU、CPU / 内存是否贴边、磁盘或网络是否在持续传输。
+`inspire notebook metrics <name> --workspace <workspace>` 看平台资源视图的历史资源曲线，不需要进入容器。适合判断实例是否真的吃到 GPU、CPU / 内存是否贴边、磁盘或网络是否在持续传输。
 
 常用入口：
 
 ```bash
-inspire notebook events <name> --tail 50
-inspire notebook metrics <name> --window 30m
-inspire notebook metrics <name> --metric gpu,gpu_mem,cpu,mem --sparkline --no-plot
+inspire notebook events <name> --workspace 分布式训练空间 --tail 50
+inspire notebook metrics <name> --workspace 分布式训练空间 --window 30m
+inspire notebook metrics <name> --workspace 分布式训练空间 --metric gpu,gpu_mem,cpu,mem --sparkline --no-plot
 ```
 
 分工原则：

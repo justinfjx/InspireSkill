@@ -337,7 +337,7 @@ def list_hpc(
 @click.option("--image-type", default="SOURCE_PRIVATE", show_default=True, help="Image source type")
 @click.option(
     "--instance-count",
-    type=int,
+    type=click.IntRange(1),
     default=1,
     show_default=True,
     help="Number of selected nodes to allocate.",
@@ -354,20 +354,20 @@ def list_hpc(
 )
 @click.option(
     "--number-of-tasks",
-    type=int,
+    type=click.IntRange(1),
     default=1,
     show_default=True,
     help="Slurm --ntasks value.",
 )
 @click.option(
     "--cpus-per-task",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Slurm --cpus-per-task value. Default: derive from --quota CPU count.",
 )
 @click.option(
     "--memory-per-cpu",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Slurm --mem-per-cpu in GiB. Default: derive from --quota memory / CPU.",
 )
@@ -669,7 +669,7 @@ def status_hpc(ctx: Context, name: str, workspace: str) -> None:
 @click.option(
     "--workspace",
     required=True,
-    help="Workspace name. Required; -A is not accepted.",
+    help="Workspace name.",
 )
 @click.option(
     "--limit",
@@ -722,7 +722,7 @@ def instances_hpc(ctx: Context, name: str, workspace: str, limit: int) -> None:
 @click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
@@ -760,7 +760,7 @@ def hpc_id(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> None
 @click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
@@ -808,7 +808,7 @@ def stop_hpc(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> No
 )
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
@@ -822,7 +822,7 @@ def delete_hpc(ctx: Context, name: str, workspace: str, yes: bool, pick: Optiona
 
     \b
     Example:
-        inspire hpc delete my-hpc-run
+        inspire hpc delete my-hpc-run --workspace CPU资源空间
     """
     if not yes and not ctx.json_output:
         click.confirm(

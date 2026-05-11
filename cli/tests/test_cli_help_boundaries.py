@@ -20,13 +20,10 @@ def test_job_logs_help_positions_web_as_fallback() -> None:
 def test_instances_help_uses_required_workspace_and_limit() -> None:
     for group in ("job", "ray", "hpc"):
         result = CliRunner().invoke(cli_main, [group, "instances", "--help"])
-        output = _one_line(result.output)
 
         assert result.exit_code == 0
         assert "--workspace TEXT" in result.output
         assert "--limit INTEGER" in result.output
-        if group != "job":
-            assert "Required; -A is not accepted" in output
         assert "--num" not in result.output
         assert "--web" not in result.output
         assert "--all-workspaces" not in result.output
@@ -256,11 +253,22 @@ def test_events_help_has_no_cache_mode() -> None:
         ["job", "events", "--help"],
         ["notebook", "events", "--help"],
         ["hpc", "events", "--help"],
+        ["ray", "events", "--help"],
     ):
         result = CliRunner().invoke(cli_main, args)
 
         assert result.exit_code == 0
         assert "--from-cache" not in result.output
+        assert "--follow" in result.output
+        assert "--watch" not in result.output
+        assert "Alias for global --json" not in result.output
+        assert "Equivalent to top-level" not in result.output
+
+    notebook_result = CliRunner().invoke(cli_main, ["notebook", "events", "--help"])
+    assert notebook_result.exit_code == 0
+    assert "--keyword" in notebook_result.output
+    assert "--type" not in notebook_result.output
+    assert "--reason" not in notebook_result.output
 
 
 def test_model_help_has_no_cross_user_filter() -> None:

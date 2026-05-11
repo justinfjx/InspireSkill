@@ -21,35 +21,32 @@ from inspire.platform.web.browser_api.notebooks import list_notebook_events
 @click.argument("name")
 @click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
-    "--json",
-    "json_output_local",
-    is_flag=True,
-    help="Output as JSON. Equivalent to top-level `--json`.",
-)
-@click.option(
-    "--type",
-    "type_filter",
-    help="Filter events by `type` (Normal / Warning; case-insensitive prefix match).",
-)
-@click.option(
-    "--reason",
-    "reason_filter",
-    help="Filter events whose `reason` contains this substring (case-insensitive).",
+    "--keyword",
+    "keyword_filter",
+    help="Filter lifecycle messages by substring (case-insensitive).",
 )
 @click.option(
     "--tail",
-    type=int,
-    help="Show only the last N events (applied after --type/--reason).",
+    type=click.IntRange(1),
+    help="Show only the last N events (applied after --keyword).",
+)
+@click.option("--follow", "-f", is_flag=True, help="Follow the event timeline and print new events.")
+@click.option(
+    "--interval",
+    type=click.IntRange(1),
+    default=5,
+    show_default=True,
+    help="Polling interval in seconds for --follow.",
 )
 @pass_context
 def events(
     ctx: Context,
     name: str,
     workspace: str,
-    json_output_local: bool,
-    type_filter: Optional[str],
-    reason_filter: Optional[str],
+    keyword_filter: Optional[str],
     tail: Optional[int],
+    follow: bool,
+    interval: int,
 ) -> None:
     """Show platform events for a notebook instance.
 
@@ -57,8 +54,8 @@ def events(
     Examples:
       inspire notebook events <name> --workspace 分布式训练空间
       inspire --json notebook events <name> --workspace 分布式训练空间
-      inspire notebook events <name> --workspace 分布式训练空间 --type Warning
-      inspire notebook events <name> --workspace 分布式训练空间 --reason FailedScheduling
+      inspire notebook events <name> --workspace 分布式训练空间 --keyword FailedScheduling
+      inspire notebook events <name> --workspace 分布式训练空间 --follow
     """
     from inspire.cli.commands.notebook import notebook_lookup as _nb
     from inspire.cli.utils.notebook_cli import WEB_AUTH_HINT, get_base_url, load_config, require_web_session
@@ -92,9 +89,12 @@ def events(
         resource_id=notebook_id,
         resource_type="notebook",
         resource_name=name,
-        fetch=lambda: list_notebook_events(notebook_id),
-        json_output_local=json_output_local,
-        type_filter=type_filter,
-        reason_filter=reason_filter,
+        fetch=lambda: list_notebook_events(notebook_id, session=session),
+        json_output_local=False,
+        type_filter=None,
+        reason_filter=None,
+        keyword_filter=keyword_filter,
         tail=tail,
+        follow=follow,
+        interval=interval,
     )

@@ -206,7 +206,7 @@ def try_exec_via_ssh_tunnel(
                         f"SSH tunnel not available. Notebook '{bridge.name}' is {notebook_status}.",
                         hint=(
                             f"Start it with `inspire notebook start {bridge.name} --workspace <workspace>` if needed, "
-                            f"or wait until `inspire notebook status {bridge.name}` reports "
+                            f"or wait until `inspire notebook status {bridge.name} --workspace <workspace>` reports "
                             "RUNNING, then retry."
                         ),
                     )
@@ -648,7 +648,7 @@ def exec_via_workflow(
 @click.option(
     "timeout",
     "--timeout",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Timeout in seconds (default: config value)",
 )

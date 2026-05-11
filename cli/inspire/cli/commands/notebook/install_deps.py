@@ -249,7 +249,7 @@ def _run_step(label: str, command: str, *, notebook: str, timeout: int) -> int:
 )
 @click.option(
     "--timeout",
-    type=int,
+    type=click.IntRange(1),
     default=1800,
     show_default=True,
     help=(

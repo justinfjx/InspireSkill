@@ -23,29 +23,32 @@ from inspire.platform.web.session import get_web_session
 @click.argument("name")
 @click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
-    "--json",
-    "json_output_local",
-    is_flag=True,
-    help="Output as JSON. Equivalent to top-level `--json`.",
-)
-@click.option(
     "--reason",
     "reason_filter",
     help="Filter events whose `reason` contains this substring (case-insensitive).",
 )
 @click.option(
     "--tail",
-    type=int,
+    type=click.IntRange(1),
     help="Show only the last N events (applied after --reason).",
+)
+@click.option("--follow", "-f", is_flag=True, help="Follow the event timeline and print new events.")
+@click.option(
+    "--interval",
+    type=click.IntRange(1),
+    default=5,
+    show_default=True,
+    help="Polling interval in seconds for --follow.",
 )
 @pass_context
 def events(
     ctx: Context,
     name: str,
     workspace: str,
-    json_output_local: bool,
     reason_filter: Optional[str],
     tail: Optional[int],
+    follow: bool,
+    interval: int,
 ) -> None:
     """Show job-level platform events for an HPC job.
 
@@ -54,6 +57,7 @@ def events(
       inspire hpc events <name> --workspace CPU资源空间
       inspire --json hpc events <name> --workspace CPU资源空间
       inspire hpc events <name> --workspace CPU资源空间 --reason Deleted
+      inspire hpc events <name> --workspace CPU资源空间 --follow
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -75,8 +79,10 @@ def events(
         resource_type="hpc",
         resource_name=name,
         fetch=lambda: list_hpc_job_events(job_id),
-        json_output_local=json_output_local,
+        json_output_local=False,
         type_filter=None,  # HPC events lack `type`; filter not applicable
         reason_filter=reason_filter,
         tail=tail,
+        follow=follow,
+        interval=interval,
     )

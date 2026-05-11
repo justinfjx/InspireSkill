@@ -377,7 +377,7 @@ def _resolve_notebook_id(
             "CLI commands take a notebook name.",
             EXIT_VALIDATION_ERROR,
             hint=(
-                "Use `inspire notebook list` to find the name. "
+                "Use `inspire notebook list --workspace <workspace|all>` to find the name. "
                 "Use `inspire notebook id <name>` only for explicit platform lookup."
             ),
         )

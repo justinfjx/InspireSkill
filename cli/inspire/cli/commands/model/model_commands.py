@@ -256,7 +256,7 @@ def list_model(
 @click.argument("name")
 @click.option("--workspace", required=True, help="Workspace name")
 @click.option("--project", default=None, help="Project name filter")
-@click.option("--pick", type=int, default=None, help="Pick Nth duplicate name (1-indexed)")
+@click.option("--pick", type=click.IntRange(1), default=None, help="Pick Nth duplicate name (1-indexed)")
 @pass_context
 def status_model(
     ctx: Context,
@@ -360,7 +360,7 @@ def status_model(
 @click.argument("name")
 @click.option("--workspace", required=True, help="Workspace name")
 @click.option("--project", default=None, help="Project name filter")
-@click.option("--pick", type=int, default=None, help="Pick Nth duplicate name (1-indexed)")
+@click.option("--pick", type=click.IntRange(1), default=None, help="Pick Nth duplicate name (1-indexed)")
 @pass_context
 def versions_model(
     ctx: Context,
@@ -464,7 +464,7 @@ def versions_model(
 )
 @click.option("--tag", "tags", multiple=True, help="Custom model tag")
 @click.option("--description", default="", help="Model description")
-@click.option("--source-type", type=int, default=1, show_default=True)
+@click.option("--source-type", type=click.IntRange(1), default=1, show_default=True)
 @pass_context
 def register_model(
     ctx: Context,

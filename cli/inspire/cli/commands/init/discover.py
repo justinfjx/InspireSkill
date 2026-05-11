@@ -545,7 +545,7 @@ def _load_projects_for_discovery(
         # Single project — unambiguous, keep the zero-friction prompt default.
         choice = click.prompt(
             "Select project for this repository",
-            type=int,
+            type=click.IntRange(1, 1),
             default=1,
             show_default=True,
         )

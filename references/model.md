@@ -36,17 +36,16 @@ inspire model <subcommand> --help
 
 | 目标 | 入口 | 后续动作 |
 | --- | --- | --- |
-| 看当前 workspace 有哪些模型 | `model list` | 找到候选模型名后再看详情 |
-| 看某个模型的元数据和版本摘要 | `model status <model-name>` | 确认存储路径、版本和可部署性 |
-| 看历史版本 | `model versions <model-name>` | 选择要部署或复现的版本 |
+| 看当前 workspace 有哪些模型 | `model list --workspace <workspace>` | 找到候选模型名后再看详情 |
+| 看某个模型的元数据和版本摘要 | `model status <model-name> --workspace <workspace>` | 确认存储路径、版本和可部署性 |
+| 看历史版本 | `model versions <model-name> --workspace <workspace>` | 选择要部署或复现的版本 |
 | 注册平台可见目录 | `model register` | 目录必须已在启智共享存储中 |
 | 创建部署服务 | `serving create` | 转到 [compute-workloads.md](compute-workloads.md) |
 
 ```bash
-inspire model list
 inspire model list --workspace 分布式训练空间
-inspire model status <model-name>
-inspire model versions <model-name>
+inspire model status <model-name> --workspace 分布式训练空间
+inspire model versions <model-name> --workspace 分布式训练空间
 inspire model register --name <model-name> --source-path <REMOTE_PATH> --workspace 分布式训练空间 --project <PROJECT>
 ```
 

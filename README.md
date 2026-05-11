@@ -139,7 +139,7 @@ inspire resources availability --workspace all --include-cpu
   </td>
   <td>
     <h4>🛰 模型部署 （Serving）</h4>
-    <code>inspire serving list / status / stop / configs / metrics</code> —— 覆盖模型部署服务的列表、状态、可用配置、资源指标和停止操作；创建部署仍交给平台部署页面。
+    <code>inspire serving create / list / status / stop / configs / metrics</code> —— 覆盖模型部署服务的创建、列表、状态、可用配置、资源指标和停止操作；创建前用 <code>serving quota --workspace &lt;workspace&gt;</code> 选 quota。
   </td>
 </tr>
 <tr>

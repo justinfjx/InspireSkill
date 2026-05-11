@@ -311,7 +311,11 @@ def resolve_notebook_image(
                     break
 
             try:
-                choice = click.prompt("\nSelect image", type=int, default=default_idx)
+                choice = click.prompt(
+                    "\nSelect image",
+                    type=click.IntRange(1, len(images)),
+                    default=default_idx,
+                )
                 if choice < 1 or choice > len(images):
                     _handle_error(
                         ctx,
@@ -992,7 +996,11 @@ def run_notebook_create(
     )
 
     if not json_output:
-        click.echo(f"\nUse `inspire notebook status {scrub_raw_ids(name)}` to check status.")
+        click.echo(
+            "\nUse "
+            f"`inspire notebook status {scrub_raw_ids(name)} --workspace {scrub_raw_ids(workspace_label)}` "
+            "to check status."
+        )
 
 
 __all__ = ["run_notebook_create", "maybe_run_post_start", "format_quota_display"]

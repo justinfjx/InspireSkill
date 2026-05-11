@@ -488,7 +488,7 @@ def list_serving(
 @click.command("status")
 @click.argument("name")
 @click.option("--workspace", required=True, help="Workspace name")
-@click.option("--pick", type=int, default=None, help="Pick Nth duplicate name (1-indexed)")
+@click.option("--pick", type=click.IntRange(1), default=None, help="Pick Nth duplicate name (1-indexed)")
 @pass_context
 def status_serving(
     ctx: Context,
@@ -570,7 +570,7 @@ def status_serving(
 @click.option("--workspace", required=True, help="Workspace name")
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
@@ -613,10 +613,10 @@ def stop_serving(
 
 @click.command("delete")
 @click.argument("name")
-@click.option("--workspace", default=None, help="Workspace name")
+@click.option("--workspace", required=True, help="Workspace name")
 @click.option(
     "--pick",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
@@ -698,7 +698,7 @@ def configs_serving(
 @click.option("--model", "model_name", required=True, help="Registered model name")
 @click.option(
     "--model-version",
-    type=int,
+    type=click.IntRange(1),
     default=None,
     help="Model version (default: latest version from model list)",
 )
@@ -728,10 +728,15 @@ def configs_serving(
     help="Serving condition profile providing workspace/project/group/quota/image.",
 )
 @click.option("--command", "-c", required=True, help="Serving startup command")
-@click.option("--port", type=int, required=True, help="Service port in the container")
-@click.option("--replicas", type=int, default=1, show_default=True)
-@click.option("--nodes-per-replica", type=int, default=1, show_default=True)
-@click.option("--shm-gib", type=int, default=None, help="Shared memory size in GiB")
+@click.option(
+    "--port",
+    type=click.IntRange(1, 65535),
+    required=True,
+    help="Service port in the container",
+)
+@click.option("--replicas", type=click.IntRange(1), default=1, show_default=True)
+@click.option("--nodes-per-replica", type=click.IntRange(1), default=1, show_default=True)
+@click.option("--shm-gib", type=click.IntRange(1), default=None, help="Shared memory size in GiB")
 @click.option(
     "--priority",
     type=click.IntRange(1, 10),
@@ -780,7 +785,7 @@ def create_serving(
         inspire serving create --name qwen-demo --model qwen-demo --workspace 分布式训练空间 \
           --project CI-情境智能 --group H200-2号机房 --quota 1,18,200 \
           --image serve-base:v1 --command "python serve.py" --port 8000 --dry-run
-        inspire serving metrics qwen-demo --window 30m
+        inspire serving metrics qwen-demo --workspace 分布式训练空间 --window 30m
     """
     try:
         from inspire.cli.utils.quota_resolver import (
