@@ -56,11 +56,11 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
     """Open an interactive SSH shell to a cached notebook.
 
     Requires a cached notebook connection. Create one with
-    ``inspire notebook ssh connect <notebook>``.
+    ``inspire notebook ssh connect <notebook> --workspace <workspace>``.
 
     \b
     Example:
-        inspire notebook ssh connect my-notebook
+        inspire notebook ssh connect my-notebook --workspace <workspace>
         inspire notebook shell my-notebook
         inspire notebook shell my-notebook --cwd me
     """
@@ -92,7 +92,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
             ctx,
             "BridgeNotFound",
             f"No cached notebook connection for '{bridge}'.",
-            hint="Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection.",
+            hint="Run `inspire notebook ssh connect <name> --workspace <workspace>` to create or refresh this notebook connection.",
         )
         raise RuntimeError("unreachable")
     if selected_bridge is None:
@@ -100,7 +100,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
             ctx,
             "TunnelError",
             "No cached notebook connection.",
-            hint="Create one with: inspire notebook ssh connect <notebook>",
+            hint="Create one with: inspire notebook ssh connect <notebook> --workspace <workspace>",
         )
         raise RuntimeError("unreachable")
 
@@ -127,7 +127,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                 ctx,
                 "BridgeNotFound",
                 f"No cached notebook connection for '{bridge_name}'.",
-                hint="Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection.",
+                hint="Run `inspire notebook ssh connect <name> --workspace <workspace>` to create or refresh this notebook connection.",
             )
             raise RuntimeError("unreachable")
 
@@ -146,7 +146,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                     "SSH tunnel not available",
                     hint=(
                         "Auto-rebuild retries exhausted. Run 'inspire notebook ssh test' and "
-                        "retry 'inspire notebook ssh connect <notebook>'."
+                        "retry 'inspire notebook ssh connect <notebook> --workspace <workspace>'."
                     ),
                 )
 
@@ -159,7 +159,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                     hint=(
                         "This cached connection has no notebook handle, so it cannot be "
                         "rebuilt automatically. Re-create it via "
-                        "'inspire notebook ssh connect <notebook>'."
+                        "'inspire notebook ssh connect <notebook> --workspace <workspace>'."
                     ),
                 )
 
@@ -177,7 +177,7 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
                         "TunnelError",
                         f"SSH tunnel not available. Notebook '{bridge_name}' is {notebook_status}.",
                         hint=(
-                            f"Start it with `inspire notebook start {bridge_name}` if needed, "
+                            f"Start it with `inspire notebook start {bridge_name} --workspace <workspace>` if needed, "
                             f"or wait until `inspire notebook status {bridge_name}` reports "
                             "RUNNING, then retry."
                         ),

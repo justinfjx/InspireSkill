@@ -318,8 +318,8 @@ def run_job_create(
     help=(
         "Resource quota as 'gpu,cpu,mem' (mem in GiB). "
         "Example: '4,80,800' for 4 GPU + 80 CPU + 800 GiB. "
-            "The triple must match a resource spec in the workspace (see 'inspire resources specs'); "
-        "pass --group to disambiguate when multiple compute groups offer the same triple."
+        "The triple must match a quota row in the workspace (see 'inspire job quota'); "
+        "pass --group <full compute group name> to disambiguate."
     ),
 )
 @click.option("--command", "-c", required=True, help="Start command")
@@ -379,8 +379,8 @@ def run_job_create(
 @click.option(
     "--group",
     help=(
-        "Compute group name. Required unless supplied by --profile. "
-        "Partial matches accepted when unique."
+        "Full compute group name. Required unless supplied by --profile. "
+        "Partial matches are not accepted."
     ),
 )
 @click.option(
@@ -437,10 +437,10 @@ def create(
     \b
     Examples:
         inspire job create -n pr-123 --workspace 分布式训练空间 --project CI-情境智能 \
-          --group H200 -q 4,80,800 --image sandbox-base:latest --nodes 1 \
+          --group H200-2号机房 -q 4,80,800 --image sandbox-base:latest --nodes 1 \
           -c "bash repo/train.sh"
         inspire job create -n test --workspace 分布式训练空间 --project CI-情境智能 \
-          --group H200 -q 1,20,200 --image sandbox-base:latest --nodes 1 \
+          --group H200-2号机房 -q 1,20,200 --image sandbox-base:latest --nodes 1 \
           -c "python train.py" --priority 9
 
     \b

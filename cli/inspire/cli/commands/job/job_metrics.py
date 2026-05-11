@@ -37,9 +37,18 @@ def _resolve_job_lcg(task_id: str, session: WebSession) -> Optional[str]:
 
 
 def _job_name_to_id(ctx: Context, name: str) -> str:
-    from inspire.cli.utils import job_cli as _jc
+    from inspire.cli.commands.job import job_commands as _job
+    from inspire.config import Config
 
-    return _jc.resolve_job_id(ctx, name)
+    config, _ = Config.from_files_and_env(require_credentials=False)
+    return _job._resolve_web_job_id(
+        config=config,
+        job=name,
+        workspace=str(getattr(ctx, "workspace", "") or ""),
+        all_workspaces=False,
+        max_pages=50,
+        allow_raw_id=True,
+    )
 
 
 job_metrics = build_metrics_command(

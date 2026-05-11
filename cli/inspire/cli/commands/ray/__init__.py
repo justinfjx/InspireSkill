@@ -11,6 +11,7 @@ from __future__ import annotations
 import click
 
 from inspire.cli.commands.batch import ray_batch
+from inspire.cli.commands.workload_quota import make_quota_command
 from inspire.cli.commands.workload_profile import make_profile_command
 
 from .ray_commands import (
@@ -35,7 +36,7 @@ def ray() -> None:
 
     \b
     Examples:
-        inspire resources specs --usage ray --workspace CPU资源空间
+        inspire ray quota --workspace CPU资源空间
         inspire ray create -n pipeline -c "python driver.py" --workspace CPU资源空间 --project CI-情境智能 --head-image ray-base:v1 --head-group HPC-可上网区资源-2 --head-quota 0,4,16 --worker "name=workers;image=ray-base:v1;group=HPC-可上网区资源-2;quota=0,20,80;min=1;max=4"
         inspire ray events pipeline --tail 50
         inspire ray instances pipeline --workspace CPU资源空间
@@ -47,6 +48,7 @@ ray.add_command(status_ray)
 ray.add_command(stop_ray)
 ray.add_command(delete_ray)
 ray.add_command(create_ray)
+ray.add_command(make_quota_command("ray"))
 ray.add_command(make_profile_command("ray"))
 ray.add_command(ray_batch)
 ray.add_command(events_ray)

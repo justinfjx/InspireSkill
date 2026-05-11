@@ -124,16 +124,9 @@ def test_list_servings_posts_expected_body_and_parses_response(monkeypatch) -> N
     }
 
 
-def test_list_servings_resolves_workspace_from_session_when_not_passed(monkeypatch) -> None:
-    record: dict[str, Any] = {}
-    _install_fake_request(
-        monkeypatch, {"code": 0, "data": {"inference_servings": [], "total": 0}}, record
-    )
-
-    list_servings(session=_FakeSession(workspace_id="ws-session"))
-    assert record["body"]["workspace_id"] == "ws-session"
-    # Default `my_serving` should be True (matches UI "我的部署").
-    assert record["body"]["filter_by"] == {"my_serving": True}
+def test_list_servings_requires_workspace_id() -> None:
+    with pytest.raises(ValueError, match="workspace_id is required"):
+        list_servings(session=_FakeSession(workspace_id="ws-session"))
 
 
 def test_list_servings_falls_back_to_list_key_when_inference_servings_missing(
@@ -145,7 +138,7 @@ def test_list_servings_falls_back_to_list_key_when_inference_servings_missing(
         {"code": 0, "data": {"list": [{"id": "sv-1", "name": "x"}], "total": 1}},
         record,
     )
-    items, total = list_servings(session=_FakeSession())
+    items, total = list_servings(workspace_id="ws-given", session=_FakeSession())
     assert total == 1
     assert items[0].inference_serving_id == "sv-1"  # falls back from `id`
 
@@ -178,12 +171,12 @@ def test_list_servings_supports_current_filter_fields(monkeypatch) -> None:
 def test_list_servings_raises_on_nonzero_code(monkeypatch) -> None:
     _install_fake_request(monkeypatch, {"code": 1234, "message": "bad"}, {})
     with pytest.raises(ValueError, match="API error: bad"):
-        list_servings(session=_FakeSession())
+        list_servings(workspace_id="ws-given", session=_FakeSession())
 
 
 def test_list_servings_empty_response_returns_empty_list_and_zero_total(monkeypatch) -> None:
     _install_fake_request(monkeypatch, {"code": 0, "data": None}, {})
-    items, total = list_servings(session=_FakeSession())
+    items, total = list_servings(workspace_id="ws-given", session=_FakeSession())
     assert items == []
     assert total == 0
 

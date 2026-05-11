@@ -15,7 +15,6 @@ import click
 from inspire.cli.context import Context, EXIT_CONFIG_ERROR, EXIT_JOB_NOT_FOUND, pass_context
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.events import run_events_command
-from inspire.cli.utils.job_cli import resolve_job_id
 from inspire.config import Config, ConfigError
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.browser_api.jobs import (
@@ -66,21 +65,7 @@ from .job_commands import WebJobResolutionError, _close_web_client, _resolve_web
     type=int,
     help="Show only the last N events (applied after --type / --reason).",
 )
-@click.option("--web", is_flag=True, help="Use the platform detail view.")
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Search all visible workspaces when resolving a job name",
-)
-@click.option(
-    "--max-pages",
-    type=int,
-    default=50,
-    show_default=True,
-    help="Max web pages to scan per workspace when resolving a job name",
-)
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @pass_context
 def events(
     ctx: Context,
@@ -91,43 +76,34 @@ def events(
     instance_ids: tuple[str, ...],
     all_instances: bool,
     tail: Optional[int],
-    web: bool,
     workspace: Optional[str],
-    all_workspaces: bool,
-    max_pages: int,
 ) -> None:
     """Show events for a training job.
 
     \b
     Examples:
-      inspire job events <job-name>
-      inspire --json job events <job-name>
+      inspire job events <job-name> --workspace 分布式训练空间
+      inspire --json job events <job-name> --workspace 分布式训练空间
       inspire job events <job-name> --type Warning
       inspire job events <job-name> --reason Unschedulable
       inspire job events <job-name> --instance <pod-name>
-      inspire job events --web <job-name>
-      inspire job events -A <job-name> --all-instances
+      inspire job events <job-name> --workspace all --all-instances
     """
-    web_mode = web or workspace or all_workspaces or all_instances
-
-    if web_mode:
-        try:
-            config, _ = Config.from_files_and_env(require_credentials=False)
-            resolved_id = _resolve_web_job_id(
-                config=config,
-                job=job,
-                workspace=workspace,
-                all_workspaces=all_workspaces,
-                max_pages=max_pages,
-            )
-        except ConfigError as e:
-            _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-            return
-        except WebJobResolutionError as e:
-            _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
-            return
-    else:
-        resolved_id = resolve_job_id(ctx, job)
+    try:
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        resolved_id = _resolve_web_job_id(
+            config=config,
+            job=job,
+            workspace=workspace,
+            all_workspaces=False,
+            max_pages=50,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
+    except WebJobResolutionError as e:
+        _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
+        return
 
     pods = list(instance_ids) if instance_ids else None
     if all_instances:
@@ -143,7 +119,7 @@ def events(
             if all_instances:
                 instances, _ = browser_api_module.list_job_instances(
                     resolved_id,
-                    num=200,
+                    limit=200,
                     session=session,
                 )
                 pod_names = [
@@ -166,7 +142,7 @@ def events(
         resource_id=event_scope_key,
         resource_type="job",
         resource_name=job,
-        fetch=_fetch_web_events if web_mode else _fetch_local_events,
+        fetch=_fetch_web_events,
         json_output_local=json_output_local,
         type_filter=type_filter,
         reason_filter=reason_filter,

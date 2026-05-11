@@ -29,8 +29,20 @@ def _resolve_serving_lcg(task_id: str, session: WebSession) -> Optional[str]:
 
 def _serving_name_to_id(ctx: Context, name: str) -> str:
     from inspire.cli.commands.serving import serving_commands as _sv
+    from inspire.config import Config
+    from inspire.platform.web.session import get_web_session
 
-    return _sv._resolve_serving_name(ctx, name)
+    if name.startswith("sv-"):
+        return name
+
+    config, _ = Config.from_files_and_env(require_credentials=False)
+    session = get_web_session()
+    workspace_id = _sv._resolve_workspace_id(
+        config,
+        str(getattr(ctx, "workspace", "") or ""),
+        session=session,
+    )
+    return _sv._resolve_serving_name(ctx, name, workspace_id=workspace_id)
 
 
 serving_metrics = build_metrics_command(

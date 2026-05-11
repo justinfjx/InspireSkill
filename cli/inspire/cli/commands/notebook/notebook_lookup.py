@@ -329,18 +329,15 @@ def _collect_workspace_ids_for_lookup(
 ) -> list[str]:
     """Enumerate workspaces in which to look up a notebook by name.
 
-    Name lookup uses the live workspace IDs already attached to the
-    authenticated web session, falling back to the session's current workspace
-    when the platform did not enumerate the full visible set.
+    This is only a broad live-session fallback for legacy internal call sites.
+    User-facing query and lifecycle commands pass explicit workspace IDs from
+    ``--workspace <name|all>`` instead of inheriting browser state.
     """
     del config
     candidates: list[str] = []
     all_workspace_ids = getattr(session, "all_workspace_ids", None)
     if isinstance(all_workspace_ids, list):
         candidates.extend(str(value) for value in all_workspace_ids if value)
-    current_workspace_id = getattr(session, "workspace_id", None)
-    if current_workspace_id:
-        candidates.append(str(current_workspace_id))
     return _unique_workspace_ids(candidates)
 
 
@@ -361,6 +358,7 @@ def _resolve_notebook_id(
     base_url: str,
     identifier: str,
     json_output: bool,
+    workspace_ids: list[str] | None = None,
 ) -> tuple[str, str | None]:
     identifier = identifier.strip()
     if not identifier:
@@ -384,7 +382,7 @@ def _resolve_notebook_id(
             ),
         )
 
-    workspace_ids = _collect_workspace_ids_for_lookup(session, config)
+    workspace_ids = workspace_ids or _collect_workspace_ids_for_lookup(session, config)
 
     if not workspace_ids:
         _handle_error(
@@ -451,7 +449,7 @@ def _resolve_notebook_id(
             "APIError",
             f"Notebook not found: {identifier}",
             EXIT_API_ERROR,
-            hint="Run 'inspire notebook list --all-workspaces' to find the notebook name.",
+            hint="Run 'inspire notebook list --workspace all' to find the notebook name.",
         )
 
     if len(matches) == 1:

@@ -19,6 +19,7 @@ from inspire.platform.web.browser_api.notebooks import list_notebook_events
 
 @click.command("events")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--json",
     "json_output_local",
@@ -44,6 +45,7 @@ from inspire.platform.web.browser_api.notebooks import list_notebook_events
 def events(
     ctx: Context,
     name: str,
+    workspace: str,
     json_output_local: bool,
     type_filter: Optional[str],
     reason_filter: Optional[str],
@@ -53,14 +55,38 @@ def events(
 
     \b
     Examples:
-      inspire notebook events <name>
-      inspire --json notebook events <name>
-      inspire notebook events <name> --type Warning
-      inspire notebook events <name> --reason FailedScheduling
+      inspire notebook events <name> --workspace 分布式训练空间
+      inspire --json notebook events <name> --workspace 分布式训练空间
+      inspire notebook events <name> --workspace 分布式训练空间 --type Warning
+      inspire notebook events <name> --workspace 分布式训练空间 --reason FailedScheduling
     """
-    from inspire.cli.commands.notebook.notebook_metrics import _notebook_name_to_id
+    from inspire.cli.commands.notebook import notebook_lookup as _nb
+    from inspire.cli.utils.notebook_cli import WEB_AUTH_HINT, get_base_url, load_config, require_web_session
+    from inspire.config import ConfigError
+    from inspire.config.workspaces import resolve_workspace_query_scope
+    from inspire.cli.context import EXIT_CONFIG_ERROR
+    from inspire.cli.utils.errors import exit_with_error as _handle_error
 
-    notebook_id = _notebook_name_to_id(ctx, name)
+    session = require_web_session(ctx, hint=WEB_AUTH_HINT)
+    config = load_config(ctx)
+    try:
+        workspace_ids, _ = resolve_workspace_query_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
+    notebook_id, _ = _nb._resolve_notebook_id(
+        ctx,
+        session=session,
+        config=config,
+        base_url=get_base_url(),
+        identifier=name,
+        json_output=getattr(ctx, "json_output", False),
+        workspace_ids=workspace_ids,
+    )
     run_events_command(
         ctx,
         resource_id=notebook_id,

@@ -13,19 +13,21 @@ def test_job_logs_help_positions_web_as_fallback() -> None:
 
     assert result.exit_code == 0
     assert "CLI-managed remote log file" in output
-    assert "cached notebook SSH bridge" in output
-    assert "Fallback: read platform aggregated logs" in output
+    assert "cached notebook bridge" in output
+    assert "Platform logs are the default" in output
 
 
-def test_instances_help_uses_required_workspace_and_num() -> None:
+def test_instances_help_uses_required_workspace_and_limit() -> None:
     for group in ("job", "ray", "hpc"):
         result = CliRunner().invoke(cli_main, [group, "instances", "--help"])
         output = _one_line(result.output)
 
         assert result.exit_code == 0
         assert "--workspace TEXT" in result.output
-        assert "Required; -A is not accepted" in output
-        assert "--num INTEGER" in result.output
+        assert "--limit INTEGER" in result.output
+        if group != "job":
+            assert "Required; -A is not accepted" in output
+        assert "--num" not in result.output
         assert "--web" not in result.output
         assert "--all-workspaces" not in result.output
         assert "--all-users" not in result.output
@@ -36,11 +38,71 @@ def test_instances_help_uses_required_workspace_and_num() -> None:
 
 def test_resources_nodes_help_prefers_min_nodes_wording() -> None:
     result = CliRunner().invoke(cli_main, ["resources", "nodes", "--help"])
+    output = _one_line(result.output)
 
     assert result.exit_code == 0
     assert "whole 8-GPU nodes" in result.output
-    assert "inspire resources nodes --min-nodes 2" in result.output
+    assert "compute group name keyword/substring" in output
+    assert "full name is not required" in output
+    assert "inspire resources nodes --workspace 分布式训练空间 --min-nodes 2" in result.output
     assert "not scattered GPUs" in result.output
+
+
+def test_query_commands_require_explicit_workspace() -> None:
+    cases = (
+        ["job", "list"],
+        ["notebook", "status", "demo"],
+        ["notebook", "list"],
+        ["resources", "availability"],
+        ["resources", "nodes"],
+        ["hpc", "list"],
+        ["ray", "list"],
+        ["model", "list"],
+        ["serving", "list"],
+        ["serving", "configs"],
+        ["user", "permissions"],
+    )
+    runner = CliRunner()
+    for args in cases:
+        result = runner.invoke(cli_main, args)
+        assert result.exit_code != 0
+        assert "Missing option '--workspace'" in result.output
+
+
+def test_query_group_help_says_keyword_substring() -> None:
+    for args in (
+        ["job", "quota", "--help"],
+        ["resources", "availability", "--help"],
+        ["resources", "nodes", "--help"],
+    ):
+        result = CliRunner().invoke(cli_main, args)
+        output = _one_line(result.output)
+
+        assert result.exit_code == 0
+        assert "compute group name keyword/substring" in output
+        assert "full name is not required" in output
+
+
+def test_create_and_profile_group_help_requires_full_name() -> None:
+    for args in (
+        ["notebook", "create", "--help"],
+        ["job", "create", "--help"],
+        ["hpc", "create", "--help"],
+        ["ray", "create", "--help"],
+        ["serving", "create", "--help"],
+        ["notebook", "profile", "set", "--help"],
+        ["job", "profile", "set", "--help"],
+        ["hpc", "profile", "set", "--help"],
+        ["ray", "profile", "set", "--help"],
+        ["serving", "profile", "set", "--help"],
+    ):
+        result = CliRunner().invoke(cli_main, args)
+        output = _one_line(result.output)
+
+        assert result.exit_code == 0
+        assert "Full compute group name" in output
+        assert "Partial matches accepted" not in output
+        assert "compute group name keyword/substring" not in output
 
 
 def test_dry_run_help_says_resolve_not_submit() -> None:

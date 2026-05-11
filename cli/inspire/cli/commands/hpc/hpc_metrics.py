@@ -35,11 +35,25 @@ def _resolve_hpc_lcg(task_id: str, session: WebSession) -> Optional[str]:
 
 
 def _hpc_name_to_id(ctx: Context, name: str) -> str:
-    # Module-attribute lookup so pytest monkeypatches on `_resolve_hpc_name`
-    # in ``hpc_commands`` intercept at call time (see cli/tests/conftest.py).
+    # Module-attribute lookup so pytest monkeypatches on the workspace-scoped
+    # resolver in ``hpc_commands`` intercept at call time.
     from inspire.cli.commands.hpc import hpc_commands as _hpc
+    from inspire.config import Config
+    from inspire.platform.web.session import get_web_session
 
-    return _hpc._resolve_hpc_name(ctx, name)
+    if name.startswith("hpc-job-"):
+        return name
+
+    config, _ = Config.from_files_and_env(require_credentials=False)
+    session = get_web_session()
+    return _hpc._resolve_hpc_name_in_workspace(
+        ctx,
+        config=config,
+        session=session,
+        name=name,
+        workspace=str(getattr(ctx, "workspace", "") or ""),
+        limit=10000,
+    )
 
 
 hpc_metrics = build_metrics_command(

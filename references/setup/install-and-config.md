@@ -82,7 +82,7 @@ inspire config show --compact
 ```bash
 cd /path/to/your-repo
 inspire init
-inspire resources list --all --include-cpu
+inspire resources availability --workspace all --include-cpu
 ```
 
 `inspire init` 会发现可用项目、workspace、compute group 和远端存储池，并写入：

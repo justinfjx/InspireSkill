@@ -19,8 +19,8 @@
 先确认可上网 CPU 规格：
 
 ```bash
-inspire resources specs --usage notebook --workspace CPU资源空间 --include-empty
-inspire resources specs --usage notebook --workspace CPU资源空间 --group CPU资源-2
+inspire notebook quota --workspace CPU资源空间 --include-empty
+inspire notebook quota --workspace CPU资源空间 --group CPU资源-2
 ```
 
 创建准备盒：
@@ -28,7 +28,7 @@ inspire resources specs --usage notebook --workspace CPU资源空间 --group CPU
 ```bash
 inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
   --name <name>-base --image <BASE_IMAGE> --project <PROJECT> --wait
-inspire notebook ssh connect <name>-base
+inspire notebook ssh connect <name>-base --workspace CPU资源空间
 ```
 
 准备共享盘内容：
@@ -67,10 +67,10 @@ inspire image save <name>-base -n <img> -v v1 --public --wait
 HPC 示例：
 
 ```bash
-inspire resources specs --usage hpc --workspace CPU资源空间
+inspire hpc quota --workspace CPU资源空间
 inspire hpc create -n <name>-preprocess \
   -c 'srun bash -lc "python <repo>/preprocess.py --out public:dataset-v1"' \
-  --workspace CPU资源空间 --project <PROJECT> --group <GROUP> \
+  --workspace CPU资源空间 --project <PROJECT> --group <FULL_GROUP_NAME> \
   -q 0,20,256 --image <IMAGE> --priority 5
 ```
 
@@ -87,14 +87,14 @@ inspire hpc create -n <name>-preprocess \
 - 代码在共享盘 repo 中，或镜像内已包含固定代码。
 - 数据和权重在目标项目共享路径可见。
 - 依赖在镜像中，或目标环境无需联网安装。
-- `inspire resources specs --usage job --workspace 分布式训练空间` 能找到目标 `--quota`。
+- `inspire job quota --workspace 分布式训练空间` 能找到目标 `--quota`。
 
 单节点调试：
 
 ```bash
-inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP> -q 1,20,200 \
+inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP_FULL_NAME> -q 1,20,200 \
   --name <name>-probe --image <IMAGE> --project <PROJECT> --wait
-inspire notebook ssh connect <name>-probe
+inspire notebook ssh connect <name>-probe --workspace 分布式训练空间
 inspire notebook exec <name>-probe --cwd me:<repo> "bash scripts/probe.sh"
 ```
 
@@ -102,24 +102,24 @@ inspire notebook exec <name>-probe --cwd me:<repo> "bash scripts/probe.sh"
 
 ```bash
 inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
-  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group <GPU_GROUP> \
+  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group <GPU_GROUP_FULL_NAME> \
   --project <PROJECT> --image <IMAGE> --priority 5
-inspire job logs --follow <name>-train
+inspire job logs <name>-train --workspace 分布式训练空间 --follow
 ```
 
 训练失败或长时间排队时，先查：
 
 ```bash
-inspire job events <name>-train --tail 50
-inspire job logs <name>-train --tail 100
-inspire job status <name>-train
+inspire job events <name>-train --workspace 分布式训练空间 --tail 50
+inspire job logs <name>-train --workspace 分布式训练空间 --tail 100
+inspire job status <name>-train --workspace 分布式训练空间
 ```
 
 训练已进入 `RUNNING` 后，把 `metrics` 当成和日志同级的健康度观察面：
 
 ```bash
-inspire job metrics <name>-train --window 30m
-inspire job metrics <name>-train --metric gpu,gpu_mem,cpu,mem,net_read,net_write --sparkline --no-plot
+inspire job metrics <name>-train --workspace 分布式训练空间 --window 30m
+inspire job metrics <name>-train --workspace 分布式训练空间 --metric gpu,gpu_mem,cpu,mem,net_read,net_write --sparkline --no-plot
 ```
 
 多节点训练里，某个 pod 长期低 GPU / 低网络通常意味着数据加载、通信或进程状态异常；所有 pod GPU 接近零且 CPU / I/O 也安静时，不要只盯 `RUNNING`，回到日志和产出文件确认训练是否真的推进。
@@ -133,7 +133,7 @@ inspire model register --name <model> --source-path <REMOTE_MODEL_DIR> \
   --workspace 分布式训练空间 --project <PROJECT>
 inspire model versions <model> --workspace 分布式训练空间
 inspire serving create --name <service> --model <model> --workspace 分布式训练空间 \
-  --project <PROJECT> --group <GROUP> --quota 1,18,200 --image <IMAGE> \
+  --project <PROJECT> --group <FULL_GROUP_NAME> --quota 1,18,200 --image <IMAGE> \
   --command "python serve.py" --port 8000 --dry-run
 ```
 

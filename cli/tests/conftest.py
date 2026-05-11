@@ -47,13 +47,9 @@ def _short_circuit_platform_resolvers(monkeypatch):  # noqa: ANN001
 
     # Per-resource resolvers: module + attribute name.
     patches = [
-        ("inspire.cli.utils.job_cli", "resolve_job_id"),
         ("inspire.cli.commands.job.job_commands", "resolve_job_id"),
         ("inspire.cli.commands.job.job_events", "resolve_job_id"),
         ("inspire.cli.commands.job.job_logs", "resolve_job_id"),
-        ("inspire.cli.commands.hpc.hpc_commands", "_resolve_hpc_name"),
-        ("inspire.cli.commands.hpc.hpc_events", "_resolve_hpc_name"),
-        ("inspire.cli.commands.ray.ray_commands", "_resolve_ray_name"),
         ("inspire.cli.commands.serving.serving_commands", "_resolve_serving_name"),
         ("inspire.cli.commands.image.image_commands", "_resolve_image_name"),
     ]

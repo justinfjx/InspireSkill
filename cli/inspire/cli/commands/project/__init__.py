@@ -19,7 +19,7 @@ def project():
 
     `project` is mostly for group-level project context: ownership, displayed
     budget / points, and platform priority fields. For ordinary personal
-    compute decisions, start with `resources specs` and live availability;
+    compute decisions, start with `<workload> quota` and live availability;
     project budget is usually not the first constraint.
 
     \b

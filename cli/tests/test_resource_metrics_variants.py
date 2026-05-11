@@ -106,7 +106,7 @@ def test_job_metrics_resolver_and_wiring(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["job", "metrics", "job-abc123", "--metric", "gpu", "--window", "30m"],
+        ["job", "metrics", "job-abc123", "--workspace", "all", "--metric", "gpu", "--window", "30m"],
     )
     assert result.exit_code == 0, result.output
 
@@ -157,7 +157,7 @@ def test_hpc_metrics_resolver_and_wiring(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["hpc", "metrics", "hpc-job-xyz", "--metric", "gpu", "--window", "15m"],
+        ["hpc", "metrics", "hpc-job-xyz", "--workspace", "all", "--metric", "gpu", "--window", "15m"],
     )
     assert result.exit_code == 0, result.output
 
@@ -205,7 +205,7 @@ def test_serving_metrics_resolver_and_wiring(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["serving", "metrics", "sv-abc", "--metric", "gpu", "--window", "10m"],
+        ["serving", "metrics", "sv-abc", "--workspace", "all", "--metric", "gpu", "--window", "10m"],
     )
     assert result.exit_code == 0, result.output
 
@@ -227,17 +227,17 @@ def test_serving_metrics_resolver_and_wiring(
     [
         (
             "job",
-            ["job", "metrics", "job-abc", "--metric", "gpu"],
+            ["job", "metrics", "job-abc", "--workspace", "all", "--metric", "gpu"],
             "distributed_training",
         ),
         (
             "hpc",
-            ["hpc", "metrics", "hpc-job-xyz", "--metric", "gpu"],
+            ["hpc", "metrics", "hpc-job-xyz", "--workspace", "all", "--metric", "gpu"],
             "hpc_job",
         ),
         (
             "serving",
-            ["serving", "metrics", "sv-abc", "--metric", "gpu"],
+            ["serving", "metrics", "sv-abc", "--workspace", "all", "--metric", "gpu"],
             "inference_serving",
         ),
     ],

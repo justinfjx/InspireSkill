@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from inspire.platform.web.browser_api.core import _browser_api_path, _get_base_url, _request_json
 from inspire.platform.web.browser_api.jobs import list_job_events, list_jobs
-from inspire.platform.web.session import DEFAULT_WORKSPACE_ID, WebSession, get_web_session
+from inspire.platform.web.session import WebSession, get_web_session
 
 __all__ = [
     "ProjectInfo",
@@ -84,7 +84,7 @@ def list_projects(
         session = get_web_session()
 
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
 
     body = {
         "page": 1,
@@ -151,7 +151,7 @@ def list_projects_v2(
     if session is None:
         session = get_web_session()
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
 
     filter_body: dict[str, Any] = {"workspace_id": workspace_id}
     if check_admin is not None:

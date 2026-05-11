@@ -1277,8 +1277,8 @@ def _print_discover_completion(
         click.echo()
         click.echo("Ready to use:")
         click.echo("  inspire config show     # Verify configuration")
-        click.echo("  inspire resources list  # View available GPUs")
-        click.echo("  inspire notebook list   # List notebooks")
+        click.echo("  inspire resources availability --workspace <workspace>  # View available GPUs")
+        click.echo("  inspire notebook list --workspace <workspace>           # List notebooks")
         return
     click.echo("Next steps:")
     click.echo("  Run: inspire config show")

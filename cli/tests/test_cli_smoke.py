@@ -77,13 +77,13 @@ def test_resources_help_includes_key_subcommands() -> None:
     runner = CliRunner()
     result = runner.invoke(cli_main, ["resources", "--help"])
     assert result.exit_code == 0
-    assert "list" in result.output
+    assert "availability" in result.output
     assert "nodes" in result.output
 
 
-def test_job_logs_help_mentions_ssh_only() -> None:
+def test_job_logs_help_mentions_platform_default() -> None:
     runner = CliRunner()
     result = runner.invoke(cli_main, ["job", "logs", "--help"])
     assert result.exit_code == 0
-    assert "over SSH" in result.output
-    assert "cached notebook connection" in result.output
+    assert "--source [platform|ssh]" in result.output
+    assert "Platform logs are the default" in result.output

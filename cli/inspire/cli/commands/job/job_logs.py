@@ -1,16 +1,4 @@
-"""Job logs command over SSH.
-
-`inspire job logs <name>` cats / tails / follows the remote log file via
-a cached notebook connection (any one with shared-FS access; pick explicitly
-with ``--notebook``). The log path uses the convention
-``<remote_cwd>/.inspire/training_master_<sanitized_name>_<timestamp>.log``;
-``inspire job logs`` resolves the latest match via SSH ``ls -1t`` so a
-re-submitted name shows the most recent run, not a clobbered file. Pass
-``--remote-log-path`` to override (e.g. for jobs created outside the CLI).
-
-Bulk mode and the legacy GitHub-workflow fallback were removed. Use
-``inspire notebook ssh connect <name>`` once to create the cached notebook connection.
-"""
+"""Job logs command."""
 
 from __future__ import annotations
 
@@ -44,14 +32,38 @@ from inspire.cli.context import (
 from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.auth import AuthManager
 from inspire.cli.utils.errors import exit_with_error as _handle_error
-from inspire.cli.utils.job_cli import resolve_job_id
 from inspire.cli.utils.job_submit import derive_remote_log_glob
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.session import SessionExpiredError, WebSession, get_web_session
 
-from .job_commands import WebJobResolutionError, _close_web_client, _resolve_web_job_id
+from .job_commands import (
+    WebJobResolutionError,
+    WebJobValidationError,
+    _close_web_client,
+    _resolve_web_job_id,
+)
+
+
+def _window_to_minutes(window: str) -> int:
+    value = (window or "").strip().lower()
+    if len(value) < 2:
+        raise click.BadParameter("use a window like 30m or 2h")
+    unit = value[-1]
+    try:
+        amount = int(value[:-1])
+    except ValueError as exc:
+        raise click.BadParameter("use a window like 30m or 2h") from exc
+    if amount <= 0:
+        raise click.BadParameter("window must be positive")
+    if unit == "m":
+        return amount
+    if unit == "h":
+        return amount * 60
+    if unit == "d":
+        return amount * 24 * 60
+    raise click.BadParameter("window unit must be m, h, or d")
 
 
 def _resolve_latest_log_via_ssh(
@@ -408,12 +420,12 @@ def _emit_no_tunnel_error(ctx: Context, *, bridge_name: Optional[str]) -> None:
         hint = (
             f"Cached notebook tunnel(s): {preview}. "
             "Pass --notebook <name> to target one explicitly, "
-            "or run `inspire notebook ssh connect <notebook-name>` to bootstrap a new one."
+            "or run `inspire notebook ssh connect <notebook-name> --workspace <workspace>` to bootstrap a new one."
         )
     else:
         hint = (
             "No cached notebook tunnels found. "
-            "Run `inspire notebook ssh connect <notebook-name>` to bootstrap one with shared-FS access."
+            "Run `inspire notebook ssh connect <notebook-name> --workspace <workspace>` to bootstrap one with shared-FS access."
         )
     label = f"bridge '{bridge_name}'" if bridge_name else "default bridge"
     _handle_error(
@@ -465,7 +477,7 @@ def _run_job_logs_single_job(
                     "NotebookTunnelNotFound",
                     f"No cached notebook tunnel for '{bridge_name}'.",
                     EXIT_GENERAL_ERROR,
-                    hint="Run `inspire notebook ssh connect <name>` to create or refresh a notebook connection.",
+                    hint="Run `inspire notebook ssh connect <name> --workspace <workspace>` to create or refresh a notebook connection.",
                 )
             _emit_no_tunnel_error(ctx, bridge_name=bridge_name)
             return
@@ -587,16 +599,16 @@ def _run_job_logs_web_single_job(
         _handle_error(
             ctx,
             "InvalidUsage",
-            "--json --follow --web is not supported",
+            "--json --follow --source platform is not supported",
             EXIT_VALIDATION_ERROR,
-            hint="Drop --json to follow web logs, or drop --follow for a one-shot JSON fetch.",
+            hint="Drop --json to follow platform logs, or drop --follow for a one-shot JSON fetch.",
         )
         return
     if since_minutes is not None and since_minutes <= 0:
         _handle_error(
             ctx,
             "InvalidUsage",
-            "--since-minutes must be positive",
+            "--window must be positive",
             EXIT_VALIDATION_ERROR,
         )
         return
@@ -604,7 +616,7 @@ def _run_job_logs_web_single_job(
         _handle_error(
             ctx,
             "InvalidUsage",
-            "--web-page-size must be positive",
+            "--limit must be positive",
             EXIT_VALIDATION_ERROR,
         )
         return
@@ -631,7 +643,7 @@ def _run_job_logs_web_single_job(
             else:
                 instances, _ = browser_api_module.list_job_instances(
                     job_id,
-                    num=200,
+                    limit=200,
                     session=session,
                 )
                 pod_names = [
@@ -724,7 +736,7 @@ def _run_job_logs_web_single_job(
     "--follow",
     "-f",
     is_flag=True,
-    help="Follow new log content; default mode uses SSH tail -f, --web polls platform logs",
+    help="Follow new log content; platform logs are polled, SSH logs use tail -f.",
 )
 @click.option(
     "--remote-log-path",
@@ -739,32 +751,21 @@ def _run_job_logs_web_single_job(
     help=(
         "Notebook name whose cached SSH connection should be used. Required when more "
         "than one is cached and the default connection is ambiguous. "
-        "Run `inspire notebook ssh connect <notebook-name>` first. "
+        "Run `inspire notebook ssh connect <notebook-name> --workspace <workspace>` first. "
         "No short alias — `-n` is reserved for --tail."
     ),
 )
 @click.option(
-    "--web",
-    is_flag=True,
+    "--source",
+    type=click.Choice(["platform", "ssh"], case_sensitive=False),
+    default="platform",
+    show_default=True,
     help=(
-        "Fallback: read platform aggregated logs instead of the CLI-managed SSH log file. "
-        "Use when no cached notebook SSH bridge or shared-FS log path is available."
+        "Log source. Use platform for aggregated platform logs or ssh for "
+        "CLI-managed remote log files."
     ),
 )
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Resolve the job name across every visible workspace, not just the current one",
-)
-@click.option(
-    "--max-pages",
-    type=int,
-    default=50,
-    show_default=True,
-    help="Max web pages to scan per workspace when resolving a job name",
-)
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--instance",
     "instance_ids",
@@ -772,17 +773,16 @@ def _run_job_logs_web_single_job(
     help="Pod instance name to query. Repeat to query multiple pods.",
 )
 @click.option(
-    "--since-minutes",
-    type=int,
+    "--window",
     default=None,
-    help="Query logs from the last N minutes instead of the job lifetime window",
+    help="Relative time window for platform logs, e.g. 30m or 2h.",
 )
 @click.option(
-    "--web-page-size",
+    "--limit",
     type=int,
     default=500,
     show_default=True,
-    help="Max log records fetched from the aggregated log view",
+    help="Max platform log records fetched. For SSH logs, use --tail for line count.",
 )
 @pass_context
 def logs(
@@ -794,37 +794,24 @@ def logs(
     follow: bool,
     remote_log_path: Optional[str],
     notebook: Optional[str],
-    web: bool,
+    source: str,
     workspace: Optional[str],
-    all_workspaces: bool,
-    max_pages: int,
     instance_ids: tuple[str, ...],
-    since_minutes: int | None,
-    web_page_size: int,
+    window: str | None,
+    limit: int,
 ) -> None:
-    """Read the CLI-managed remote log file for a training job over SSH.
+    """Read training-job logs from the platform or an SSH log file.
 
-    Requires a cached notebook connection.
-
-    Default mode reads the log file written by `inspire job create` under
-    the `me` path alias, usually
-    ``<me>/.inspire/training_master_<name>_*.log``. It requires a cached
-    notebook connection / SSH bridge from `inspire notebook ssh connect <notebook>`.
-
-    Use ``--web`` only as a fallback to platform aggregated logs when no cached
-    notebook bridge or shared-FS log path is available.
+    Platform logs are the default. Use ``--source ssh`` when you specifically
+    need the CLI-managed remote log file through a cached notebook bridge.
 
     \b
     Examples:
-        inspire job logs my-training-run
-        inspire job logs my-training-run --tail 100
-        inspire job logs my-training-run --head 50
-        inspire job logs my-training-run --follow
-        inspire job logs my-training-run --path
-        inspire job logs my-training-run --notebook my-cpu-box
-        inspire job logs my-training-run --remote-log-path /inspire/.../custom.log
-        inspire job logs --web my-training-run --tail 100
-        inspire job logs --web my-training-run --follow
+        inspire job logs my-training-run --workspace 分布式训练空间
+        inspire job logs my-training-run --workspace 分布式训练空间 --tail 100
+        inspire job logs my-training-run --workspace 分布式训练空间 --window 30m
+        inspire job logs my-training-run --workspace 分布式训练空间 --follow
+        inspire job logs my-training-run --workspace 分布式训练空间 --source ssh --notebook my-cpu-box
     """
     if notebook is not None:
         from inspire.cli.utils.id_resolver import reject_id_at_boundary
@@ -837,18 +824,18 @@ def logs(
         )
     bridge = notebook
 
-    web_mode = (
-        web
-        or workspace
-        or bool(instance_ids)
-        or since_minutes is not None
-    )
-    if web_mode:
+    try:
+        since_minutes = _window_to_minutes(window) if window else None
+    except click.BadParameter as exc:
+        _handle_error(ctx, "ValidationError", str(exc), EXIT_VALIDATION_ERROR)
+        return
+
+    if source.lower() == "platform":
         if bridge:
             _handle_error(
                 ctx,
                 "InvalidUsage",
-                "--notebook cannot be combined with --web",
+                "--notebook cannot be combined with --source platform",
                 EXIT_VALIDATION_ERROR,
             )
             return
@@ -856,7 +843,7 @@ def logs(
             _handle_error(
                 ctx,
                 "InvalidUsage",
-                "--remote-log-path cannot be combined with --web",
+                "--remote-log-path cannot be combined with --source platform",
                 EXIT_VALIDATION_ERROR,
             )
             return
@@ -868,15 +855,35 @@ def logs(
             path=path,
             follow=follow,
             workspace=workspace,
-            all_workspaces=all_workspaces,
-            max_pages=max_pages,
+            all_workspaces=False,
+            max_pages=50,
             instance_ids=instance_ids,
             since_minutes=since_minutes,
-            web_page_size=web_page_size,
+            web_page_size=limit,
         )
         return
 
-    job_id = resolve_job_id(ctx, job, all_workspaces=all_workspaces)
+    try:
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        job_id = _resolve_web_job_id(
+            config=config,
+            job=job,
+            workspace=workspace,
+            all_workspaces=False,
+            max_pages=50,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
+    except WebJobValidationError as e:
+        _handle_error(ctx, "ValidationError", str(e), EXIT_VALIDATION_ERROR)
+        return
+    except WebJobResolutionError as e:
+        _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
+        return
+    except (SessionExpiredError, ValueError) as e:
+        _handle_error(ctx, "AuthenticationError", str(e), EXIT_AUTH_ERROR)
+        return
 
     resolved_log_path: str
     if remote_log_path:
@@ -890,13 +897,6 @@ def logs(
             )
             return
     else:
-        try:
-            config, _ = Config.from_files_and_env(
-                require_credentials=False
-            )
-        except ConfigError as e:
-            _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-            return
         glob_pattern = derive_remote_log_glob(config, name=job)
         if not glob_pattern:
             _handle_error(

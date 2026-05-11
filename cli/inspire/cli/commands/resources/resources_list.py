@@ -22,14 +22,14 @@ from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.compute_groups import compute_group_name_map, load_compute_groups_from_config
 from inspire.config import Config, ConfigError
-from inspire.config.workspaces import select_workspace_id
+from inspire.config.workspaces import resolve_workspace_query_scope
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.resources import (
     KNOWN_COMPUTE_GROUPS,
     clear_availability_cache,
     fetch_resource_availability,
 )
-from inspire.platform.web.session import DEFAULT_WORKSPACE_ID, SessionExpiredError, get_web_session
+from inspire.platform.web.session import SessionExpiredError, get_web_session
 from .table import render_table
 
 
@@ -61,31 +61,17 @@ def _resolve_workspace_scope(
     *,
     config: Optional[Config],
     session,
-    explicit_workspace_name: Optional[str],
-    show_all: bool,
+    workspace: Optional[str],
 ) -> tuple[list[str], dict[str, str], bool]:
     workspace_names = _workspace_name_map(config=config, session=session)
-    if explicit_workspace_name is not None:
-        if config is None:
-            raise ConfigError("Workspace selection requires a loaded config.")
-        resolved_workspace_id = select_workspace_id(
-            config,
-            explicit_workspace_name=explicit_workspace_name,
-            session=session,
-        )
-        return [str(resolved_workspace_id)], workspace_names, True
-
-    if show_all:
-        seen: set[str] = set()
-        workspace_ids: list[str] = []
-        for wid in session.all_workspace_ids or []:
-            if wid and wid not in seen:
-                seen.add(wid)
-                workspace_ids.append(wid)
-        if workspace_ids:
-            return workspace_ids, workspace_names, False
-
-    return [session.workspace_id or DEFAULT_WORKSPACE_ID], workspace_names, False
+    if config is None:
+        raise ConfigError("Workspace selection requires a loaded config.")
+    workspace_ids, all_workspaces = resolve_workspace_query_scope(
+        config,
+        workspace=workspace,
+        session=session,
+    )
+    return workspace_ids, workspace_names, all_workspaces
 
 
 def _format_metric(value: float | int) -> str:
@@ -142,12 +128,12 @@ def _format_availability_table(availability, workspace_mode: bool = False) -> No
     lines.append("")
     lines.append("💡 Usage:")
     lines.append(
-        '  inspire job create -n train -c "python train.py" -q 1,20,200   # 1 GPU + 20 CPU + 200 GiB'
+        "  inspire job quota --workspace <workspace> --group H100   # Filter to find full group names"
     )
     lines.append(
-        '  inspire job create -n train -c "python train.py" -q 4,80,800 --group H100   # Pin group'
+        '  inspire job create -n train --workspace <workspace> --project <project> --group H100-2号机房 -q 4,80,800 -c "python train.py"'
     )
-    lines.append("  inspire resources specs --usage notebook    # List valid quota triples")
+    lines.append("  # create/profile --group requires the full compute group name")
     lines.append("")
 
     click.echo("\n".join(lines))
@@ -370,12 +356,12 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
     lines.append("")
     lines.append("💡 Usage:")
     lines.append(
-        '  inspire job create -n train -c "python train.py" -q 1,20,200   # 1 GPU + 20 CPU + 200 GiB'
+        "  inspire notebook quota --workspace <workspace> --group H100   # Filter to find full group names"
     )
     lines.append(
-        '  inspire job create -n train -c "python train.py" -q 4,80,800 --group H100   # Pin group'
+        '  inspire job create -n train --workspace <workspace> --project <project> --group H100-2号机房 -q 4,80,800 -c "python train.py"'
     )
-    lines.append("  inspire resources specs --usage notebook    # List valid quota triples")
+    lines.append("  # create/profile --group requires the full compute group name")
     lines.append("")
 
     click.echo("\n".join(lines))
@@ -383,9 +369,10 @@ def _format_accurate_availability_table(availability, *, include_cpu: bool) -> N
 
 def _list_accurate_resources(
     ctx: Context,
-    show_all: bool,
     *,
-    explicit_workspace_name: Optional[str],
+    workspace: Optional[str],
+    group: Optional[str],
+    limit: Optional[int],
     include_cpu: bool,
 ) -> None:
     """List accurate compute-group availability using browser API."""
@@ -402,27 +389,24 @@ def _list_accurate_resources(
         workspace_ids, workspace_names, explicit_workspace_selected = _resolve_workspace_scope(
             config=config,
             session=session,
-            explicit_workspace_name=explicit_workspace_name,
-            show_all=show_all,
+            workspace=workspace,
         )
-        target_workspace_id = workspace_ids[0] if len(workspace_ids) == 1 else None
-
-        known_groups = _known_compute_groups_from_config(
-            show_all=show_all or explicit_workspace_selected
-        )
+        target_workspace_id = workspace_ids[0] if not explicit_workspace_selected else None
 
         availability = browser_api_module.get_accurate_resource_availability(
             workspace_id=target_workspace_id,
             session=session,
             include_cpu=include_cpu,
-            all_workspaces=show_all and not explicit_workspace_selected,
+            all_workspaces=explicit_workspace_selected,
         )
 
-        if not show_all and not explicit_workspace_selected:
-            availability = [a for a in availability if a.group_id in known_groups]
-            for entry in availability:
-                if not entry.group_name:
-                    entry.group_name = known_groups.get(entry.group_id, entry.group_name)
+        group_filter = (group or "").strip().lower()
+        if group_filter:
+            availability = [
+                a for a in availability if group_filter in str(a.group_name or "").lower()
+            ]
+        if limit is not None:
+            availability = availability[:limit]
         for entry in availability:
             if not entry.workspace_name:
                 entry.workspace_name = workspace_names.get(entry.workspace_id, entry.workspace_name)
@@ -800,19 +784,19 @@ def run_resources_list(
     ctx: Context,
     *,
     no_cache: bool,
-    show_all: bool,
     watch: bool,
     interval: int,
-    workspace: bool,
+    workspace: str,
+    group: Optional[str],
+    limit: Optional[int],
     use_global: bool,
-    explicit_workspace_name: Optional[str],
     include_cpu: bool,
 ) -> None:
-    if include_cpu and (workspace or use_global):
+    if include_cpu and use_global:
         _handle_error(
             ctx,
             "InvalidOption",
-            "CPU totals are only available in accurate mode. Remove --workspace/--global.",
+            "CPU totals are only available in accurate mode. Remove --global.",
             EXIT_CONFIG_ERROR,
         )
         return
@@ -828,44 +812,52 @@ def run_resources_list(
                 err=True,
             )
             sys.exit(EXIT_CONFIG_ERROR)
-
-        _watch_resources(ctx, show_all, interval, workspace, use_global)
+        _handle_error(
+            ctx,
+            "InvalidOption",
+            "Watch mode is disabled for workspace-scoped resources queries. Use `resources nodes --workspace <name|all>` for node-level snapshots.",
+            EXIT_CONFIG_ERROR,
+        )
         return
 
-    if workspace or use_global:
-        if use_global and not workspace:
-            click.echo(
-                "Note: --global is deprecated; showing workspace node availability instead.",
-                err=True,
-            )
-        _list_workspace_resources(ctx, show_all, no_cache)
+    if use_global:
+        _handle_error(
+            ctx,
+            "InvalidOption",
+            "--global is removed. Use --workspace all or resources nodes --workspace <name|all>.",
+            EXIT_CONFIG_ERROR,
+        )
         return
 
     _list_accurate_resources(
         ctx,
-        show_all,
-        explicit_workspace_name=explicit_workspace_name,
+        workspace=workspace,
+        group=group,
+        limit=limit,
         include_cpu=include_cpu,
     )
 
 
-@click.command("list")
+@click.command("availability")
 @click.option(
     "--no-cache",
     is_flag=True,
     help="Clear optional workspace availability metadata cache before loading",
 )
 @click.option(
-    "--all",
-    "show_all",
-    is_flag=True,
-    help="Thorough check: show all accessible compute groups across visible workspaces",
+    "--workspace",
+    required=True,
+    help="Workspace name or 'all'.",
 )
 @click.option(
-    "--workspace-name",
+    "--group",
     default=None,
-    help="Workspace name override",
-)
+        help=(
+            "Filter by compute group name keyword/substring; full name is not "
+            "required. Use this to find the exact compute group name required by "
+            "workload create/profile --group."
+        ),
+    )
 @click.option(
     "--include-cpu",
     is_flag=True,
@@ -884,53 +876,37 @@ def run_resources_list(
     default=30,
     help="Watch refresh interval in seconds (default: 30)",
 )
-@click.option(
-    "--workspace",
-    "-ws",
-    is_flag=True,
-    help="Show per-node availability for the current workspace",
-)
-@click.option(
-    "--global",
-    "use_global",
-    is_flag=True,
-    help="Deprecated: alias for --workspace",
-)
+@click.option("--limit", "-n", type=click.IntRange(min=1), default=None, help="Maximum rows to show.")
 @pass_context
-def list_resources(
+def availability_resources(
     ctx: Context,
     no_cache: bool,
-    show_all: bool,
-    workspace_name: Optional[str],
+    workspace: str,
+    group: Optional[str],
     include_cpu: bool,
     watch: bool,
     interval: int,
-    workspace: bool = False,
-    use_global: bool = False,
+    limit: Optional[int],
 ) -> None:
-    """List compute-group availability across workspaces.
+    """List compute-group availability.
 
-    By default, shows real-time GPU usage.
+    Requires --workspace <name|all> and shows real-time GPU usage.
     Use --include-cpu to include CPU-only compute groups and CPU/memory totals.
-    Use --workspace for per-node availability (free/ready nodes).
 
     \b
     Examples:
-        inspire resources list              # Accurate GPU usage (default)
-        inspire resources list --include-cpu  # Include CPU-only groups
-        inspire resources list --workspace-name 分布式训练空间
-        inspire resources list --workspace  # Node-level availability
-        inspire resources list --all        # Include all visible workspaces/groups
-        inspire resources list --watch      # Watch mode
+        inspire resources availability --workspace 分布式训练空间
+        inspire resources availability --workspace all --include-cpu
+        inspire resources availability --workspace 分布式训练空间 --group H200
     """
     run_resources_list(
         ctx,
         no_cache=no_cache,
-        show_all=show_all,
         watch=watch,
         interval=interval,
         workspace=workspace,
-        use_global=use_global,
-        explicit_workspace_name=workspace_name,
+        group=group,
+        limit=limit,
+        use_global=False,
         include_cpu=include_cpu,
     )

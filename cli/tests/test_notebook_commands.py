@@ -331,9 +331,8 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         max_retries=0,
         retry_delay=0.0,
     )
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {}
 
     monkeypatch.setattr(
@@ -404,7 +403,10 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "start", "ring-8h100-test"])
+    result = runner.invoke(
+        cli_main,
+        ["notebook", "start", "ring-8h100-test", "--workspace", "a"],
+    )
 
     assert result.exit_code == EXIT_SUCCESS
     assert started["notebook_id"] == item["id"]
@@ -426,9 +428,8 @@ def test_notebook_start_name_conflict_prompts_selection(
         max_retries=0,
         retry_delay=0.0,
     )
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {}
 
     monkeypatch.setattr(
@@ -508,7 +509,7 @@ def test_notebook_start_name_conflict_prompts_selection(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["notebook", "start", "ring-8h100-test"],
+        ["notebook", "start", "ring-8h100-test", "--workspace", "all"],
         input="2\n",
     )
 
@@ -533,9 +534,8 @@ def test_notebook_start_warns_when_no_wait_conflicts_with_configured_post_start(
         max_retries=0,
         retry_delay=0.0,
     )
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {}
 
     monkeypatch.setattr(
@@ -607,7 +607,10 @@ def test_notebook_start_warns_when_no_wait_conflicts_with_configured_post_start(
     monkeypatch.setattr(browser_api_module, "run_command_in_notebook", lambda **kwargs: True)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "start", "ring-8h100-test", "--no-wait"])
+    result = runner.invoke(
+        cli_main,
+        ["notebook", "start", "ring-8h100-test", "--workspace", "a", "--no-wait"],
+    )
 
     assert result.exit_code == EXIT_SUCCESS
     assert started["notebook_id"] == item["id"]
@@ -621,6 +624,8 @@ def test_run_notebook_ssh_validates_dropbear_setup_script(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -700,6 +705,7 @@ def test_run_notebook_ssh_validates_dropbear_setup_script(
         ssh_flow_module.run_notebook_ssh(
             Context(),
             notebook_id="nb-name",
+            workspace="Test Workspace",
             wait=True,
             pubkey=None,
             port=31337,
@@ -717,6 +723,8 @@ def test_run_notebook_ssh_fails_fast_on_account_mismatch(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     captured: dict[str, str] = {}
@@ -767,6 +775,7 @@ def test_run_notebook_ssh_fails_fast_on_account_mismatch(
         ssh_flow_module.run_notebook_ssh(
             Context(),
             notebook_id="nb-name",
+            workspace="Test Workspace",
             wait=True,
             pubkey=None,
             port=31337,
@@ -786,6 +795,8 @@ def test_run_notebook_ssh_passes_resolved_runtime_to_setup(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -862,6 +873,7 @@ def test_run_notebook_ssh_passes_resolved_runtime_to_setup(
     ssh_flow_module.run_notebook_ssh(
         Context(),
         notebook_id="nb-name",
+        workspace="Test Workspace",
         wait=True,
         pubkey=None,
         port=31337,
@@ -877,6 +889,8 @@ def test_run_notebook_ssh_refreshes_saved_profile_on_notebook_mismatch(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -960,6 +974,7 @@ def test_run_notebook_ssh_refreshes_saved_profile_on_notebook_mismatch(
     ssh_flow_module.run_notebook_ssh(
         Context(),
         notebook_id="nb-name",
+        workspace="Test Workspace",
         wait=True,
         pubkey=None,
         port=31337,
@@ -985,6 +1000,8 @@ def test_run_notebook_ssh_interactive_reconnects_after_drop(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -1072,6 +1089,7 @@ def test_run_notebook_ssh_interactive_reconnects_after_drop(
     ssh_flow_module.run_notebook_ssh(
         Context(),
         notebook_id="nb-name",
+        workspace="Test Workspace",
         wait=True,
         pubkey=None,
         port=31337,
@@ -1089,6 +1107,8 @@ def test_run_notebook_ssh_command_uses_non_interactive_executor(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -1156,12 +1176,7 @@ def test_run_notebook_ssh_command_uses_non_interactive_executor(
     monkeypatch.setattr(
         tunnel_module,
         "run_ssh_command_streaming",
-        lambda command,
-        bridge_name=None,
-        config=None,
-        timeout=None,
-        output_callback=None,
-        pass_stdin=False: (
+        lambda command, bridge_name=None, config=None, timeout=None, output_callback=None, pass_stdin=False: (
             streamed.update(
                 {
                     "command": command,
@@ -1205,6 +1220,7 @@ def test_run_notebook_ssh_command_uses_non_interactive_executor(
     ssh_flow_module.run_notebook_ssh(
         Context(),
         notebook_id="nb-name",
+        workspace="Test Workspace",
         wait=True,
         pubkey=None,
         port=31337,
@@ -1227,6 +1243,8 @@ def test_run_notebook_ssh_name_uses_cached_bridge_metadata(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -1276,12 +1294,7 @@ def test_run_notebook_ssh_name_uses_cached_bridge_metadata(
     monkeypatch.setattr(
         tunnel_module,
         "run_ssh_command_streaming",
-        lambda command,
-        bridge_name=None,
-        config=None,
-        timeout=None,
-        output_callback=None,
-        pass_stdin=False: (
+        lambda command, bridge_name=None, config=None, timeout=None, output_callback=None, pass_stdin=False: (
             streamed.update(
                 {
                     "command": command,
@@ -1297,21 +1310,20 @@ def test_run_notebook_ssh_name_uses_cached_bridge_metadata(
     monkeypatch.setattr(
         ssh_flow_module.subprocess,
         "run",
-        lambda args,
-        stdin=None,
-        capture_output=True,
-        timeout=10,
-        text=True: subprocess.CompletedProcess(
-            args,
-            0,
-            stdout="ok\n",
-            stderr="",
+        lambda args, stdin=None, capture_output=True, timeout=10, text=True: (
+            subprocess.CompletedProcess(
+                args,
+                0,
+                stdout="ok\n",
+                stderr="",
+            )
         ),
     )
 
     ssh_flow_module.run_notebook_ssh(
         Context(),
         notebook_id="container-config",
+        workspace="Test Workspace",
         wait=True,
         pubkey=None,
         port=31337,
@@ -1333,6 +1345,8 @@ def test_run_notebook_ssh_command_timeout_is_reported(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -1427,15 +1441,13 @@ def test_run_notebook_ssh_command_timeout_is_reported(
     monkeypatch.setattr(
         ssh_flow_module.subprocess,
         "run",
-        lambda args,
-        stdin=None,
-        capture_output=True,
-        timeout=10,
-        text=True: subprocess.CompletedProcess(
-            args,
-            0,
-            stdout="ok\n",
-            stderr="",
+        lambda args, stdin=None, capture_output=True, timeout=10, text=True: (
+            subprocess.CompletedProcess(
+                args,
+                0,
+                stdout="ok\n",
+                stderr="",
+            )
         ),
     )
 
@@ -1443,6 +1455,7 @@ def test_run_notebook_ssh_command_timeout_is_reported(
         ssh_flow_module.run_notebook_ssh(
             Context(),
             notebook_id="nb-name",
+            workspace="Test Workspace",
             wait=True,
             pubkey=None,
             port=31337,
@@ -1464,6 +1477,8 @@ def test_run_notebook_ssh_command_failure_reports_exit_code_and_grep_hint(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -1556,15 +1571,13 @@ def test_run_notebook_ssh_command_failure_reports_exit_code_and_grep_hint(
     monkeypatch.setattr(
         ssh_flow_module.subprocess,
         "run",
-        lambda args,
-        stdin=None,
-        capture_output=True,
-        timeout=10,
-        text=True: subprocess.CompletedProcess(
-            args,
-            0,
-            stdout="ok\n",
-            stderr="",
+        lambda args, stdin=None, capture_output=True, timeout=10, text=True: (
+            subprocess.CompletedProcess(
+                args,
+                0,
+                stdout="ok\n",
+                stderr="",
+            )
         ),
     )
 
@@ -1572,6 +1585,7 @@ def test_run_notebook_ssh_command_failure_reports_exit_code_and_grep_hint(
         ssh_flow_module.run_notebook_ssh(
             Context(),
             notebook_id="nb-name",
+            workspace="Test Workspace",
             wait=True,
             pubkey=None,
             port=31337,
@@ -1592,6 +1606,8 @@ def test_run_notebook_ssh_reports_when_tunnel_not_ready(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -1671,6 +1687,7 @@ def test_run_notebook_ssh_reports_when_tunnel_not_ready(
         ssh_flow_module.run_notebook_ssh(
             Context(),
             notebook_id="nb-name",
+            workspace="Test Workspace",
             wait=True,
             pubkey=None,
             port=31337,
@@ -1723,7 +1740,10 @@ def test_ssh_notebook_cache_hit_invokes_reconnect_with_notebook_kwarg(
     monkeypatch.setattr(remote_shell_module, "bridge_ssh", fake_reconnect)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "ssh", "connect", "gpu-main"])
+    result = runner.invoke(
+        cli_main,
+        ["notebook", "ssh", "connect", "gpu-main", "--workspace", "Test Workspace"],
+    )
 
     assert result.exit_code == EXIT_SUCCESS
     assert captured["notebook"] == "gpu-main"
@@ -1891,9 +1911,8 @@ def test_notebook_shell_cwd_uses_path_alias(
 
     assert result.exit_code == EXIT_SUCCESS
     assert captured["bridge_name"] == "gpu-main"
-    assert (
-        'cd "/inspire/ssd/project/topic/alice/repo" && exec $SHELL -l'
-        in str(captured["remote_command"])
+    assert 'cd "/inspire/ssd/project/topic/alice/repo" && exec $SHELL -l' in str(
+        captured["remote_command"]
     )
 
 
@@ -1970,7 +1989,10 @@ def test_notebook_ssh_cache_hit_without_default_path_alias_uses_login_home(
     monkeypatch.setattr(remote_shell_module.subprocess, "call", lambda args: 0)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "ssh", "connect", "gpu-main"])
+    result = runner.invoke(
+        cli_main,
+        ["notebook", "ssh", "connect", "gpu-main", "--workspace", "Test Workspace"],
+    )
 
     assert result.exit_code == EXIT_SUCCESS
     assert captured["bridge_name"] == "gpu-main"

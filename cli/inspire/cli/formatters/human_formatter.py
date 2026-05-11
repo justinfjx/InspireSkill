@@ -243,7 +243,7 @@ def format_resources(specs: List[Dict[str, Any]], groups: List[Dict[str, Any]]) 
             "- --quota '1,20,200' -> 1 GPU + 20 CPU + 200 GiB",
             "- --quota '4,80,800' -> 4 GPUs + 80 CPU + 800 GiB",
             "- --quota '0,4,32'   -> CPU-only (4 CPU + 32 GiB)",
-            "  See 'inspire resources specs' for valid triples; add --group to disambiguate.",
+            "  See '<workload> quota' for valid triples; add --group <keyword> to disambiguate.",
         ]
     )
 

@@ -1,10 +1,11 @@
 """Inspire CLI - Main entry point.
 
 Usage:
-    inspire job create --name "pr-123" --quota "4,80,800" --command "bash train.sh"
-    inspire job status <name>
-    inspire notebook list
-    inspire resources list
+    inspire job create --name "pr-123" --workspace <workspace> --project <project> \
+        --group <full-group-name> --quota "4,80,800" --command "bash train.sh"
+    inspire job status <name> --workspace <workspace>
+    inspire notebook list --workspace <workspace>
+    inspire resources availability --workspace <workspace>
 """
 
 import logging
@@ -63,7 +64,7 @@ def main(ctx: Context, json_output: bool, debug: bool) -> None:
     Normal workflow:
         1. `inspire config context` lists usable names for workspaces,
            projects, and compute groups.
-        2. `inspire resources specs --usage <kind>` shows valid
+        2. `inspire <kind> quota --workspace <name|all>` shows valid
            `--quota gpu,cpu,mem` triples for the workload family.
         3. `inspire <kind> create ...` submits the workload using visible
            names, or `inspire <kind> profile set ...` stores reusable
@@ -83,10 +84,12 @@ def main(ctx: Context, json_output: bool, debug: bool) -> None:
 
     \b
     Examples:
-        inspire job create --name "pr-123" --quota "4,80,800" --command "bash train.sh"
-        inspire job status pr-123
-        inspire notebook list
-        inspire resources list
+        inspire job create --name "pr-123" --workspace 分布式训练空间 \
+          --project CI-情境智能 --group H200-2号机房 --quota "4,80,800" \
+          --command "bash train.sh"
+        inspire job status pr-123 --workspace 分布式训练空间
+        inspire notebook list --workspace 分布式训练空间
+        inspire resources availability --workspace 分布式训练空间
     """
     ctx.json_output = json_output
     ctx.debug = debug

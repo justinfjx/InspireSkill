@@ -12,14 +12,12 @@ from . import notebook_lookup as notebook_lookup_module
 from . import notebook_ssh_flow as notebook_ssh_flow_module
 from .notebook_create_flow import maybe_run_post_start, run_notebook_create
 from .notebook_lookup import (
-    _ZERO_WORKSPACE_ID,
     _collect_workspace_ids_for_lookup,
     _get_current_user_detail,
     _list_notebooks_for_workspace,
     _resolve_notebook_id as _lookup_resolve_notebook_id,
     _sort_notebook_items,
     _try_get_current_user_ids,
-    _unique_workspace_ids,
     _validate_notebook_account_access,
 )
 from .notebook_presenters import _print_notebook_detail, _print_notebook_list
@@ -46,7 +44,7 @@ from inspire.cli.utils.notebook_post_start import (
 )
 from inspire.cli.utils.tunnel_reconnect import rebuild_notebook_bridge_profile
 from inspire.config import ConfigError
-from inspire.config.workspaces import select_workspace_id
+from inspire.config.workspaces import resolve_workspace_query_scope
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web import session as web_session_module
 from inspire.platform.web.browser_api import NotebookFailedError
@@ -138,8 +136,8 @@ def _workspace_display(session, workspace_id: str) -> str:  # noqa: ANN001
         "Resource quota as 'gpu,cpu,mem' (mem in GiB). "
         "Example: '1,20,200' for 1 GPU + 20 CPU + 200 GiB. "
         "Use '0,4,32' for CPU-only. "
-        "The triple must match a resource spec in the workspace (see 'inspire resources specs'); "
-        "pass --group to disambiguate when multiple compute groups offer the same triple. "
+        "The triple must match a quota row in the workspace (see 'inspire notebook quota'); "
+        "pass --group <full compute group name> to disambiguate. "
         "Required unless supplied by --profile."
     ),
 )
@@ -203,7 +201,10 @@ def _workspace_display(session, workspace_id: str) -> str:  # noqa: ANN001
 @click.option(
     "--group",
     "group",
-    help="Compute group name. Required unless supplied by --profile. Partial matches accepted when unique.",
+    help=(
+        "Full compute group name. Required unless supplied by --profile. "
+        "Partial matches are not accepted."
+    ),
 )
 @click.option(
     "--profile",
@@ -234,11 +235,11 @@ def create_notebook_cmd(
     \b
     Examples:
         inspire notebook create --workspace 分布式训练空间 --project CI-情境智能 \
-          --image sandbox-base:latest --group H200 -q 1,20,200
+          --image sandbox-base:latest --group H200-2号机房 -q 1,20,200
         inspire notebook create --workspace CPU资源空间 --project CI-情境智能 \
           --image sandbox-base:latest --group CPU资源-2 -q 0,4,32 --shm-size 64
         inspire notebook create --workspace 分布式训练空间 --project CI-情境智能 \
-          --image sandbox-base:latest --group H200 -q 1,20,200 \
+          --image sandbox-base:latest --group H200-2号机房 -q 1,20,200 \
           --post-start-script scripts/notebook_setup.sh
     """
     if post_start and post_start_script:
@@ -269,6 +270,7 @@ def create_notebook_cmd(
 
 @click.command("stop")
 @click.argument("notebook")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--json",
     "json_output",
@@ -279,6 +281,7 @@ def create_notebook_cmd(
 def stop_notebook_cmd(
     ctx: Context,
     notebook: str,
+    workspace: str,
     json_output: bool,
 ) -> None:
     """Stop a running notebook instance.
@@ -296,6 +299,15 @@ def stop_notebook_cmd(
 
     base_url = get_base_url()
     config = load_config(ctx)
+    try:
+        workspace_ids, _ = resolve_workspace_query_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
     notebook_id, _ = _resolve_notebook_id(
         ctx,
         session=session,
@@ -303,6 +315,7 @@ def stop_notebook_cmd(
         base_url=base_url,
         identifier=notebook,
         json_output=json_output,
+        workspace_ids=workspace_ids,
     )
 
     try:
@@ -329,6 +342,7 @@ def stop_notebook_cmd(
 
 @click.command("delete")
 @click.argument("notebook")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--yes",
     "-y",
@@ -345,6 +359,7 @@ def stop_notebook_cmd(
 def delete_notebook_cmd(
     ctx: Context,
     notebook: str,
+    workspace: str,
     yes: bool,
     json_output: bool,
 ) -> None:
@@ -370,6 +385,15 @@ def delete_notebook_cmd(
 
     base_url = get_base_url()
     config = load_config(ctx)
+    try:
+        workspace_ids, _ = resolve_workspace_query_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
     notebook_id, _ = _resolve_notebook_id(
         ctx,
         session=session,
@@ -377,6 +401,7 @@ def delete_notebook_cmd(
         base_url=base_url,
         identifier=notebook,
         json_output=json_output,
+        workspace_ids=workspace_ids,
     )
 
     if not yes and not json_output:
@@ -410,6 +435,7 @@ def delete_notebook_cmd(
 
 @click.command("start")
 @click.argument("notebook")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--wait/--no-wait",
     default=False,
@@ -437,6 +463,7 @@ def delete_notebook_cmd(
 def start_notebook_cmd(
     ctx: Context,
     notebook: str,
+    workspace: str,
     wait: bool,
     post_start: Optional[str],
     post_start_script: Optional[Path],
@@ -446,11 +473,11 @@ def start_notebook_cmd(
 
     \b
     Examples:
-        inspire notebook start ring-8h100-test
-        inspire notebook start ring-8h100-test --wait
-        inspire notebook start ring-8h100-test --post-start 'bash /workspace/setup.sh'
-        inspire notebook start ring-8h100-test --post-start-script scripts/notebook_setup.sh
-        inspire notebook start ring-8h100-test --post-start none
+        inspire notebook start ring-8h100-test --workspace 分布式训练空间
+        inspire notebook start ring-8h100-test --workspace 分布式训练空间 --wait
+        inspire notebook start ring-8h100-test --workspace 分布式训练空间 --post-start 'bash /workspace/setup.sh'
+        inspire notebook start ring-8h100-test --workspace 分布式训练空间 --post-start-script scripts/notebook_setup.sh
+        inspire notebook start ring-8h100-test --workspace 分布式训练空间 --post-start none
     """
     if post_start and post_start_script:
         raise click.UsageError("Use either --post-start or --post-start-script, not both.")
@@ -474,6 +501,15 @@ def start_notebook_cmd(
         _handle_error(ctx, "ValidationError", str(e), EXIT_CONFIG_ERROR)
         return
 
+    try:
+        workspace_ids, _ = resolve_workspace_query_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
     notebook_id, _ = _resolve_notebook_id(
         ctx,
         session=session,
@@ -481,6 +517,7 @@ def start_notebook_cmd(
         base_url=base_url,
         identifier=notebook,
         json_output=json_output,
+        workspace_ids=workspace_ids,
     )
 
     try:
@@ -553,6 +590,7 @@ def start_notebook_cmd(
 
 @click.command("status")
 @click.argument("notebook")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--json",
     "json_output",
@@ -563,13 +601,14 @@ def start_notebook_cmd(
 def notebook_status(
     ctx: Context,
     notebook: str,
+    workspace: str,
     json_output: bool,
 ) -> None:
     """Get status of a notebook instance.
 
     \b
     Examples:
-        inspire notebook status my-notebook
+        inspire notebook status my-notebook --workspace 分布式训练空间
     """
     json_output = resolve_json_output(ctx, json_output)
 
@@ -581,6 +620,15 @@ def notebook_status(
     base_url = get_base_url()
 
     config = load_config(ctx)
+    try:
+        workspace_ids, _ = resolve_workspace_query_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
     notebook_id, _ = _resolve_notebook_id(
         ctx,
         session=session,
@@ -588,6 +636,7 @@ def notebook_status(
         base_url=base_url,
         identifier=notebook,
         json_output=json_output,
+        workspace_ids=workspace_ids,
     )
 
     try:
@@ -634,6 +683,7 @@ def notebook_status(
 
 @click.command("id")
 @click.argument("notebook")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--json",
     "json_output",
@@ -644,6 +694,7 @@ def notebook_status(
 def notebook_id_cmd(
     ctx: Context,
     notebook: str,
+    workspace: str,
     json_output: bool,
 ) -> None:
     """Print the platform ID for a notebook name."""
@@ -651,6 +702,15 @@ def notebook_id_cmd(
     session = require_web_session(ctx, hint=WEB_AUTH_HINT)
     base_url = get_base_url()
     config = load_config(ctx)
+    try:
+        workspace_ids, _ = resolve_workspace_query_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
     notebook_id, _ = _resolve_notebook_id(
         ctx,
         session=session,
@@ -658,6 +718,7 @@ def notebook_id_cmd(
         base_url=base_url,
         identifier=notebook,
         json_output=json_output,
+        workspace_ids=workspace_ids,
     )
 
     if json_output:
@@ -671,13 +732,8 @@ def notebook_id_cmd(
 @click.command("list")
 @click.option(
     "--workspace",
-    help="Workspace name",
-)
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="List notebooks across all visible workspaces",
+    required=True,
+    help="Workspace name or 'all'.",
 )
 @click.option(
     "--limit",
@@ -694,7 +750,7 @@ def notebook_id_cmd(
     help="Filter by status (e.g. RUNNING, STOPPED). Repeatable.",
 )
 @click.option(
-    "--name",
+    "--keyword",
     "keyword",
     default="",
     help="Filter by notebook name (keyword search)",
@@ -709,7 +765,6 @@ def notebook_id_cmd(
 def list_notebooks(
     ctx: Context,
     workspace: Optional[str],
-    all_workspaces: bool,
     limit: int,
     status: tuple[str, ...],
     keyword: str,
@@ -719,14 +774,14 @@ def list_notebooks(
 
     \b
     Examples:
-        inspire notebook list
-        inspire notebook list -n 10
-        inspire notebook list -s RUNNING
-        inspire notebook list -s RUNNING -s STOPPED
-        inspire notebook list --name my-notebook
+        inspire notebook list --workspace 分布式训练空间
+        inspire notebook list --workspace 分布式训练空间 -n 10
+        inspire notebook list --workspace 分布式训练空间 -s RUNNING
+        inspire notebook list --workspace 分布式训练空间 -s RUNNING -s STOPPED
+        inspire notebook list --workspace 分布式训练空间 --keyword my-notebook
         inspire notebook list --workspace GPU资源空间 -s RUNNING -n 5
-        inspire notebook list --all-workspaces
-        inspire notebook list --json
+        inspire notebook list --workspace all
+        inspire notebook list --workspace all --json
     """
     json_output = resolve_json_output(ctx, json_output)
 
@@ -736,46 +791,15 @@ def list_notebooks(
     )
     config = load_config(ctx)
 
-    workspace_ids: list[str] = []
-    if workspace:
-        try:
-            resolved = select_workspace_id(config, explicit_workspace_name=workspace, session=session)
-        except ConfigError as e:
-            _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-            return
-        if resolved:
-            workspace_ids = [resolved]
-    elif all_workspaces:
-        candidates: list[str] = []
-        if getattr(session, "workspace_id", None):
-            candidates.append(str(session.workspace_id))
-        candidates.extend(str(wid) for wid in getattr(session, "all_workspace_ids", None) or [])
-
-        workspace_ids = _unique_workspace_ids(candidates)
-        for ws_id in workspace_ids:
-            try:
-                select_workspace_id(config, explicit_workspace_id=ws_id)
-            except ConfigError as e:
-                _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
-                return
-
-    if not workspace_ids:
-        # No --workspace and no --all-workspaces: use the web session's
-        # currently active workspace.
-        resolved = getattr(session, "workspace_id", None)
-        resolved = None if resolved == _ZERO_WORKSPACE_ID else resolved
-        if not resolved:
-            from inspire.config.workspaces import workspace_required_hint
-
-            _handle_error(
-                ctx,
-                "ConfigError",
-                "No workspace selected and the web session doesn't have one.",
-                EXIT_CONFIG_ERROR,
-                hint=workspace_required_hint(config),
-            )
-            return
-        workspace_ids = [str(resolved)]
+    try:
+        workspace_ids, _ = resolve_workspace_query_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
 
     base_url = get_base_url()
 
@@ -845,6 +869,7 @@ def list_notebooks(
 
 @click.command("connect")
 @click.argument("notebook")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--wait/--no-wait",
     default=True,
@@ -897,6 +922,7 @@ def list_notebooks(
 def ssh_notebook_cmd(
     ctx: Context,
     notebook: str,
+    workspace: str,
     wait: bool,
     pubkey: Optional[str],
     port: int,
@@ -915,8 +941,8 @@ def ssh_notebook_cmd(
 
     \b
     Examples:
-        inspire notebook ssh connect <notebook-name>
-        inspire notebook ssh connect <notebook-name> --command "hostname"
+        inspire notebook ssh connect <notebook-name> --workspace CPU资源空间
+        inspire notebook ssh connect <notebook-name> --workspace CPU资源空间 --command "hostname"
     """
     from inspire.accounts import normalize_environment
 
@@ -941,6 +967,7 @@ def ssh_notebook_cmd(
     run_notebook_ssh(
         ctx,
         notebook_id=notebook,
+        workspace=workspace,
         wait=wait,
         pubkey=pubkey,
         port=port,

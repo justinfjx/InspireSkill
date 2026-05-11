@@ -8,6 +8,8 @@ from inspire.cli.main import main as cli_main
 
 class _FakeSession:
     workspace_id = "ws-default"
+    all_workspace_ids = ["ws-default"]
+    all_workspace_names = {"ws-default": "Test Workspace"}
     storage_state = {"cookies": [{"name": "session", "value": "ok"}]}
 
 
@@ -25,7 +27,7 @@ def _patch_web_resolution(monkeypatch) -> _FakeSession:  # noqa: ANN001
     monkeypatch.setattr(
         job_logs.browser_api_module,
         "list_job_instances",
-        lambda job_id, *, num, session: (
+        lambda job_id, *, limit, session: (
             [{"name": "worker-0"}],
             1,
         ),
@@ -96,7 +98,18 @@ def test_web_follow_polls_new_logs_and_scrubs_human_output(monkeypatch) -> None:
 
     result = CliRunner().invoke(
         cli_main,
-        ["job", "logs", "train-a", "--web", "--follow", "--tail", "1"],
+        [
+            "job",
+            "logs",
+            "train-a",
+            "--workspace",
+            "Test Workspace",
+            "--source",
+            "platform",
+            "--follow",
+            "--tail",
+            "1",
+        ],
     )
 
     assert result.exit_code == 0, result.output
@@ -128,7 +141,18 @@ def test_web_follow_accepts_explicit_instance_without_listing_instances(monkeypa
 
     result = CliRunner().invoke(
         cli_main,
-        ["job", "logs", "train-a", "--web", "--follow", "--instance", "rank-0"],
+        [
+            "job",
+            "logs",
+            "train-a",
+            "--workspace",
+            "Test Workspace",
+            "--source",
+            "platform",
+            "--follow",
+            "--instance",
+            "rank-0",
+        ],
     )
 
     assert result.exit_code == 0, result.output
@@ -143,8 +167,18 @@ def test_web_follow_json_is_rejected_before_web_calls(monkeypatch) -> None:  # n
 
     result = CliRunner().invoke(
         cli_main,
-        ["--json", "job", "logs", "train-a", "--web", "--follow"],
+        [
+            "--json",
+            "job",
+            "logs",
+            "train-a",
+            "--workspace",
+            "Test Workspace",
+            "--source",
+            "platform",
+            "--follow",
+        ],
     )
 
     assert result.exit_code != 0
-    assert "--json --follow --web is not supported" in result.output
+    assert "--json --follow --source platform is not supported" in result.output

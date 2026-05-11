@@ -366,6 +366,7 @@ def build_metrics_command(
 
     @click.command("metrics")
     @click.argument("name")
+    @click.option("--workspace", required=True, help="Workspace name.")
     @click.option(
         "--metric",
         "metric_selector",
@@ -437,6 +438,7 @@ def build_metrics_command(
     def metrics_cmd(
         ctx: Context,
         name: str,
+        workspace: str,
         metric_selector: Optional[str],
         window: str,
         start: Optional[str],
@@ -456,6 +458,7 @@ def build_metrics_command(
         per-task / per-replica balance. Each unit is drawn as its own line in
         the PNG chart and summarized in the terminal output.
         """
+        setattr(ctx, "workspace", workspace)
         task_id = name_resolver(ctx, name)
 
         json_output = resolve_json_output(ctx, json_output)

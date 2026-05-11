@@ -15,7 +15,7 @@ description: "Execution-first Inspire platform CLI usage manual, with on-demand 
 
 | 层面 | 决策问题 | 主要入口 |
 | --- | --- | --- |
-| 调度条件 | 在哪个 workspace、project、compute group 上，用多少 GPU / CPU / 内存，跑哪个镜像 | `config context`、`resources specs`、`<workload> profile` |
+| 调度条件 | 在哪个 workspace、project、compute group 上，用多少 GPU / CPU / 内存，跑哪个镜像 | `config context`、`<workload> quota`、`<workload> profile` |
 | 远端文件 | 代码、数据、权重、产物放在哪个项目共享盘路径 | `init`、`notebook path`、`notebook exec --cwd`、`notebook scp` |
 | 工作负载 | 交互调试、GPU job、CPU HPC、Ray、serving 选哪一个入口 | `notebook`、`job`、`hpc`、`ray`、`serving` |
 | 观察与收尾 | 为什么排队 / 失败、是否真的在工作、日志在哪里、何时清理 | `events`、`logs`、`metrics`、`status`、`instances`、`stop`、`delete` |
@@ -31,7 +31,7 @@ description: "Execution-first Inspire platform CLI usage manual, with on-demand 
 日常任务按这个顺序推进：
 
 1. 用 help 确认可用命令和参数。
-2. 用 `inspire config context` 和 `inspire resources specs --usage <kind> --workspace CPU资源空间` 或 `--workspace 分布式训练空间` 确认名字和可用规格。
+2. 用 `inspire config context` 和 `inspire <workload> quota --workspace CPU资源空间` 或 `--workspace 分布式训练空间` 确认名字和可用规格；只有查询命令里的 `--group` 可输入 compute group 名称关键词或子串，不要求完整名称。`create` / profile 的 `--group` 必须填写完整 compute group 名称。
 3. 如果 `分布式训练空间` 或目标 compute group 不可上网，外部下载走 `CPU资源空间`；Python / Linux 包、Conda、npm、Maven、Docker 镜像、OSS、DNS / NTP 这类平台内部可达资源先在目标 notebook 里按 SII 内部源处理，跑通后保存镜像。
 4. 用 notebook / job / hpc / ray / serving 的 create 命令提交，必要时先 `--dry-run`。
 5. 用 events 看调度和启动原因，用 logs 看程序输出，用 metrics 看资源是否真的在工作，用 status / instances 看对象和实例状态。

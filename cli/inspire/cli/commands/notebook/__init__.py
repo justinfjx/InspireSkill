@@ -1,11 +1,12 @@
 """Notebook / Interactive instance commands.
 
 Usage:
-    inspire notebook list
-    inspire notebook status <name>
-    inspire notebook create --quota 1,20,200
-    inspire notebook stop <name>
-    inspire notebook ssh connect <notebook>     # establish cached connection
+    inspire notebook list --workspace <workspace>
+    inspire notebook status <name> --workspace <workspace>
+    inspire notebook create --workspace <workspace> --project <project> \
+        --group <full-group-name> --quota 1,20,200
+    inspire notebook stop <name> --workspace <workspace>
+    inspire notebook ssh connect <notebook> --workspace <workspace>
     inspire notebook exec <notebook> "<cmd>"
     inspire notebook scp <notebook> <src> <dst>
 """
@@ -15,6 +16,7 @@ from __future__ import annotations
 import click
 
 from inspire.cli.commands.batch import notebook_batch
+from inspire.cli.commands.workload_quota import make_quota_command
 from inspire.cli.commands.workload_profile import make_profile_command
 
 from .notebook_commands import (
@@ -53,10 +55,10 @@ def notebook():
     \b
     Examples:
         inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 --project CI-情境智能 --image unified-base:v2 --name prep-box --wait
-        inspire notebook ssh connect prep-box
+        inspire notebook ssh connect prep-box --workspace CPU资源空间
         inspire notebook exec prep-box --cwd me:repo "git pull && pip install -r requirements.txt"
         inspire notebook scp prep-box ./config.yaml me:repo/config.yaml
-        inspire notebook metrics <notebook> --window 30m
+        inspire notebook metrics <notebook> --workspace CPU资源空间 --window 30m
     """
     pass
 
@@ -66,6 +68,7 @@ notebook.add_command(list_notebooks)            # list
 notebook.add_command(notebook_status)           # status
 notebook.add_command(notebook_id_cmd)           # id
 notebook.add_command(create_notebook_cmd)       # create
+notebook.add_command(make_quota_command("notebook"))  # quota
 notebook.add_command(make_profile_command("notebook"))  # profile
 notebook.add_command(notebook_batch)            # batch
 notebook.add_command(stop_notebook_cmd)         # stop

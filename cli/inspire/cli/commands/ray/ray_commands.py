@@ -32,47 +32,6 @@ def _current_user_id(session) -> str:  # noqa: ANN001
     return user_id
 
 
-def _resolve_ray_name(ctx: Context, name: str, *, pick: Optional[int] = None) -> str:
-    """Resolve a Ray job name to its platform id (``rj-<uuid>``).
-
-    Names only. Candidate set is restricted to the current user's
-    Ray jobs in the session's workspace — avoids cross-user same-name
-    ambiguity (you wouldn't have permission to operate on a teammate's
-    job anyway). Full-page fetch (`page_size=10000`) so large workspaces
-    don't drop the target off the end of page 1.
-    """
-
-    def _lister():
-        session = get_web_session()
-        me = browser_api_module.get_current_user(session=session)
-        uid = str(me.get("id") or me.get("user_id") or "").strip()
-        if not uid:
-            raise ValueError("Cannot determine the current user from the live web session.")
-        user_ids = [uid]
-        jobs, _ = browser_api_module.list_ray_jobs(
-            session=session, user_ids=user_ids, page_size=10000
-        )
-        return [
-            {
-                "name": j.name,
-                "id": j.ray_job_id,
-                "status": j.status,
-                "workspace_id": j.workspace_id,
-                "created_at": j.created_at,
-            }
-            for j in jobs
-        ]
-
-    return resolve_by_name(
-        ctx,
-        name=name,
-        resource_type="ray",
-        list_candidates=_lister,
-        json_output=ctx.json_output,
-        pick_index=pick,
-    )
-
-
 def _resolve_ray_name_in_workspace(
     ctx: Context,
     *,
@@ -80,7 +39,8 @@ def _resolve_ray_name_in_workspace(
     session,
     name: str,
     workspace: str,
-    num: int,
+    limit: int,
+    pick: Optional[int] = None,
 ) -> str:
     workspace_id = select_workspace_id(
         config,
@@ -96,7 +56,7 @@ def _resolve_ray_name_in_workspace(
             workspace_id=workspace_id,
             user_ids=[user_id],
             page_num=1,
-            page_size=num,
+            page_size=limit,
             session=session,
         )
         return [
@@ -116,6 +76,7 @@ def _resolve_ray_name_in_workspace(
         resource_type="ray",
         list_candidates=_lister,
         json_output=ctx.json_output,
+        pick_index=pick,
     )
 
 
@@ -205,27 +166,30 @@ def _format_ray_instances(instances: list[dict[str, Any]]) -> str:
 
 
 @click.command("list")
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option("--page-num", type=int, default=1, show_default=True, help="Page number")
-@click.option("--page-size", type=int, default=20, show_default=True, help="Page size")
+@click.option("--workspace", required=True, help="Workspace name")
+@click.option(
+    "--limit",
+    "-n",
+    type=click.IntRange(1),
+    default=50,
+    show_default=True,
+    help="Maximum Ray jobs to query and display.",
+)
 @pass_context
 def list_ray(
     ctx: Context,
     workspace: Optional[str],
-    page_num: int,
-    page_size: int,
+    limit: int,
 ) -> None:
     """List Ray (弹性计算) jobs in a workspace."""
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
-        resolved_workspace_id = None
-        if workspace is not None:
-            resolved_workspace_id = select_workspace_id(
-                config,
-                explicit_workspace_name=workspace,
-                session=session,
-            )
+        resolved_workspace_id = select_workspace_id(
+            config,
+            explicit_workspace_name=workspace,
+            session=session,
+        )
 
         me = browser_api_module.get_current_user(session=session)
         current_user_id = str(me.get("id") or me.get("user_id") or "").strip()
@@ -236,8 +200,8 @@ def list_ray(
         jobs, total = browser_api_module.list_ray_jobs(
             workspace_id=resolved_workspace_id,
             user_ids=user_ids,
-            page_num=page_num,
-            page_size=page_size,
+            page_num=1,
+            page_size=limit,
             session=session,
         )
         rows = [
@@ -278,8 +242,9 @@ def list_ray(
 
 @click.command("status")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name.")
 @pass_context
-def status_ray(ctx: Context, name: str) -> None:
+def status_ray(ctx: Context, name: str, workspace: str) -> None:
     """Show details for a Ray (弹性计算) job.
 
     NAME is the Ray job name shown in `inspire ray list`. Plain output shows
@@ -287,8 +252,16 @@ def status_ray(ctx: Context, name: str) -> None:
     full structured response.
     """
     try:
-        ray_job_id = _resolve_ray_name(ctx, name)
+        config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
+        ray_job_id = _resolve_ray_name_in_workspace(
+            ctx,
+            config=config,
+            session=session,
+            name=name,
+            workspace=workspace,
+            limit=10000,
+        )
         data = browser_api_module.get_ray_job_detail(ray_job_id, session=session)
 
         if ctx.json_output:
@@ -331,6 +304,7 @@ def status_ray(ctx: Context, name: str) -> None:
 
 @click.command("stop")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--pick",
     type=int,
@@ -339,11 +313,20 @@ def status_ray(ctx: Context, name: str) -> None:
     "matches the list order in the AmbiguousName error.",
 )
 @pass_context
-def stop_ray(ctx: Context, name: str, pick: Optional[int]) -> None:
+def stop_ray(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> None:
     """Stop a running Ray (弹性计算) job."""
     try:
-        ray_job_id = _resolve_ray_name(ctx, name, pick=pick)
+        config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
+        ray_job_id = _resolve_ray_name_in_workspace(
+            ctx,
+            config=config,
+            session=session,
+            name=name,
+            workspace=workspace,
+            limit=10000,
+            pick=pick,
+        )
         browser_api_module.stop_ray_job(ray_job_id, session=session)
 
         if ctx.json_output:
@@ -531,7 +514,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     "--head-group",
     "--group",
     default=None,
-    help="Head compute group name; see 'inspire config context'",
+    help="Full compute group name for the head node; see 'inspire config context'",
 )
 @click.option(
     "--head-quota",
@@ -539,7 +522,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     default=None,
     help=(
         "Head resource quota as 'gpu,cpu,mem' (mem in GiB). "
-        "CLI resolves the triple against 'inspire resources specs --usage ray'."
+        "CLI resolves the triple against 'inspire ray quota --workspace <name>'."
     ),
 )
 @click.option(
@@ -554,7 +537,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     multiple=True,
     help=(
         "Worker group spec (repeatable). Format (note ';' separator): "
-        "'name=<grp>;image=<url-or-name>;group=<group-name>;quota=<gpu,cpu,mem>;"
+        "'name=<grp>;image=<url-or-name>;group=<full-group-name>;quota=<gpu,cpu,mem>;"
         "min=<n>;max=<n>[;image_type=SOURCE_PUBLIC][;shm=<gib>]'"
     ),
 )
@@ -585,7 +568,7 @@ def create_ray(
 
     Resource sizing uses the same ``--quota gpu,cpu,mem`` triple as
     notebook / job. Choose valid triples with
-    ``inspire resources specs --usage ray``. The driver command should exit
+    ``inspire ray quota --workspace <name>``. The driver command should exit
     when the Ray work is done; otherwise the cluster continues to occupy
     quota until stopped.
 
@@ -823,6 +806,7 @@ def _format_ts(raw) -> str:
 
 @click.command("events")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--tail",
     type=int,
@@ -844,6 +828,7 @@ def _format_ts(raw) -> str:
 def events_ray(
     ctx: Context,
     name: str,
+    workspace: str,
     tail: Optional[int],
     reason: Optional[str],
     type_filter: Optional[str],
@@ -857,14 +842,22 @@ def events_ray(
 
     \b
     Examples:
-        inspire ray events <ray-name>
-        inspire ray events <ray-name> --reason FailedScheduling
-        inspire ray events <ray-name> --type Warning --tail 10
-        inspire --json ray events <ray-name>
+        inspire ray events <ray-name> --workspace CPU资源空间
+        inspire ray events <ray-name> --workspace CPU资源空间 --reason FailedScheduling
+        inspire ray events <ray-name> --workspace CPU资源空间 --type Warning --tail 10
+        inspire --json ray events <ray-name> --workspace CPU资源空间
     """
     try:
-        ray_job_id = _resolve_ray_name(ctx, name)
         session = get_web_session()
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        ray_job_id = _resolve_ray_name_in_workspace(
+            ctx,
+            config=config,
+            session=session,
+            name=name,
+            workspace=workspace,
+            limit=10000,
+        )
         events = browser_api_module.list_ray_job_events(ray_job_id, session=session)
 
         if reason:
@@ -910,14 +903,15 @@ def events_ray(
     help="Workspace name. Required; -A is not accepted.",
 )
 @click.option(
-    "--num",
+    "--limit",
+    "-n",
     type=click.IntRange(1),
     default=500,
     show_default=True,
     help="Maximum Ray jobs to scan while resolving the name and maximum instances to query.",
 )
 @pass_context
-def instances_ray(ctx: Context, name: str, workspace: str, num: int) -> None:
+def instances_ray(ctx: Context, name: str, workspace: str, limit: int) -> None:
     """List pod-level instances (head + workers) for a Ray job.
 
     \b
@@ -934,11 +928,11 @@ def instances_ray(ctx: Context, name: str, workspace: str, num: int) -> None:
             session=session,
             name=name,
             workspace=workspace,
-            num=num,
+            limit=limit,
         )
         instances, total = browser_api_module.list_ray_job_instances(
             ray_job_id,
-            num=num,
+            limit=limit,
             session=session,
         )
 
@@ -972,6 +966,7 @@ def instances_ray(ctx: Context, name: str, workspace: str, num: int) -> None:
 
 @click.command("delete")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--yes",
     "-y",
@@ -985,7 +980,7 @@ def instances_ray(ctx: Context, name: str, workspace: str, num: int) -> None:
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
 @pass_context
-def delete_ray(ctx: Context, name: str, yes: bool, pick: Optional[int]) -> None:
+def delete_ray(ctx: Context, name: str, workspace: str, yes: bool, pick: Optional[int]) -> None:
     """Permanently delete a Ray (弹性计算) job record.
 
     \b
@@ -1000,8 +995,17 @@ def delete_ray(ctx: Context, name: str, yes: bool, pick: Optional[int]) -> None:
         )
 
     try:
-        ray_job_id = _resolve_ray_name(ctx, name, pick=pick)
+        config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
+        ray_job_id = _resolve_ray_name_in_workspace(
+            ctx,
+            config=config,
+            session=session,
+            name=name,
+            workspace=workspace,
+            limit=10000,
+            pick=pick,
+        )
         browser_api_module.delete_ray_job(ray_job_id, session=session)
 
         if ctx.json_output:

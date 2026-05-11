@@ -126,17 +126,9 @@ def test_list_ray_jobs_without_user_filter_uses_current_user(monkeypatch) -> Non
     assert records[-1]["body"]["filter_by"] == {"user_id": ["user-current"]}
 
 
-def test_list_ray_jobs_falls_back_to_session_workspace(monkeypatch) -> None:
-    record: dict[str, Any] = {}
-    _install_fake_request(
-        monkeypatch,
-        {"code": 0, "data": {"items": [], "total": 0}},
-        record,
-    )
-
-    list_ray_jobs(user_ids=["user-1"], session=_FakeSession(workspace_id="ws-from-session"))
-
-    assert record["body"]["workspace_id"] == "ws-from-session"
+def test_list_ray_jobs_requires_workspace_id() -> None:
+    with pytest.raises(ValueError, match="workspace_id is required"):
+        list_ray_jobs(user_ids=["user-1"], session=_FakeSession(workspace_id="ws-from-session"))
 
 
 def test_list_ray_jobs_raises_on_non_zero_code(monkeypatch) -> None:
@@ -496,7 +488,7 @@ def test_list_ray_job_instances_posts_expected_body(monkeypatch) -> None:
         record,
     )
 
-    instances, total = list_ray_job_instances("rj-abc", num=25, session=_FakeSession())
+    instances, total = list_ray_job_instances("rj-abc", limit=25, session=_FakeSession())
 
     assert total == 2
     assert len(instances) == 2
@@ -515,6 +507,6 @@ def test_list_ray_job_instances_rejects_empty_id() -> None:
         list_ray_job_instances("", session=_FakeSession())
 
 
-def test_list_ray_job_instances_rejects_non_positive_num() -> None:
-    with pytest.raises(ValueError, match="num must be positive"):
-        list_ray_job_instances("rj-abc", num=0, session=_FakeSession())
+def test_list_ray_job_instances_rejects_non_positive_limit() -> None:
+    with pytest.raises(ValueError, match="limit must be positive"):
+        list_ray_job_instances("rj-abc", limit=0, session=_FakeSession())

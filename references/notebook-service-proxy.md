@@ -27,7 +27,7 @@ inspire notebook exec <name> "curl -sS http://127.0.0.1:<container-port>/health"
 建立一次 notebook 连接，让 CLI 写入连接信息：
 
 ```bash
-inspire notebook ssh connect <name>
+inspire notebook ssh connect <name> --workspace <workspace>
 ```
 
 读取 notebook proxy URL 模板：

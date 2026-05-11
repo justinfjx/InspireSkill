@@ -296,6 +296,9 @@ def test_hpc_status_human_output_shows_priority_fields(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     api = patch_hpc_config_and_auth(monkeypatch, tmp_path)
+    from inspire.cli.commands.hpc import hpc_commands as hpc_mod
+
+    monkeypatch.setattr(hpc_mod, "_resolve_hpc_name_in_workspace", lambda *a, **kw: "hpc-job-123")
     api.get_hpc_job_detail = lambda job_id: {
         "data": {
             "job_id": job_id,
@@ -308,7 +311,7 @@ def test_hpc_status_human_output_shows_priority_fields(
     }
     runner = CliRunner()
 
-    result = runner.invoke(cli_main, ["hpc", "status", "hpc-job-123"])
+    result = runner.invoke(cli_main, ["hpc", "status", "hpc-demo", "--workspace", "cpu-room"])
 
     assert result.exit_code == 0
     assert "Requested Priority: 7" in result.output
@@ -318,9 +321,12 @@ def test_hpc_status_human_output_shows_priority_fields(
 
 def test_hpc_status_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     api = patch_hpc_config_and_auth(monkeypatch, tmp_path)
+    from inspire.cli.commands.hpc import hpc_commands as hpc_mod
+
+    monkeypatch.setattr(hpc_mod, "_resolve_hpc_name_in_workspace", lambda *a, **kw: "hpc-job-123")
     runner = CliRunner()
 
-    result = runner.invoke(cli_main, ["--json", "hpc", "status", "hpc-job-123"])
+    result = runner.invoke(cli_main, ["--json", "hpc", "status", "hpc-demo", "--workspace", "cpu-room"])
 
     assert result.exit_code == 0
     payload = json.loads(result.output)
@@ -418,8 +424,8 @@ def test_hpc_instances_requires_workspace_and_uses_num(
             1,
         )
 
-    def fake_list_hpc_job_instances(job_id, *, num, session):  # noqa: ANN001
-        captured["instances"] = {"job_id": job_id, "num": num, "session": session}
+    def fake_list_hpc_job_instances(job_id, *, limit, session):  # noqa: ANN001
+        captured["instances"] = {"job_id": job_id, "limit": limit, "session": session}
         return (
             [
                 {
@@ -446,7 +452,7 @@ def test_hpc_instances_requires_workspace_and_uses_num(
 
     result = runner.invoke(
         cli_main,
-        ["hpc", "instances", "prep", "--workspace", "cpu-room", "--num", "42"],
+        ["hpc", "instances", "prep", "--workspace", "cpu-room", "--limit", "42"],
     )
 
     assert result.exit_code == 0, result.output
@@ -455,16 +461,19 @@ def test_hpc_instances_requires_workspace_and_uses_num(
     assert captured["resolve"]["page_num"] == 1
     assert captured["resolve"]["page_size"] == 42
     assert captured["instances"]["job_id"] == "hpc-job-001"
-    assert captured["instances"]["num"] == 42
+    assert captured["instances"]["limit"] == 42
     assert "HPC Instances" in result.output
     assert "launcher" in result.output
 
 
 def test_hpc_stop_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     api = patch_hpc_config_and_auth(monkeypatch, tmp_path)
+    from inspire.cli.commands.hpc import hpc_commands as hpc_mod
+
+    monkeypatch.setattr(hpc_mod, "_resolve_hpc_name_in_workspace", lambda *a, **kw: "hpc-job-999")
     runner = CliRunner()
 
-    result = runner.invoke(cli_main, ["--json", "hpc", "stop", "hpc-job-999"])
+    result = runner.invoke(cli_main, ["--json", "hpc", "stop", "hpc-demo", "--workspace", "cpu-room"])
 
     assert result.exit_code == 0
     payload = json.loads(result.output)

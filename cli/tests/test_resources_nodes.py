@@ -95,7 +95,15 @@ def test_resources_nodes_filters_and_returns_json_recommendation(
 
     result = CliRunner().invoke(
         cli_main,
-        ["--json", "resources", "nodes", "--min-full-free-nodes", "2"],
+        [
+            "--json",
+            "resources",
+            "nodes",
+            "--workspace",
+            "Default WS",
+            "--min-full-free-nodes",
+            "2",
+        ],
     )
 
     assert result.exit_code == 0, result.output
@@ -148,10 +156,12 @@ def test_resources_nodes_human_scrubs_raw_ids(
         ],
     )
 
-    result = CliRunner().invoke(cli_main, ["resources", "nodes", "--min-full-free-nodes", "2"])
+    result = CliRunner().invoke(
+        cli_main,
+        ["resources", "nodes", "--workspace", "Default WS", "--min-full-free-nodes", "2"],
+    )
 
     assert result.exit_code == 0, result.output
     assert raw_group_id not in result.output
     assert "<raw-id>" in result.output
     assert "Recommended:" in result.output
-

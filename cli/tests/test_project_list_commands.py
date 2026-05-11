@@ -57,7 +57,7 @@ def test_project_list_uses_session_workspace_ids(monkeypatch):
     monkeypatch.setattr(browser_api_module, "list_projects", fake_list_projects)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "project", "list"])
+    result = runner.invoke(cli_main, ["--json", "project", "list", "--workspace", "all"])
 
     assert result.exit_code == 0
     payload = json.loads(result.output)["data"]
@@ -89,7 +89,7 @@ def test_project_list_tolerates_workspace_specific_failure(monkeypatch):
     monkeypatch.setattr(browser_api_module, "list_projects", fake_list_projects)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "project", "list"])
+    result = runner.invoke(cli_main, ["--json", "project", "list", "--workspace", "all"])
 
     assert result.exit_code == 0
     payload = json.loads(result.output)["data"]
@@ -99,7 +99,7 @@ def test_project_list_tolerates_workspace_specific_failure(monkeypatch):
     assert calls == [WS_BAD, WS_GOOD]
 
 
-def test_project_list_falls_back_to_default_query_when_all_workspace_queries_fail(monkeypatch):
+def test_project_list_does_not_fallback_to_default_query_when_all_workspace_queries_fail(monkeypatch):
     session_obj = FakeSession(
         all_workspace_ids=[WS_BAD, WS_BAD_2],
         workspace_id=WS_GOOD,
@@ -114,21 +114,15 @@ def test_project_list_falls_back_to_default_query_when_all_workspace_queries_fai
 
     def fake_list_projects(workspace_id=None, session=None):  # type: ignore[no-untyped-def]
         calls.append(workspace_id)
-        if workspace_id is None:
-            return [_project("project-default", "Default", WS_GOOD)]
         raise ValueError("workspace denied")
 
     monkeypatch.setattr(browser_api_module, "list_projects", fake_list_projects)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "project", "list"])
+    result = runner.invoke(cli_main, ["--json", "project", "list", "--workspace", "all"])
 
-    assert result.exit_code == 0
-    payload = json.loads(result.output)["data"]
-    assert payload["total"] == 1
-    assert "project_id" not in payload["projects"][0]
-    assert payload["projects"][0]["name"] == "Default"
-    assert calls == [WS_BAD, WS_BAD_2, None]
+    assert result.exit_code != 0
+    assert calls == [WS_BAD, WS_BAD_2]
 
 
 def test_project_list_default_mode_queries_all_workspaces(monkeypatch):
@@ -155,7 +149,7 @@ def test_project_list_default_mode_queries_all_workspaces(monkeypatch):
     monkeypatch.setattr(browser_api_module, "list_projects", fake_list_projects)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "project", "list"])
+    result = runner.invoke(cli_main, ["--json", "project", "list", "--workspace", "all"])
 
     assert result.exit_code == 0
     payload = json.loads(result.output)["data"]
@@ -187,7 +181,7 @@ def test_project_list_all_workspaces_bypasses_fanout_limit(monkeypatch):
     monkeypatch.setattr(browser_api_module, "list_projects", fake_list_projects)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "project", "list", "--all-workspaces"])
+    result = runner.invoke(cli_main, ["--json", "project", "list", "--workspace", "all"])
 
     assert result.exit_code == 0
     payload = json.loads(result.output)["data"]
@@ -218,8 +212,8 @@ def test_project_list_refreshes_platform_for_all_workspaces(monkeypatch):
     monkeypatch.setattr(browser_api_module, "list_projects", fake_list_projects)
 
     runner = CliRunner()
-    first = runner.invoke(cli_main, ["--json", "project", "list"])
-    second = runner.invoke(cli_main, ["--json", "project", "list"])
+    first = runner.invoke(cli_main, ["--json", "project", "list", "--workspace", "all"])
+    second = runner.invoke(cli_main, ["--json", "project", "list", "--workspace", "all"])
 
     assert first.exit_code == 0
     assert second.exit_code == 0

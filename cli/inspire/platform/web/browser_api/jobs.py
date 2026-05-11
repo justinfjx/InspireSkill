@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from inspire.platform.web.browser_api.core import _browser_api_path, _get_base_url, _request_json
-from inspire.platform.web.session import DEFAULT_WORKSPACE_ID, WebSession, get_web_session
+from inspire.platform.web.session import WebSession, get_web_session
 
 __all__ = [
     "JobInfo",
@@ -87,7 +87,7 @@ def list_jobs(
         session = get_web_session()
 
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
     if created_by is None:
         current_user = get_current_user(session=session)
         created_by = str(current_user.get("id") or current_user.get("user_id") or "").strip()
@@ -171,15 +171,15 @@ def get_job_detail(
 def list_job_instances(
     job_id: str,
     *,
-    num: int = 500,
+    limit: int = 500,
     session: Optional[WebSession] = None,
 ) -> tuple[list[dict], int]:
     """Fetch pod-level instances for a distributed-training job."""
     job_id = str(job_id or "").strip()
     if not job_id:
         raise ValueError("job_id is required")
-    if num < 1:
-        raise ValueError("num must be positive")
+    if limit < 1:
+        raise ValueError("limit must be positive")
 
     if session is None:
         session = get_web_session()
@@ -189,7 +189,7 @@ def list_job_instances(
         "POST",
         _browser_api_path("/train_job/instance_list"),
         referer=f"{_get_base_url()}/jobs/distributedTrainingDetail/{job_id}",
-        body={"jobId": job_id, "page_num": 1, "page_size": num},
+        body={"jobId": job_id, "page_num": 1, "page_size": limit},
         timeout=30,
     )
 
@@ -213,7 +213,7 @@ def list_job_users(
         session = get_web_session()
 
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
 
     data = _request_json(
         session,

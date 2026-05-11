@@ -19,7 +19,7 @@ from inspire.platform.web import browser_api as browser_api_module
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.platform.web.session import SessionExpiredError, get_web_session
 from inspire.config import Config, ConfigError
-from inspire.config.workspaces import select_workspace_id
+from inspire.config.workspaces import resolve_workspace_query_scope
 from .table import render_table
 
 
@@ -36,25 +36,26 @@ def _resolve_workspace_scope(
     *,
     config: Optional[Config],
     session,
-    explicit_workspace_name: Optional[str],
-    show_all: bool,
+    workspace: Optional[str],
 ) -> tuple[Optional[str], bool]:
-    if explicit_workspace_name is not None:
-        if config is None:
-            raise ConfigError("Workspace selection requires a loaded config.")
-        return (
-            select_workspace_id(
-                config,
-                explicit_workspace_name=explicit_workspace_name,
-                session=session,
-            ),
-            False,
-        )
-    return (None, show_all)
+    if config is None:
+        raise ConfigError("Workspace selection requires a loaded config.")
+    workspace_ids, all_workspaces = resolve_workspace_query_scope(
+        config,
+        workspace=workspace,
+        session=session,
+    )
+    return (None if all_workspaces else workspace_ids[0], all_workspaces)
 
 
 @click.command("nodes")
-@click.option("--group", help="Filter by compute group name (partial match)")
+@click.option(
+    "--group",
+    help=(
+        "Filter by compute group name keyword/substring; "
+        "full name is not required."
+    ),
+)
 @click.option(
     "--min-full-free-nodes",
     "--min-free",
@@ -67,20 +68,13 @@ def _resolve_workspace_scope(
         "Use before multi-node jobs that need whole nodes, not scattered GPUs."
     ),
 )
-@click.option(
-    "--all",
-    "show_all",
-    is_flag=True,
-    help="Include all visible workspaces instead of only the current workspace",
-)
-@click.option("--workspace-name", default=None, help="Workspace name override")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @pass_context
 def list_nodes(
     ctx: Context,
     group: str,
     min_full_free_nodes: int,
-    show_all: bool,
-    workspace_name: Optional[str],
+    workspace: str,
 ) -> None:
     """Show how many whole 8-GPU nodes are currently free per compute group.
 
@@ -89,9 +83,9 @@ def list_nodes(
 
     \b
     Examples:
-        inspire resources nodes
-        inspire resources nodes --group H200
-        inspire resources nodes --min-nodes 2
+        inspire resources nodes --workspace 分布式训练空间
+        inspire resources nodes --workspace all --group H200
+        inspire resources nodes --workspace 分布式训练空间 --min-nodes 2
     """
     try:
         config = None
@@ -105,8 +99,7 @@ def list_nodes(
         workspace_id, all_workspaces = _resolve_workspace_scope(
             config=config,
             session=session,
-            explicit_workspace_name=workspace_name,
-            show_all=show_all,
+            workspace=workspace,
         )
         workspace_names = _workspace_name_map(config=config, session=session)
 
@@ -168,8 +161,7 @@ def list_nodes(
                         "groups": filtered,
                         "recommendation": recommendation,
                         "min_full_free_nodes": min_full_free_nodes,
-                        "workspace_filter": workspace_id
-                        or ("all" if all_workspaces else "current"),
+                        "workspace_filter": "all" if all_workspaces else workspace_id,
                         "total_full_free_nodes": sum(x["full_free_nodes"] for x in filtered),
                     }
                 )
@@ -256,7 +248,7 @@ def list_nodes(
             )
         click.echo("")
         click.echo("Full Free = READY nodes with 8 GPUs and no running tasks")
-        click.echo("Free GPUs = Total available GPUs (matches 'inspire resources list')")
+        click.echo("Free GPUs = Total available GPUs (matches 'inspire resources availability')")
         click.echo("")
 
     except ConfigError as e:

@@ -129,7 +129,8 @@ def test_resolve_quota_multi_match_requires_group() -> None:
             groups=groups,
             prices_loader=lambda lcg: prices.get(lcg, []),
         )
-    assert "pass --group" in str(exc.value)
+    assert "pass --group <full compute group name>" in str(exc.value)
+    assert "quota query --group <keyword>" in str(exc.value)
     assert "H100 Group" in str(exc.value)
     assert "H200 Group" in str(exc.value)
 
@@ -155,7 +156,7 @@ def test_resolve_quota_group_override_disambiguates() -> None:
     assert result.gpu_type == "H200"
 
 
-def test_resolve_quota_group_override_partial_match() -> None:
+def test_resolve_quota_group_override_rejects_partial_match() -> None:
     groups = [
         _make_group("lcg-a", "H100 Group"),
         _make_group("lcg-b", "H200 Group 2"),
@@ -163,14 +164,18 @@ def test_resolve_quota_group_override_partial_match() -> None:
     prices = {
         "lcg-b": [_make_price(quota_id="q-200", gpu=1, cpu=20, mem=200, gpu_type="H200")],
     }
-    result = resolve_quota(
-        spec=QuotaSpec(1, 20, 200),
-        workspace_id="ws-1",
-        groups=groups,
-        prices_loader=lambda lcg: prices.get(lcg, []),
-        group_override="h200",
-    )
-    assert result.quota_id == "q-200"
+    with pytest.raises(QuotaMatchError) as exc:
+        resolve_quota(
+            spec=QuotaSpec(1, 20, 200),
+            workspace_id="ws-1",
+            groups=groups,
+            prices_loader=lambda lcg: prices.get(lcg, []),
+            group_override="H200",
+        )
+    message = str(exc.value)
+    assert "exactly matches --group" in message
+    assert "full compute group name" in message
+    assert "H200 Group 2" in message
 
 
 def test_resolve_quota_group_override_no_match() -> None:
@@ -183,7 +188,7 @@ def test_resolve_quota_group_override_no_match() -> None:
             prices_loader=lambda lcg: [],
             group_override="nonsense",
         )
-    assert "No compute group name matches" in str(exc.value)
+    assert "No compute group name exactly matches --group" in str(exc.value)
 
 
 def test_resolve_quota_cpu_only() -> None:

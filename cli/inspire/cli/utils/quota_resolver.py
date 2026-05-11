@@ -9,7 +9,9 @@ demands exactly one row survives. GPU type falls out of the matched row.
 
 When multiple compute groups in the same workspace expose the same
 triple (e.g. an H100 group and an H200 group both offering
-``(1, 20, 200)``), the caller must pass ``--group`` to disambiguate.
+``(1, 20, 200)``), scheduling callers must pass the exact compute group
+name via ``--group`` to disambiguate. Query commands may offer keyword
+filters upstream, but this resolver is used by create/profile paths.
 """
 
 from __future__ import annotations
@@ -176,26 +178,20 @@ def resolve_quota(
             )
         group_list = list(loader())
 
-    if group_override:
+    if group_override is not None:
         target = group_override.strip()
         if not target:
             raise QuotaMatchError("--group value cannot be empty")
-        target_lower = target.lower()
-        filtered = []
-        for group in group_list:
-            name = _group_name(group)
-            if name.lower() == target_lower:
-                filtered = [group]
-                break
-            if target_lower in name.lower():
-                filtered.append(group)
+        filtered = [group for group in group_list if _group_name(group) == target]
         if not filtered:
             available = sorted({
                 _group_name(g) for g in group_list if _group_name(g)
             })
             hint = ", ".join(available) if available else "(none)"
             raise QuotaMatchError(
-                f"No compute group name matches --group {group_override!r}. "
+                f"No compute group name exactly matches --group {group_override!r}. "
+                "Create/profile --group requires the full compute group name. "
+                "Use a quota query --group <keyword> only to find the exact name. "
                 f"Available: {hint}"
             )
         group_list = filtered
@@ -262,7 +258,9 @@ def resolve_quota(
         ]
         raise QuotaMatchError(
             f"--quota {spec.display()} matches multiple specs in the selected workspace; "
-            "pass --group to disambiguate:\n" + "\n".join(lines)
+            "pass --group <full compute group name> to disambiguate. "
+            "Use a quota query --group <keyword> only to find the exact name:\n"
+            + "\n".join(lines)
         )
 
     return matches[0]

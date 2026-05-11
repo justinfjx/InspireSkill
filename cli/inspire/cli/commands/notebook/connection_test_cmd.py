@@ -57,7 +57,7 @@ def tunnel_test(ctx: Context, notebook: str) -> None:
                     "ConfigError",
                     "No cached notebook connection",
                     EXIT_CONFIG_ERROR,
-                    hint="Create one with: inspire notebook ssh connect <notebook>",
+                    hint="Create one with: inspire notebook ssh connect <notebook> --workspace <workspace>",
                 ),
                 err=True,
             )
@@ -65,7 +65,7 @@ def tunnel_test(ctx: Context, notebook: str) -> None:
             click.echo(
                 human_formatter.format_error(
                     "No cached notebook connection. Create one with: "
-                    "inspire notebook ssh connect <notebook>"
+                    "inspire notebook ssh connect <notebook> --workspace <workspace>"
                 ),
                 err=True,
             )

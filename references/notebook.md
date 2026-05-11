@@ -33,7 +33,7 @@ inspire notebook install-deps --help
 
 创建 notebook 前先确认三件事：
 
-1. 准备盒用 `inspire resources specs --usage notebook --workspace CPU资源空间` 选 CPU-only `--quota`；GPU 调试盒用 `inspire resources specs --usage notebook --workspace 分布式训练空间` 选 GPU `--quota`。
+1. 准备盒用 `inspire notebook quota --workspace CPU资源空间` 选 CPU-only `--quota`；GPU 调试盒用 `inspire notebook quota --workspace 分布式训练空间` 选 GPU `--quota`。
 2. 确认 `--project <PROJECT>` 是目标项目名。
 3. 用 `inspire image list` / `image detail` 选状态可用的镜像。
 
@@ -43,7 +43,7 @@ inspire notebook install-deps --help
 inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
   --name prep-box --image <BASE_IMAGE> --project <PROJECT> --wait
 
-inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP> -q 1,20,200 \
+inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP_FULL_NAME> -q 1,20,200 \
   --name gpu-probe --image <TRAIN_IMAGE> --project <PROJECT> --wait
 ```
 
@@ -54,7 +54,7 @@ inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP> -q
 先建立 notebook 连接：
 
 ```bash
-inspire notebook ssh connect <name>
+inspire notebook ssh connect <name> --workspace CPU资源空间
 ```
 
 `inspire notebook shell <name>` 是持久 SSH 会话，cwd、环境变量和 history 会保留到 `exit`。多个终端并开就是多个独立会话，互相共享同一容器资源。
@@ -109,7 +109,7 @@ inspire notebook scp <notebook-name> --download me:<repo>/outputs/ ./outputs/ -r
 inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
   --name base-box --image <BASE_IMAGE> --project <PROJECT> --wait
 
-inspire notebook ssh connect base-box
+inspire notebook ssh connect base-box --workspace CPU资源空间
 inspire notebook exec base-box --cwd me:<repo> \
   "pip config set global.index-url http://nexus.sii.shaipower.online/repository/pypi/simple && \
    pip config set global.trusted-host nexus.sii.shaipower.online && \

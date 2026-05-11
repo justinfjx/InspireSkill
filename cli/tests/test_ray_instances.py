@@ -71,8 +71,8 @@ def test_ray_instances_requires_workspace_and_uses_num(monkeypatch: pytest.Monke
             1,
         )
 
-    def fake_list_ray_job_instances(ray_job_id, *, num, session):  # noqa: ANN001
-        captured["instances"] = {"ray_job_id": ray_job_id, "num": num, "session": session}
+    def fake_list_ray_job_instances(ray_job_id, *, limit, session):  # noqa: ANN001
+        captured["instances"] = {"ray_job_id": ray_job_id, "limit": limit, "session": session}
         return (
             [
                 {
@@ -101,7 +101,7 @@ def test_ray_instances_requires_workspace_and_uses_num(monkeypatch: pytest.Monke
 
     result = CliRunner().invoke(
         cli_main,
-        ["ray", "instances", "elastic-a", "--workspace", "Ray资源空间", "--num", "42"],
+        ["ray", "instances", "elastic-a", "--workspace", "Ray资源空间", "--limit", "42"],
     )
 
     assert result.exit_code == 0, result.output
@@ -110,7 +110,7 @@ def test_ray_instances_requires_workspace_and_uses_num(monkeypatch: pytest.Monke
     assert captured["resolve"]["page_num"] == 1
     assert captured["resolve"]["page_size"] == 42
     assert captured["instances"]["ray_job_id"] == "rj-abc"
-    assert captured["instances"]["num"] == 42
+    assert captured["instances"]["limit"] == 42
     assert captured["instances"]["session"] is session
     assert "Ray Instances" in result.output
     assert "head" in result.output
@@ -150,7 +150,7 @@ def test_ray_instances_json_omits_platform_handle(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(
         ray_commands.browser_api_module,
         "list_ray_job_instances",
-        lambda ray_job_id, *, num, session: (
+        lambda ray_job_id, *, limit, session: (
             [{"instance_id": "rj-abc-head-1", "instance_type": "head"}],
             1,
         ),

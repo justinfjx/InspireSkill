@@ -102,7 +102,7 @@ inspire account add <name>
 inspire config show --compact
 cd /path/to/your-repo
 inspire init
-inspire resources list --all --include-cpu
+inspire resources availability --workspace all --include-cpu
 ```
 
 账号级 / 项目级配置分层、多账号和代理 setup 见 [references/setup/install-and-config.md](references/setup/install-and-config.md)。
@@ -115,21 +115,21 @@ inspire resources list --all --include-cpu
 <tr>
   <td width="50%">
     <h4>📝 Notebook 统一入口</h4>
-    全链路命令化：<code>create / list / status / start · stop / ssh connect / exec / shell / scp / install-deps / metrics / events / lifecycle</code>。一次 <code>notebook ssh connect &lt;name&gt;</code> 建立连接，后续 <code>exec / shell / scp / ...</code> 都直接用 notebook name。<b>任何镜像、任何计算组、有无公网</b>都能直接使用远程执行和文件流转命令。
+    全链路命令化：<code>create / list / status / start · stop / ssh connect / exec / shell / scp / install-deps / metrics / events / lifecycle</code>。一次 <code>notebook ssh connect &lt;name&gt; --workspace &lt;workspace&gt;</code> 建立连接，后续 <code>exec / shell / scp / ...</code> 都直接用 notebook name。<b>任何镜像、任何计算组、有无公网</b>都能直接使用远程执行和文件流转命令。
   </td>
   <td width="50%">
     <h4>🚀 HPC 任务分派</h4>
-    <code>inspire hpc create -c &lt;slurm-body&gt;</code> 只写 Slurm 正文 + 显式 <code>srun</code>，平台自动补 <code>#SBATCH</code> 头。两层独立：节点规格用 <code>--quota gpu,cpu,mem</code>（CLI 自动解析到平台 spec），slurm 调度用 <code>--number-of-tasks / --cpus-per-task / --memory-per-cpu</code>。
+    <code>inspire hpc create -c &lt;slurm-body&gt;</code> 只写 Slurm 正文 + 显式 <code>srun</code>，平台自动补 <code>#SBATCH</code> 头。两层独立：节点资源用 <code>--quota gpu,cpu,mem</code>（CLI 自动解析到平台 quota row），slurm 调度用 <code>--number-of-tasks / --cpus-per-task / --memory-per-cpu</code>。
   </td>
 </tr>
 <tr>
   <td>
     <h4>🏃 GPU 后台任务（平台名：分布式训练）</h4>
-    平台官方把 <code>job</code> 这一路叫"分布式训练" / distributed training；提交 job 时只要求 GPU 计算资源和启动命令，不强制程序必须是训练。<code>inspire job</code> 可用于一张卡、多卡、单节点、多节点等后台 GPU 任务 —— 分布式训练 / 批量推理 / 并发 worker pool 都走这里（<code>hpc</code> 对应 CPU Slurm）。提交统一使用 <code>job create</code>；需要跟日志时用 <code>job logs --follow</code>，健康度用 <code>job metrics</code> 看 GPU、显存、CPU、内存、I/O 和多 pod 负载是否同步。
+    平台官方把 <code>job</code> 这一路叫"分布式训练" / distributed training；提交 job 时只要求 GPU 计算资源和启动命令，不强制程序必须是训练。<code>inspire job</code> 可用于一张卡、多卡、单节点、多节点等后台 GPU 任务 —— 分布式训练 / 批量推理 / 并发 worker pool 都走这里（<code>hpc</code> 对应 CPU Slurm）。提交统一使用 <code>job create</code>；需要跟日志时用 <code>job logs &lt;name&gt; --workspace &lt;workspace&gt; --follow</code>，健康度用 <code>job metrics &lt;name&gt; --workspace &lt;workspace&gt;</code> 看 GPU、显存、CPU、内存、I/O 和多 pod 负载是否同步。
   </td>
   <td>
     <h4>📊 资源情报</h4>
-    <code>resources list --all --include-cpu</code> / <code>resources nodes --all</code> / <code>resources specs</code> — 三板斧定位哪个集群有空，支持透支式申请。
+    <code>resources availability --workspace all --include-cpu</code> / <code>resources nodes --workspace all</code> / <code>&lt;workload&gt; quota --workspace &lt;name&gt;</code> — 三板斧定位哪个集群有空，支持透支式申请。
   </td>
 </tr>
 <tr>
@@ -176,7 +176,7 @@ inspire resources list --all --include-cpu
 | [OpenClaw](https://github.com/openclaw/openclaw) | `~/.openclaw/skills/inspire/` | 全局 "managed skills" 层；workspace 层 （`~/.openclaw/workspace/skills/`） 可覆盖 |
 | [OpenCode](https://github.com/anomalyco/opencode) | `~/.config/opencode/skills/inspire/` | 遵循 XDG；`$OPENCODE_CONFIG_DIR` 可改根 |
 
-**为什么默认推 Claude Code**：它的 scheduler 支持在**后台 Bash 命令结束时自动唤醒 Agent**。把 `inspire job logs --follow <name>` / 长轮询 checkpoint / `inspire hpc status <name>` 监视之类长 watch 挂到后台，训练或 HPC 任务跑完 Agent 自己醒过来接下一步。Codex / Gemini CLI / OpenClaw / OpenCode 目前没有这个能力，做长流水的自动化会弱一档。
+**为什么默认推 Claude Code**：它的 scheduler 支持在**后台 Bash 命令结束时自动唤醒 Agent**。把 `inspire job logs <name> --workspace <workspace> --follow` / 长轮询 checkpoint / `inspire hpc status <name> --workspace <workspace>` 监视之类长 watch 挂到后台，训练或 HPC 任务跑完 Agent 自己醒过来接下一步。Codex / Gemini CLI / OpenClaw / OpenCode 目前没有这个能力，做长流水的自动化会弱一档。
 
 ---
 

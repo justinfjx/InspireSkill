@@ -9,6 +9,7 @@ import click
 from inspire.cli.context import (
     Context,
     EXIT_API_ERROR,
+    EXIT_CONFIG_ERROR,
     pass_context,
 )
 from inspire.cli.formatters import human_formatter, json_formatter
@@ -18,9 +19,12 @@ from inspire.cli.utils.id_resolver import resolve_by_name
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.notebook_cli import (
     WEB_AUTH_HINT,
+    load_config,
     require_web_session,
     resolve_json_output,
 )
+from inspire.config import ConfigError
+from inspire.config.workspaces import resolve_workspace_query_scope
 from inspire.platform.web import browser_api as browser_api_module
 
 _ZERO_WORKSPACE_ID = "ws-00000000-0000-0000-0000-000000000000"
@@ -49,9 +53,9 @@ def _project_to_dict(proj: browser_api_module.ProjectInfo) -> dict:
     }
 
 
-def _resolve_project_name(ctx: Context, name: str, *, session) -> str:  # noqa: ANN001
+def _resolve_project_name(ctx: Context, name: str, *, session, workspace_id: str) -> str:  # noqa: ANN001
     def _lister():
-        projects = browser_api_module.list_projects(session=session)
+        projects = browser_api_module.list_projects(workspace_id=workspace_id, session=session)
         return [
             {
                 "name": project.name,
@@ -202,23 +206,21 @@ def _select_workspace_ids_for_listing(
     help="Alias for global --json",
 )
 @click.option(
-    "--all-workspaces",
-    "all_workspaces",
-    is_flag=True,
-    default=True,
-    help="Query all discovered workspaces (default, exhaustive).",
+    "--workspace",
+    required=True,
+    help="Workspace name or 'all'.",
 )
 @pass_context
 def list_projects_cmd(
     ctx: Context,
     json_output: bool,
-    all_workspaces: bool,
+    workspace: str,
 ) -> None:
     """List project-level metadata.
 
     \b
     Examples:
-        inspire project list          # Show project metadata table
+        inspire project list --workspace all
         inspire project list --json   # JSON output with all fields
     """
     json_output = resolve_json_output(ctx, json_output)
@@ -227,76 +229,36 @@ def list_projects_cmd(
         ctx,
         hint=WEB_AUTH_HINT,
     )
+    config = load_config(ctx)
 
     try:
-        workspace_ids = session.all_workspace_ids
-        if workspace_ids is None:
-            # Workspace discovery never happened (stale session or login
-            # method that doesn't support it). Fall back to the session's
-            # single workspace.
-            workspace_ids = _unique_workspace_ids(
-                [getattr(session, "workspace_id", None)]
+        workspace_ids, all_workspaces = resolve_workspace_query_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+        query_workspace_ids = _select_workspace_ids_for_listing(
+            workspace_ids,
+            session_workspace_id=None,
+            all_workspaces=all_workspaces,
+        )
+        projects, workspace_errors = _collect_workspace_projects(
+            query_workspace_ids,
+            session=session,
+        )
+        if not projects and workspace_errors:
+            error_samples = ", ".join(
+                f"{ws_id}: {message}" for ws_id, message in workspace_errors[:3]
             )
-        else:
-            workspace_ids = _unique_workspace_ids(list(workspace_ids))
-        if not workspace_ids:
-            # No discovered workspaces — only default query path applies.
-            projects = browser_api_module.list_projects(session=session)
-        elif not all_workspaces:
-            # API-side reduction: prefer a single default project-list query
-            # before probing per-workspace platform data.
-            default_query_error: Exception | None = None
-            try:
-                projects = browser_api_module.list_projects(session=session)
-            except Exception as exc:
-                projects = []
-                default_query_error = exc
-
-            if not projects:
-                query_workspace_ids = _select_workspace_ids_for_listing(
-                    workspace_ids,
-                    session_workspace_id=getattr(session, "workspace_id", None),
-                    all_workspaces=False,
-                )
-                projects, workspace_errors = _collect_workspace_projects(
-                    query_workspace_ids,
-                    session=session,
-                )
-                if not projects and workspace_errors and default_query_error is not None:
-                    error_samples = ", ".join(
-                        f"{ws_id}: {message}" for ws_id, message in workspace_errors[:3]
-                    )
-                    if len(workspace_errors) > 3:
-                        error_samples += ", ..."
-                    raise ValueError(
-                        f"Failed to list projects across visible workspaces "
-                        f"({len(workspace_errors)} failed: {error_samples}); "
-                        f"default query failed: {default_query_error}"
-                    ) from default_query_error
-        else:
-            query_workspace_ids = _select_workspace_ids_for_listing(
-                workspace_ids,
-                session_workspace_id=getattr(session, "workspace_id", None),
-                all_workspaces=all_workspaces,
+            if len(workspace_errors) > 3:
+                error_samples += ", ..."
+            raise ValueError(
+                f"Failed to list projects across requested workspaces "
+                f"({len(workspace_errors)} failed: {error_samples})"
             )
-            projects, workspace_errors = _collect_workspace_projects(
-                query_workspace_ids,
-                session=session,
-            )
-            if not projects and workspace_errors:
-                try:
-                    projects = browser_api_module.list_projects(session=session)
-                except Exception as e:
-                    error_samples = ", ".join(
-                        f"{ws_id}: {message}" for ws_id, message in workspace_errors[:3]
-                    )
-                    if len(workspace_errors) > 3:
-                        error_samples += ", ..."
-                    raise ValueError(
-                        f"Failed to list projects across visible workspaces "
-                        f"({len(workspace_errors)} failed: {error_samples}); "
-                        f"default query failed: {e}"
-                    ) from e
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
     except Exception as e:
         _handle_error(ctx, "APIError", f"Failed to list projects: {e}", EXIT_API_ERROR)
         return
@@ -312,13 +274,25 @@ def list_projects_cmd(
 
 @click.command("detail")
 @click.argument("project")
+@click.option("--workspace", required=True, help="Workspace name.")
 @pass_context
-def detail_project_cmd(ctx: Context, project: str) -> None:
+def detail_project_cmd(ctx: Context, project: str, workspace: str) -> None:
     """Show detail for a single project by name."""
     session = require_web_session(ctx, hint="inspire project detail requires a logged-in web session")
+    config = load_config(ctx)
     try:
-        project_id = _resolve_project_name(ctx, project, session=session)
+        workspace_ids, is_all = resolve_workspace_query_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+        if is_all:
+            raise ConfigError("project detail requires a single workspace name, not 'all'.")
+        project_id = _resolve_project_name(ctx, project, session=session, workspace_id=workspace_ids[0])
         data = browser_api_module.get_project_detail(project_id, session=session)
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
     except Exception as e:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
         return

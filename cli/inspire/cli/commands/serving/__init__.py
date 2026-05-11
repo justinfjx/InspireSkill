@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from inspire.cli.commands.batch import serving_batch
+from inspire.cli.commands.workload_quota import make_quota_command
 from inspire.cli.commands.workload_profile import make_profile_command
 
 from .serving_commands import (
@@ -40,6 +41,7 @@ def serving() -> None:
 
 
 serving.add_command(create_serving)
+serving.add_command(make_quota_command("serving"))
 serving.add_command(make_profile_command("serving"))
 serving.add_command(serving_batch)
 serving.add_command(list_serving)

@@ -62,6 +62,48 @@ def workspace_label(session: Any, workspace_id: str, requested: str | None = Non
     return workspace_name_map(session).get(workspace_id) or "(workspace name unavailable)"
 
 
+def _visible_workspace_ids(session: Any) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for wid in getattr(session, "all_workspace_ids", None) or []:
+        wid_s = str(wid or "").strip()
+        if wid_s and wid_s != _PLACEHOLDER_WORKSPACE_ID and wid_s not in seen:
+            ordered.append(wid_s)
+            seen.add(wid_s)
+    return ordered
+
+
+def resolve_workspace_query_scope(
+    config: Any,
+    *,
+    workspace: Optional[str],
+    session: Any,
+) -> tuple[list[str], bool]:
+    """Resolve required query scope from ``--workspace <name|all>``.
+
+    Query commands must not inherit the browser session's active workspace.
+    ``all`` is the only supported fanout sentinel.
+    """
+    raw = (workspace or "").strip()
+    if not raw:
+        raise ConfigError("Workspace is required. Pass --workspace <workspace-name|all>.")
+    if raw.lower() == "current":
+        raise ConfigError("--workspace current is not supported. Pass a workspace name or 'all'.")
+    if raw.lower() == "all":
+        workspace_ids = _visible_workspace_ids(session)
+        if not workspace_ids:
+            raise ConfigError("No visible workspaces found in the live web session.")
+        return workspace_ids, True
+    resolved = select_workspace_id(
+        config,
+        explicit_workspace_name=raw,
+        session=session,
+    )
+    if not resolved:
+        raise ConfigError(f"Unknown workspace name: {raw!r}.")
+    return [resolved], False
+
+
 def select_workspace_id(
     config: Any,
     *,
@@ -124,6 +166,7 @@ def workspace_required_hint(config: Any | None = None) -> str:
 
 __all__ = [
     "select_workspace_id",
+    "resolve_workspace_query_scope",
     "workspace_label",
     "workspace_name_map",
     "workspace_required_hint",

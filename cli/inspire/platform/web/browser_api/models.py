@@ -23,7 +23,7 @@ from inspire.platform.web.browser_api.core import (
     _get_base_url,
     _request_json,
 )
-from inspire.platform.web.session import DEFAULT_WORKSPACE_ID, WebSession, get_web_session
+from inspire.platform.web.session import WebSession, get_web_session
 
 __all__ = [
     "ModelInfo",
@@ -72,7 +72,7 @@ def _resolve_workspace(
     if session is None:
         session = get_web_session()
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
     return session, workspace_id
 
 

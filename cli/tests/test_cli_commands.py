@@ -273,7 +273,10 @@ def test_global_json_flag_with_resources_list(monkeypatch: pytest.MonkeyPatch, t
     )
     runner = CliRunner()
 
-    result = runner.invoke(cli_main, ["--json", "resources", "list"])
+    result = runner.invoke(
+        cli_main,
+        ["--json", "resources", "availability", "--workspace", "Test Workspace"],
+    )
     assert result.exit_code == 0
 
     payload = json.loads(result.output)
@@ -293,7 +296,10 @@ def test_global_debug_flag_runs_subcommand(monkeypatch: pytest.MonkeyPatch, tmp_
     )
     runner = CliRunner()
 
-    result = runner.invoke(cli_main, ["--debug", "resources", "list"])
+    result = runner.invoke(
+        cli_main,
+        ["--debug", "resources", "availability", "--workspace", "Test Workspace"],
+    )
     assert result.exit_code == 0
 
 
@@ -414,9 +420,15 @@ def test_build_remote_logged_command_tees_output_and_sets_pipefail(
     assert ": > '/train/user space/.inspire/training_master_train_a_20260508T010203Z.log'" in script
     assert "cd '/train/user space' && " in script
     assert "{ bash -c 'python train.py' 2> >(" in script
-    assert "tee -a '/train/user space/.inspire/training_master_train_a_20260508T010203Z.log' >&2" in script
-    assert "| tee -a '/train/user space/.inspire/training_master_train_a_20260508T010203Z.log'" in script
-    assert "> \"${log_path}\" 2>&1" not in command
+    assert (
+        "tee -a '/train/user space/.inspire/training_master_train_a_20260508T010203Z.log' >&2"
+        in script
+    )
+    assert (
+        "| tee -a '/train/user space/.inspire/training_master_train_a_20260508T010203Z.log'"
+        in script
+    )
+    assert '> "${log_path}" 2>&1' not in command
 
 
 def test_build_remote_logged_command_preserves_user_pythonunbuffered() -> None:
@@ -466,11 +478,28 @@ def test_job_status_human_output_uses_name(monkeypatch: pytest.MonkeyPatch, tmp_
     callers to round-trip them and then hit ``reject_id_at_boundary``.
     """
     patch_config_and_auth(monkeypatch, tmp_path)
+    from inspire.cli.commands.job import job_commands
+
+    monkeypatch.setattr(job_commands, "_resolve_web_job_id", lambda **kwargs: TEST_JOB_ID)
+    monkeypatch.setattr(job_commands, "get_web_session", web_session_module.get_web_session)
+    monkeypatch.setattr(
+        job_commands.browser_api_module,
+        "get_job_detail",
+        lambda job_id, *, session: {
+            "job_id": job_id,
+            "name": "test-job",
+            "status": "SUCCEEDED",
+            "created_at": "1770000000000",
+        },
+    )
     runner = CliRunner()
 
-    result = runner.invoke(cli_main, ["job", "status", "test-job"])
+    result = runner.invoke(
+        cli_main,
+        ["job", "status", "test-job", "--workspace", "Test Workspace"],
+    )
     assert result.exit_code == 0
-    assert "Job Status" in result.output
+    assert "Web Job Status" in result.output
     assert "Name: test-job" in result.output
     assert TEST_JOB_ID not in result.output  # platform handle stays out of human output
 
@@ -481,7 +510,7 @@ def test_legacy_human_job_list_formatter_is_name_only() -> None:
     output = format_job_list(
         [
             {
-            "job_id": TEST_JOB_ID,
+                "job_id": TEST_JOB_ID,
                 "name": "visible-name",
                 "status": "RUNNING",
                 "created_at": "2026-05-06T14:48:50",
@@ -498,25 +527,36 @@ def test_legacy_human_job_list_formatter_is_name_only() -> None:
 def test_job_status_not_found_sets_specific_exit_code(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
-    api = patch_config_and_auth(monkeypatch, tmp_path)
+    patch_config_and_auth(monkeypatch, tmp_path)
+    from inspire.cli.commands.job import job_commands
 
-    def failing_get_job_detail(job_id: str) -> Dict[str, Any]:
+    monkeypatch.setattr(job_commands, "_resolve_web_job_id", lambda **kwargs: TEST_JOB_ID)
+    monkeypatch.setattr(job_commands, "get_web_session", web_session_module.get_web_session)
+
+    def failing_get_job_detail(job_id: str, *, session: object) -> Dict[str, Any]:
+        del job_id, session
         raise RuntimeError("Job not found")
 
-    api.get_job_detail = failing_get_job_detail  # type: ignore[assignment]
+    monkeypatch.setattr(job_commands.browser_api_module, "get_job_detail", failing_get_job_detail)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["job", "status", "missing-id"])
+    result = runner.invoke(
+        cli_main,
+        ["job", "status", "missing-id", "--workspace", "Test Workspace"],
+    )
     assert result.exit_code == EXIT_JOB_NOT_FOUND
 
 
 def test_job_stop_with_force_and_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     patch_config_and_auth(monkeypatch, tmp_path)
+    from inspire.cli.commands.job import job_commands
+
+    monkeypatch.setattr(job_commands, "_resolve_web_job_id", lambda **kwargs: TEST_JOB_ID)
     runner = CliRunner()
 
     result = runner.invoke(
         cli_main,
-        ["--json", "job", "stop", "test-job"],
+        ["--json", "job", "stop", "test-job", "--workspace", "Test Workspace"],
     )
     assert result.exit_code == 0
 
@@ -527,25 +567,38 @@ def test_job_stop_with_force_and_json(monkeypatch: pytest.MonkeyPatch, tmp_path:
 
 
 def test_job_wait_succeeds_and_exits_zero(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    api = patch_config_and_auth(monkeypatch, tmp_path)
+    patch_config_and_auth(monkeypatch, tmp_path)
+    from inspire.cli.commands.job import job_commands
+
+    monkeypatch.setattr(job_commands, "_resolve_web_job_id", lambda **kwargs: TEST_JOB_ID)
+    monkeypatch.setattr(job_commands, "get_web_session", web_session_module.get_web_session)
 
     # Ensure the job is immediately in a terminal state
-    def get_job_detail(job_id: str) -> Dict[str, Any]:
+    def get_job_detail(job_id: str, *, session: object) -> Dict[str, Any]:
+        del session
         return {
-            "data": {
-                "job_id": job_id,
-                "name": "wait-job",
-                "status": "SUCCEEDED",
-                "running_time_ms": "1000",
-            }
+            "job_id": job_id,
+            "name": "wait-job",
+            "status": "SUCCEEDED",
+            "running_time_ms": "1000",
         }
 
-    api.get_job_detail = get_job_detail  # type: ignore[assignment]
+    monkeypatch.setattr(job_commands.browser_api_module, "get_job_detail", get_job_detail)
 
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["job", "wait", "wait-job", "--timeout", "60", "--interval", "1"],
+        [
+            "job",
+            "wait",
+            "wait-job",
+            "--workspace",
+            "Test Workspace",
+            "--timeout",
+            "60",
+            "--interval",
+            "1",
+        ],
     )
     assert result.exit_code == EXIT_SUCCESS
     assert "SUCCEEDED" in result.output
@@ -554,24 +607,38 @@ def test_job_wait_succeeds_and_exits_zero(monkeypatch: pytest.MonkeyPatch, tmp_p
 def test_job_wait_json_output_has_no_human_banner(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    api = patch_config_and_auth(monkeypatch, tmp_path)
+    patch_config_and_auth(monkeypatch, tmp_path)
+    from inspire.cli.commands.job import job_commands
 
-    def get_job_detail(job_id: str) -> Dict[str, Any]:
+    monkeypatch.setattr(job_commands, "_resolve_web_job_id", lambda **kwargs: TEST_JOB_ID)
+    monkeypatch.setattr(job_commands, "get_web_session", web_session_module.get_web_session)
+
+    def get_job_detail(job_id: str, *, session: object) -> Dict[str, Any]:
+        del session
         return {
-            "data": {
-                "job_id": job_id,
-                "name": "wait-job",
-                "status": "SUCCEEDED",
-                "running_time_ms": "1000",
-            }
+            "job_id": job_id,
+            "name": "wait-job",
+            "status": "SUCCEEDED",
+            "running_time_ms": "1000",
         }
 
-    api.get_job_detail = get_job_detail  # type: ignore[assignment]
+    monkeypatch.setattr(job_commands.browser_api_module, "get_job_detail", get_job_detail)
 
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["--json", "job", "wait", "wait-job", "--timeout", "60", "--interval", "1"],
+        [
+            "--json",
+            "job",
+            "wait",
+            "wait-job",
+            "--workspace",
+            "Test Workspace",
+            "--timeout",
+            "60",
+            "--interval",
+            "1",
+        ],
     )
 
     assert result.exit_code == EXIT_SUCCESS
@@ -584,12 +651,11 @@ def test_job_wait_json_output_has_no_human_banner(
 
 def test_job_wait_times_out(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     patch_config_and_auth(monkeypatch, tmp_path)
+    from inspire.cli.commands.job import job_commands
+
+    monkeypatch.setattr(job_commands, "_resolve_web_job_id", lambda **kwargs: TEST_JOB_ID)
 
     # Force time to jump ahead so we immediately hit timeout
-    from importlib import import_module
-
-    job_deps = import_module("inspire.cli.commands.job.job_deps")
-
     calls: List[int] = []
 
     def fake_time() -> int:
@@ -597,12 +663,22 @@ def test_job_wait_times_out(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         calls.append(1)
         return 0 if len(calls) == 1 else 10
 
-    monkeypatch.setattr(job_deps.time, "time", fake_time)
+    monkeypatch.setattr(job_commands.time, "time", fake_time)
 
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["job", "wait", "wait-job", "--timeout", "1", "--interval", "1"],
+        [
+            "job",
+            "wait",
+            "wait-job",
+            "--workspace",
+            "Test Workspace",
+            "--timeout",
+            "1",
+            "--interval",
+            "1",
+        ],
     )
     assert result.exit_code == EXIT_TIMEOUT
     assert "Timeout after 1s" in result.output
@@ -649,12 +725,12 @@ def test_job_list_web_name_search_scans_all_workspaces(
         calls.append(
             {
                 "workspace_id": workspace_id,
-                    "created_by": created_by,
-                    "status": status,
-                    "keyword": keyword,
-                    "page_num": page_num,
-                    "page_size": page_size,
-                }
+                "created_by": created_by,
+                "status": status,
+                "keyword": keyword,
+                "page_num": page_num,
+                "page_size": page_size,
+            }
         )
         if workspace_id == "ws-train" and page_num == 1:
             return (
@@ -687,7 +763,7 @@ def test_job_list_web_name_search_scans_all_workspaces(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["--json", "job", "list", "-A", "--name", "qwen35", "--limit", "1"],
+        ["--json", "job", "list", "--workspace", "all", "--keyword", "qwen35", "--limit", "1"],
     )
 
     assert result.exit_code == 0
@@ -767,7 +843,10 @@ def test_job_list_human_output_hides_raw_ids_and_name_search_ignores_job_id(
     monkeypatch.setattr(browser_api_module, "list_jobs", fake_list_jobs)
 
     runner = CliRunner()
-    human_result = runner.invoke(cli_main, ["job", "list", "-A", "--name", "qwen35"])
+    human_result = runner.invoke(
+        cli_main,
+        ["job", "list", "--workspace", "all", "--keyword", "qwen35"],
+    )
 
     assert human_result.exit_code == 0
     assert "kchen-slime-code-qwen35-35b-a3b-6node" in human_result.output
@@ -776,7 +855,10 @@ def test_job_list_human_output_hides_raw_ids_and_name_search_ignores_job_id(
     assert "ws-train" not in human_result.output
     assert "project-1" not in human_result.output
 
-    id_query_result = runner.invoke(cli_main, ["job", "list", "-A", "--name", "12345678"])
+    id_query_result = runner.invoke(
+        cli_main,
+        ["job", "list", "--workspace", "all", "--keyword", "12345678"],
+    )
 
     assert id_query_result.exit_code == 0
     assert "No jobs found." in id_query_result.output
@@ -821,7 +903,10 @@ def test_nodes_list_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     )
     runner = CliRunner()
 
-    result = runner.invoke(cli_main, ["--json", "resources", "nodes"])
+    result = runner.invoke(
+        cli_main,
+        ["--json", "resources", "nodes", "--workspace", "Test Workspace"],
+    )
     assert result.exit_code == 0
 
     data = json.loads(result.output)
@@ -882,7 +967,10 @@ def test_resources_list_all_workspaces_and_cpu_json(
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "resources", "list", "--all", "--include-cpu"])
+    result = runner.invoke(
+        cli_main,
+        ["--json", "resources", "availability", "--workspace", "all", "--include-cpu"],
+    )
     assert result.exit_code == 0
 
     payload = json.loads(result.output)
@@ -925,9 +1013,7 @@ def test_config_check_auth_failure(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
 
 
 def test_config_check_config_error(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         raise ConfigError("missing env")
 
     monkeypatch.setattr(
@@ -960,9 +1046,7 @@ base_url = "https://my-inspire.internal"
 """)
     global_config = tmp_path / "global-config.toml"
 
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_PROJECT}
 
     def fake_get_config_paths(cls):  # type: ignore[override]
@@ -998,9 +1082,7 @@ def test_config_check_accepts_local_json_alias(
     config.base_url = "https://my-inspire.internal"
     config.docker_registry = TEST_DOCKER_REGISTRY
 
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_ENV}
 
     def fake_get_config_paths(cls):  # type: ignore[override]
@@ -1030,9 +1112,7 @@ def test_config_check_rejects_placeholder_base_url(
     config = make_test_config(tmp_path)
     config.base_url = "https://api.example.com"
 
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_DEFAULT}
 
     def fake_get_config_paths(cls):  # type: ignore[override]
@@ -1066,9 +1146,7 @@ def test_config_check_requires_docker_registry(
     config.base_url = "https://my-inspire.internal"
     config.docker_registry = None
 
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {
             "base_url": config_module.SOURCE_ENV,
             "docker_registry": config_module.SOURCE_DEFAULT,
@@ -1109,9 +1187,7 @@ def test_config_check_rejects_top_level_project_base_url_key(
     project_config = project_dir / "config.toml"
     project_config.write_text('base_url = "https://wrong.example.com"\n')
 
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_PROJECT}
 
     def fake_get_config_paths(cls):  # type: ignore[override]
@@ -1147,9 +1223,7 @@ def test_config_check_allows_path_defaults_for_endpoint_fields(
     config.openapi_prefix = "/openapi/v1"
     config.browser_api_prefix = "/api/v1"
 
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {"base_url": config_module.SOURCE_ENV}
 
     def fake_get_config_paths(cls):  # type: ignore[override]
@@ -1199,9 +1273,7 @@ def test_config_show_respects_global_json_flag(
 ) -> None:
     config = make_test_config(tmp_path)
 
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {"username": config_module.SOURCE_ENV}
 
     def fake_get_config_paths(cls):  # type: ignore[override]
@@ -1240,9 +1312,8 @@ def test_notebook_list_all_workspaces_combines_results(
         max_retries=0,
         retry_delay=0.0,
     )
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {}
 
     monkeypatch.setattr(
@@ -1310,7 +1381,7 @@ def test_notebook_list_all_workspaces_combines_results(
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "notebook", "list", "--all-workspaces"])
+    result = runner.invoke(cli_main, ["--json", "notebook", "list", "--workspace", "all"])
 
     assert result.exit_code == EXIT_SUCCESS
     payload = json.loads(result.output)
@@ -1334,9 +1405,8 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         max_retries=0,
         retry_delay=0.0,
     )
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {}
 
     monkeypatch.setattr(
@@ -1407,7 +1477,10 @@ def test_notebook_start_accepts_name(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "start", "ring-8h100-test"])
+    result = runner.invoke(
+        cli_main,
+        ["notebook", "start", "ring-8h100-test", "--workspace", "a"],
+    )
 
     assert result.exit_code == EXIT_SUCCESS
     assert started["notebook_id"] == item["id"]
@@ -1429,9 +1502,8 @@ def test_notebook_start_name_conflict_prompts_selection(
         max_retries=0,
         retry_delay=0.0,
     )
-    def fake_from_files_and_env(
-        cls, require_credentials: bool = True
-    ):  # type: ignore[override]
+
+    def fake_from_files_and_env(cls, require_credentials: bool = True):  # type: ignore[override]
         return config, {}
 
     monkeypatch.setattr(
@@ -1511,7 +1583,7 @@ def test_notebook_start_name_conflict_prompts_selection(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["notebook", "start", "ring-8h100-test"],
+        ["notebook", "start", "ring-8h100-test", "--workspace", "all"],
         input="2\n",
     )
 
@@ -1531,6 +1603,8 @@ def test_run_notebook_ssh_validates_dropbear_setup_script(
 
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -1612,6 +1686,7 @@ def test_run_notebook_ssh_validates_dropbear_setup_script(
         notebook_cmd_module.run_notebook_ssh(
             Context(),
             notebook_id="nb-name",
+            workspace="Test Workspace",
             wait=True,
             pubkey=None,
             port=31337,
@@ -1632,6 +1707,8 @@ def test_run_notebook_ssh_fails_fast_on_account_mismatch(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     captured: dict[str, str] = {}
@@ -1682,6 +1759,7 @@ def test_run_notebook_ssh_fails_fast_on_account_mismatch(
         notebook_cmd_module.run_notebook_ssh(
             Context(),
             notebook_id="nb-name",
+            workspace="Test Workspace",
             wait=True,
             pubkey=None,
             port=31337,
@@ -1701,6 +1779,8 @@ def test_run_notebook_ssh_passes_resolved_runtime_to_setup(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -1781,6 +1861,7 @@ def test_run_notebook_ssh_passes_resolved_runtime_to_setup(
     notebook_cmd_module.run_notebook_ssh(
         Context(),
         notebook_id="nb-name",
+        workspace="Test Workspace",
         wait=True,
         pubkey=None,
         port=31337,
@@ -1796,6 +1877,8 @@ def test_run_notebook_ssh_refreshes_saved_profile_on_notebook_mismatch(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -1882,6 +1965,7 @@ def test_run_notebook_ssh_refreshes_saved_profile_on_notebook_mismatch(
     notebook_cmd_module.run_notebook_ssh(
         Context(),
         notebook_id="nb-name",
+        workspace="Test Workspace",
         wait=True,
         pubkey=None,
         port=31337,
@@ -1912,6 +1996,8 @@ def test_run_notebook_ssh_interactive_reconnects_after_drop(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -2002,6 +2088,7 @@ def test_run_notebook_ssh_interactive_reconnects_after_drop(
     notebook_cmd_module.run_notebook_ssh(
         Context(),
         notebook_id="nb-name",
+        workspace="Test Workspace",
         wait=True,
         pubkey=None,
         port=31337,
@@ -2019,6 +2106,8 @@ def test_run_notebook_ssh_reports_when_tunnel_not_ready(
 ) -> None:
     class FakeSession:
         workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
         storage_state = {}
 
     class FakeTunnelConfig:
@@ -2102,6 +2191,7 @@ def test_run_notebook_ssh_reports_when_tunnel_not_ready(
         notebook_cmd_module.run_notebook_ssh(
             Context(),
             notebook_id="nb-name",
+            workspace="Test Workspace",
             wait=True,
             pubkey=None,
             port=31337,

@@ -6,13 +6,7 @@ from typing import Optional
 
 from .models import FullFreeNodeCount, GPUAvailability
 from inspire.platform.web.browser_api.core import _browser_api_path, _get_base_url, _request_json
-from inspire.platform.web.session import (
-    DEFAULT_WORKSPACE_ID,
-    SessionExpiredError,
-    WebSession,
-    clear_session_cache,
-    get_web_session,
-)
+from inspire.platform.web.session import SessionExpiredError, WebSession, clear_session_cache, get_web_session
 
 
 def list_compute_groups(
@@ -24,7 +18,7 @@ def list_compute_groups(
         session = get_web_session()
 
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
 
     body = {
         "page_size": -1,
@@ -97,7 +91,7 @@ def cluster_basic_info(
     if session is None:
         session = get_web_session()
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
 
     body = {"workspace_id": workspace_id, "filter": {"workspace_id": workspace_id}}
     attempts = (
@@ -154,7 +148,7 @@ def list_node_dimension(
     if session is None:
         session = get_web_session()
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
 
     body = {
         "workspace_id": workspace_id,
@@ -269,7 +263,7 @@ def _resolve_workspace_targets(
         if ordered:
             return ordered
 
-    return [session.workspace_id or DEFAULT_WORKSPACE_ID]
+    raise ValueError("workspace_id is required unless all_workspaces=True")
 
 
 def get_accurate_resource_availability(

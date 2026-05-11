@@ -36,6 +36,8 @@ _NOTEBOOK_ID = "nb-xyz"
 class _FakeSession:
     def __init__(self) -> None:
         self.workspace_id = "ws-fake"
+        self.all_workspace_ids = ["ws-fake"]
+        self.all_workspace_names = {"ws-fake": "Fake Workspace"}
 
 
 def _install_common_fakes(
@@ -133,6 +135,8 @@ def test_metrics_json_output_is_raw_time_series_and_skips_plot(
             "notebook",
             "metrics",
             _NOTEBOOK_NAME,
+                "--workspace",
+                "all",
             "--metric",
             "gpu,cpu",
             "--window",
@@ -176,7 +180,7 @@ def test_metrics_default_output_writes_png_and_prints_path(
         tmp_metrics_dir=str(tmp_path),
     )
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "gpu"])
+    result = runner.invoke(cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--workspace", "all", "--metric", "gpu"])
 
     assert result.exit_code == 0, result.output
 
@@ -209,7 +213,7 @@ def test_metrics_no_plot_suppresses_render(
     )
     runner = CliRunner()
     result = runner.invoke(
-        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "gpu", "--no-plot"]
+        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--workspace", "all", "--metric", "gpu", "--no-plot"]
     )
     assert result.exit_code == 0, result.output
     assert render_captures == []
@@ -228,7 +232,7 @@ def test_metrics_sparkline_flag_includes_block_chars(
     )
     runner = CliRunner()
     result = runner.invoke(
-        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "gpu", "--sparkline"]
+        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--workspace", "all", "--metric", "gpu", "--sparkline"]
     )
     assert result.exit_code == 0, result.output
     assert any(ch in result.output for ch in "▁▂▃▄▅▆▇█")
@@ -253,6 +257,8 @@ def test_metrics_custom_plot_path_is_honored(
             "notebook",
             "metrics",
             _NOTEBOOK_NAME,
+                "--workspace",
+                "all",
             "--metric",
             "gpu",
             "--plot",
@@ -272,7 +278,7 @@ def test_metrics_rejects_unknown_alias(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     runner = CliRunner()
     result = runner.invoke(
-        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "throughput"]
+        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--workspace", "all", "--metric", "throughput"]
     )
     assert result.exit_code == EXIT_VALIDATION_ERROR
     assert "unknown metric" in result.output
@@ -285,7 +291,7 @@ def test_metrics_errors_when_lcg_unresolvable(monkeypatch: pytest.MonkeyPatch) -
         groups=[],
     )
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["notebook", "metrics", _NOTEBOOK_NAME])
+    result = runner.invoke(cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--workspace", "all"])
     assert result.exit_code == EXIT_CONFIG_ERROR
     assert "Unable to resolve compute group" in result.output
     assert "logic_compute_group_id" not in result.output
@@ -307,6 +313,8 @@ def test_metrics_cli_honors_explicit_lcg(monkeypatch: pytest.MonkeyPatch) -> Non
             "notebook",
             "metrics",
             _NOTEBOOK_NAME,
+                "--workspace",
+                "all",
             "--lcg",
             "lcg-explicit",
             "--metric",
@@ -333,6 +341,8 @@ def test_metrics_absolute_window(monkeypatch: pytest.MonkeyPatch) -> None:
             "notebook",
             "metrics",
             _NOTEBOOK_NAME,
+                "--workspace",
+                "all",
             "--metric",
             "gpu",
             "--start",
@@ -403,7 +413,7 @@ def test_multi_pod_text_summary_surfaces_stragglers(
     )
     runner = CliRunner()
     result = runner.invoke(
-        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--metric", "gpu"]
+        cli_main, ["notebook", "metrics", _NOTEBOOK_NAME, "--workspace", "all", "--metric", "gpu"]
     )
     assert result.exit_code == 0, result.output
     # Pod count reflected.

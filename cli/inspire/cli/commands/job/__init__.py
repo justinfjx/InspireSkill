@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from inspire.cli.commands.batch import job_batch
+from inspire.cli.commands.workload_quota import make_quota_command
 from inspire.cli.commands.workload_profile import make_profile_command
 
 from .job_commands import (
@@ -36,8 +37,8 @@ def job() -> None:
 
     \b
     Examples:
-        inspire resources specs --usage job --workspace 分布式训练空间 --group H200
-        inspire job create --name train-a --workspace 分布式训练空间 --project CI-情境智能 --group H200 -q 8,160,1800 --image train-base:v1 --nodes 2 --command "bash repo/train.sh" --priority 5
+        inspire job quota --workspace 分布式训练空间 --group H200
+        inspire job create --name train-a --workspace 分布式训练空间 --project CI-情境智能 --group H200-2号机房 -q 8,160,1800 --image train-base:v1 --nodes 2 --command "bash repo/train.sh" --priority 5
         inspire job logs train-a --follow
         inspire job metrics train-a --window 30m
         inspire job events train-a --tail 50
@@ -45,6 +46,7 @@ def job() -> None:
 
 
 job.add_command(create)
+job.add_command(make_quota_command("job"))
 job.add_command(make_profile_command("job"))
 job.add_command(job_batch)
 job.add_command(status)

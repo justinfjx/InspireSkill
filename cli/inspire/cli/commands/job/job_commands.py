@@ -28,7 +28,6 @@ from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.auth import AuthManager, AuthenticationError
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.id_resolver import is_full_uuid, is_partial_id
-from inspire.cli.utils.job_cli import resolve_job_id
 from inspire.cli.utils.job_shell import (
     JobShellError,
     normalize_job_instances,
@@ -37,7 +36,7 @@ from inspire.cli.utils.job_shell import (
 )
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
-from inspire.config.workspaces import select_workspace_id
+from inspire.config.workspaces import resolve_workspace_query_scope, select_workspace_id
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.session import SessionExpiredError, get_web_session
 
@@ -119,35 +118,15 @@ def _list_workspace_ids(
     config: Config,
     session,  # noqa: ANN001
     *,
-    explicit_workspace_id: Optional[str],
-    all_workspaces: bool,
+    workspace: Optional[str],
 ) -> list[str]:
     """Pick workspace_ids for a job-list call.
 
-    Precedence:
-      1. ``--workspace`` explicit workspace name
-      2. ``-A`` widens to the platform session's known workspaces
-      3. default = platform session's workspace
+    Query commands require ``--workspace <name|all>`` and never inherit the
+    browser session's active workspace.
     """
-    if explicit_workspace_id:
-        return [explicit_workspace_id]
-
-    if all_workspaces:
-        seen: set[str] = set()
-        ordered: list[str] = []
-        current = str(getattr(session, "workspace_id", "") or "").strip()
-        if current:
-            ordered.append(current)
-            seen.add(current)
-        for wid in getattr(session, "all_workspace_ids", None) or []:
-            wid_s = str(wid or "").strip()
-            if wid_s and wid_s not in seen:
-                ordered.append(wid_s)
-                seen.add(wid_s)
-        return ordered or [""]
-
-    current = str(getattr(session, "workspace_id", "") or "").strip()
-    return [current] if current else [""]
+    workspace_ids, _ = resolve_workspace_query_scope(config, workspace=workspace, session=session)
+    return workspace_ids
 
 
 def _job_matches_name(job, query: Optional[str]) -> bool:  # noqa: ANN001
@@ -370,7 +349,7 @@ def _resolve_web_job_id(
     max_pages: int,
     pick: Optional[int] = None,
     allow_raw_id: bool = False,
-    scan_num: Optional[int] = None,
+    scan_limit: Optional[int] = None,
 ) -> str:
     job = (job or "").strip()
     if not job:
@@ -380,19 +359,19 @@ def _resolve_web_job_id(
             return job
         raise WebJobValidationError(
             "CLI commands take a job name. "
-            "Use `inspire job list -A` to find the name."
+            "Use `inspire job list --workspace <name|all>` to find the name."
         )
     if not allow_raw_id and (
         is_full_uuid(job, prefix="job-") or is_partial_id(job, prefix="job-")
     ):
         raise WebJobValidationError(
             "CLI commands take a job name. "
-            "Use `inspire job list -A` to find the name."
+            "Use `inspire job list --workspace <name|all>` to find the name."
         )
 
     limit = 0 if pick is not None else 2
-    page_size = max(1, int(scan_num)) if scan_num is not None else 100
-    scan_pages = 1 if scan_num is not None else max_pages
+    page_size = max(1, int(scan_limit)) if scan_limit is not None else 100
+    scan_pages = 1 if scan_limit is not None else max_pages
     rows, _ = _list_web_jobs(
         config=config,
         workspace=workspace,
@@ -429,10 +408,8 @@ def _resolve_web_job_id(
             f"Multiple web jobs match {scrub_raw_ids(job)!r}; pass the full job name. "
             f"Candidates: {candidate_names}"
         )
-    if workspace and not all_workspaces:
-        hint = f"inspire job list --workspace {scrub_raw_ids(workspace)} --name {scrub_raw_ids(job)}"
-    else:
-        hint = f"inspire job list -A --name {scrub_raw_ids(job)}"
+    hint_workspace = scrub_raw_ids(workspace or "all")
+    hint = f"inspire job list --workspace {hint_workspace} --name {scrub_raw_ids(job)}"
     raise WebJobResolutionError(
         f"No web job matching {scrub_raw_ids(job)!r} found. "
         f"Try `{hint}`."
@@ -503,7 +480,6 @@ def _list_web_jobs(
 ) -> tuple[list[dict], list[dict]]:
     try:
         session = get_web_session()
-        explicit_workspace_id = _resolve_explicit_workspace(config, workspace, session)
         creator_id = _current_user_id(session)
 
         allowed_statuses = _expand_status_aliases([status]) if status else None
@@ -513,11 +489,10 @@ def _list_web_jobs(
         workspace_ids = _list_workspace_ids(
             config,
             session,
-            explicit_workspace_id=explicit_workspace_id,
-            all_workspaces=all_workspaces,
+            workspace=workspace,
         )
 
-        if name and all_workspaces and not explicit_workspace_id:
+        if name and (workspace or "").strip().lower() == "all":
             rows, scanned = _scan_web_jobs_round_robin(
                 session=session,
                 workspace_ids=workspace_ids,
@@ -715,23 +690,8 @@ def _watch_jobs(
     show_default=True,
     help="Refresh interval in seconds for --watch",
 )
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Search every visible workspace",
-)
-@click.option("--name", default=None, help="Case-insensitive keyword filter for job name/command")
-@click.option("--page-num", type=int, default=1, show_default=True, help="Result page number")
-@click.option("--page-size", type=int, default=100, show_default=True, help="Result page size")
-@click.option(
-    "--max-pages",
-    type=int,
-    default=50,
-    show_default=True,
-    help="Max result pages to scan per workspace when --name is set",
-)
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
+@click.option("--keyword", default=None, help="Case-insensitive keyword filter for job name/command")
 @pass_context
 def list_jobs(
     ctx: Context,
@@ -741,23 +701,19 @@ def list_jobs(
     watch: bool,
     interval: int,
     workspace: Optional[str],
-    all_workspaces: bool,
-    name: Optional[str],
-    page_num: int,
-    page_size: int,
-    max_pages: int,
+    keyword: Optional[str],
 ) -> None:
     """List training jobs from the platform.
 
-    Default scope is the current workspace. Pass ``-A`` to fan out across
-    every visible workspace.
+    Requires ``--workspace <name|all>``. Use ``all`` to fan out across every
+    visible workspace.
 
     \b
     Example:
-        inspire job list
+        inspire job list --workspace 分布式训练空间
         inspire job list --limit 20 --status RUNNING
-        inspire job list --name qwen35
-        inspire job list -A --name qwen35 --limit 20
+        inspire job list --keyword qwen35
+        inspire job list --workspace all --keyword qwen35 --limit 20
         inspire job list --active
         inspire job list --watch --active -n 20
     """
@@ -769,11 +725,11 @@ def list_jobs(
                 ctx,
                 config=config,
                 workspace=workspace,
-                all_workspaces=all_workspaces,
+                all_workspaces=False,
                 status=status,
-                name=name,
-                page_size=page_size,
-                max_pages=max_pages,
+                name=keyword,
+                page_size=limit or 100,
+                max_pages=50,
                 limit=limit,
                 interval=interval,
                 active=active,
@@ -783,12 +739,12 @@ def list_jobs(
         rows, scanned = _list_web_jobs(
             config=config,
             workspace=workspace,
-            all_workspaces=all_workspaces,
+            all_workspaces=False,
             status=status,
-            name=name,
-            page_num=page_num,
-            page_size=page_size,
-            max_pages=max_pages,
+            name=keyword,
+            page_num=1,
+            page_size=limit or 100,
+            max_pages=50,
             limit=limit,
         )
 
@@ -819,34 +775,19 @@ def list_jobs(
 
 @click.command("id")
 @click.argument("job")
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Resolve the job name across every visible workspace, not just the current one",
-)
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--pick",
     type=int,
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
-@click.option(
-    "--max-pages",
-    type=int,
-    default=50,
-    show_default=True,
-    help="Max result pages to scan per workspace when resolving a job name",
-)
 @pass_context
 def show_id(
     ctx: Context,
     job: str,
     workspace: Optional[str],
-    all_workspaces: bool,
     pick: Optional[int],
-    max_pages: int,
 ) -> None:
     """Print the platform ID for a training job name."""
     try:
@@ -855,8 +796,8 @@ def show_id(
             config=config,
             job=job,
             workspace=workspace,
-            all_workspaces=all_workspaces,
-            max_pages=max_pages,
+            all_workspaces=False,
+            max_pages=50,
             pick=pick,
         )
         if ctx.json_output:
@@ -877,29 +818,12 @@ def show_id(
 
 @click.command("status")
 @click.argument("job")
-@click.option("--web", is_flag=True, help="Use the platform detail view.")
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Resolve the job name across every visible workspace, not just the current one",
-)
-@click.option(
-    "--max-pages",
-    type=int,
-    default=50,
-    show_default=True,
-    help="Max result pages to scan per workspace when resolving a job name",
-)
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @pass_context
 def status(
     ctx: Context,
     job: str,
-    web: bool,
     workspace: Optional[str],
-    all_workspaces: bool,
-    max_pages: int,
 ) -> None:
     """Check the status of a training job.
 
@@ -907,42 +831,27 @@ def status(
 
     \b
     Example:
-        inspire job status my-training-run
-        inspire job status --web my-training-run
+        inspire job status my-training-run --workspace 分布式训练空间
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
-        web_mode = web or workspace
-        if web_mode:
-            job_id = _resolve_web_job_id(
-                config=config,
-                job=job,
-                workspace=workspace,
-                all_workspaces=all_workspaces,
-                max_pages=max_pages,
-            )
-            try:
-                session = get_web_session()
-                job_data = browser_api_module.get_job_detail(job_id, session=session)
-            finally:
-                _close_web_client()
-
-            if ctx.json_output:
-                click.echo(json_formatter.format_json({"source": "web", "job": job_data}))
-            else:
-                click.echo(_format_web_job_status(job_data))
-            return
-
-        job_id = resolve_job_id(ctx, job, all_workspaces=all_workspaces)
-        api = AuthManager.get_api(config)
-
-        result = api.get_job_detail(job_id)
-        job_data = result.get("data", {})
+        job_id = _resolve_web_job_id(
+            config=config,
+            job=job,
+            workspace=workspace,
+            all_workspaces=False,
+            max_pages=50,
+        )
+        try:
+            session = get_web_session()
+            job_data = browser_api_module.get_job_detail(job_id, session=session)
+        finally:
+            _close_web_client()
 
         if ctx.json_output:
-            click.echo(json_formatter.format_json(job_data))
+            click.echo(json_formatter.format_json({"source": "web", "job": job_data}))
         else:
-            click.echo(human_formatter.format_job_status(job_data))
+            click.echo(_format_web_job_status(job_data))
 
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
@@ -967,21 +876,22 @@ def status(
 @click.option(
     "--workspace",
     required=True,
-    help="Workspace name. Required; -A is not accepted.",
+    help="Workspace name.",
 )
 @click.option(
-    "--num",
+    "--limit",
+    "-n",
     type=click.IntRange(1),
     default=500,
     show_default=True,
-    help="Maximum jobs to scan while resolving the name and maximum instances to query.",
+    help="Maximum instances to query and display.",
 )
 @pass_context
 def instances(
     ctx: Context,
     job: str,
     workspace: Optional[str],
-    num: int,
+    limit: int,
 ) -> None:
     """List pod-level instances for a distributed-training job."""
     try:
@@ -992,13 +902,13 @@ def instances(
             workspace=workspace,
             all_workspaces=False,
             max_pages=1,
-            scan_num=num,
+            scan_limit=limit,
         )
         try:
             session = get_web_session()
             rows, total = browser_api_module.list_job_instances(
                 job_id,
-                num=num,
+                limit=limit,
                 session=session,
             )
         finally:
@@ -1025,30 +935,31 @@ def instances(
 
 @click.command("stop")
 @click.argument("job")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--pick",
     type=int,
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Resolve the job name across every visible workspace, not just the current one",
-)
 @pass_context
-def stop(ctx: Context, job: str, pick: Optional[int], all_workspaces: bool) -> None:
+def stop(ctx: Context, job: str, workspace: Optional[str], pick: Optional[int]) -> None:
     """Stop a running training job.
 
     \b
     Example:
         inspire job stop my-training-run
     """
-    job_id = resolve_job_id(ctx, job, pick=pick, all_workspaces=all_workspaces)
-
     try:
-        config, _ = Config.from_files_and_env()
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        job_id = _resolve_web_job_id(
+            config=config,
+            job=job,
+            workspace=workspace,
+            all_workspaces=False,
+            max_pages=50,
+            pick=pick,
+        )
         api = AuthManager.get_api(config)
 
         api.stop_training_job(job_id)
@@ -1074,6 +985,7 @@ def stop(ctx: Context, job: str, pick: Optional[int], all_workspaces: bool) -> N
 
 @click.command("delete")
 @click.argument("job")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @click.option(
     "--yes",
     "-y",
@@ -1086,14 +998,8 @@ def stop(ctx: Context, job: str, pick: Optional[int], all_workspaces: bool) -> N
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Resolve the job name across every visible workspace, not just the current one",
-)
 @pass_context
-def delete(ctx: Context, job: str, yes: bool, pick: Optional[int], all_workspaces: bool) -> None:
+def delete(ctx: Context, job: str, workspace: Optional[str], yes: bool, pick: Optional[int]) -> None:
     """Permanently delete a training job entry from the platform.
 
     \b
@@ -1104,7 +1010,22 @@ def delete(ctx: Context, job: str, yes: bool, pick: Optional[int], all_workspace
     Example:
         inspire job delete my-training-run
     """
-    job_id = resolve_job_id(ctx, job, pick=pick, all_workspaces=all_workspaces)
+    try:
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        job_id = _resolve_web_job_id(
+            config=config,
+            job=job,
+            workspace=workspace,
+            all_workspaces=False,
+            max_pages=50,
+            pick=pick,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
+    except WebJobResolutionError as e:
+        _handle_error(ctx, "JobNotFound", str(e), EXIT_JOB_NOT_FOUND)
+        return
 
     if not yes and not ctx.json_output:
         click.confirm(
@@ -1141,31 +1062,14 @@ def delete(ctx: Context, job: str, yes: bool, pick: Optional[int], all_workspace
 @click.argument("job")
 @click.option("--timeout", type=int, default=14400, help="Timeout in seconds (default: 4 hours)")
 @click.option("--interval", type=int, default=30, help="Poll interval in seconds (default: 30)")
-@click.option("--web", is_flag=True, help="Use the platform detail view while polling.")
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Resolve the job name across every visible workspace, not just the current one",
-)
-@click.option(
-    "--max-pages",
-    type=int,
-    default=50,
-    show_default=True,
-    help="Max result pages to scan per workspace when resolving a job name",
-)
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @pass_context
 def wait(
     ctx: Context,
     job: str,
     timeout: int,
     interval: int,
-    web: bool,
     workspace: Optional[str],
-    all_workspaces: bool,
-    max_pages: int,
 ) -> None:
     """Wait for a job to complete.
 
@@ -1174,24 +1078,17 @@ def wait(
 
     \b
     Example:
-        inspire job wait my-training-run --timeout 7200
-        inspire job wait --web my-training-run --timeout 60
+        inspire job wait my-training-run --workspace 分布式训练空间 --timeout 7200
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
-        web_mode = web or workspace
-        if web_mode:
-            job_id = _resolve_web_job_id(
-                config=config,
-                job=job,
-                workspace=workspace,
-                all_workspaces=all_workspaces,
-                max_pages=max_pages,
-            )
-            api = None
-        else:
-            job_id = resolve_job_id(ctx, job, all_workspaces=all_workspaces)
-            api = AuthManager.get_api(config)
+        job_id = _resolve_web_job_id(
+            config=config,
+            job=job,
+            workspace=workspace,
+            all_workspaces=False,
+            max_pages=50,
+        )
 
         terminal_statuses = {
             "SUCCEEDED",
@@ -1217,16 +1114,11 @@ def wait(
                 return
 
             try:
-                if web_mode:
-                    try:
-                        session = get_web_session()
-                        job_data = browser_api_module.get_job_detail(job_id, session=session)
-                    finally:
-                        _close_web_client()
-                else:
-                    assert api is not None
-                    result = api.get_job_detail(job_id)
-                    job_data = result.get("data", {})
+                try:
+                    session = get_web_session()
+                    job_data = browser_api_module.get_job_detail(job_id, session=session)
+                finally:
+                    _close_web_client()
                 current_status = job_data.get("status", "UNKNOWN")
 
                 if current_status != last_status:
@@ -1286,54 +1178,29 @@ def wait(
 
 @click.command("command")
 @click.argument("job")
-@click.option("--web", is_flag=True, help="Use the platform detail view.")
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Resolve the job name across every visible workspace, not just the current one",
-)
-@click.option(
-    "--max-pages",
-    type=int,
-    default=50,
-    show_default=True,
-    help="Max result pages to scan per workspace when resolving a job name",
-)
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @pass_context
 def show_command(
     ctx: Context,
     job: str,
-    web: bool,
     workspace: Optional[str],
-    all_workspaces: bool,
-    max_pages: int,
 ) -> None:
     """Show the training command used for a job."""
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
-        web_mode = web or workspace
-        if web_mode:
-            job_id = _resolve_web_job_id(
-                config=config,
-                job=job,
-                workspace=workspace,
-                all_workspaces=all_workspaces,
-                max_pages=max_pages,
-            )
-            try:
-                session = get_web_session()
-                job_data = browser_api_module.get_job_detail(job_id, session=session)
-            finally:
-                _close_web_client()
-            source = "web"
-        else:
-            job_id = resolve_job_id(ctx, job, all_workspaces=all_workspaces)
-            api = AuthManager.get_api(config)
-            result = api.get_job_detail(job_id)
-            job_data = result.get("data", {})
-            source = "api"
+        job_id = _resolve_web_job_id(
+            config=config,
+            job=job,
+            workspace=workspace,
+            all_workspaces=False,
+            max_pages=50,
+        )
+        try:
+            session = get_web_session()
+            job_data = browser_api_module.get_job_detail(job_id, session=session)
+        finally:
+            _close_web_client()
+        source = "web"
         command_value = job_data.get("command")
 
         if not command_value:
@@ -1380,20 +1247,7 @@ def show_command(
     default=None,
     help="Pick the Nth matching job (1-indexed) when multiple jobs share a name",
 )
-@click.option("--workspace", default=None, help="Workspace name")
-@click.option(
-    "--all-workspaces",
-    "-A",
-    is_flag=True,
-    help="Resolve the job name across every visible workspace, not just the current one",
-)
-@click.option(
-    "--max-pages",
-    type=int,
-    default=50,
-    show_default=True,
-    help="Max web pages to scan per workspace when resolving a job name",
-)
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
 @pass_context
 def shell(
     ctx: Context,
@@ -1402,8 +1256,6 @@ def shell(
     instance_name: Optional[str],
     pick: Optional[int],
     workspace: Optional[str],
-    all_workspaces: bool,
-    max_pages: int,
 ) -> None:
     """Open an interactive shell inside a running training-job instance.
 
@@ -1429,8 +1281,8 @@ def shell(
             config=config,
             job=job,
             workspace=workspace,
-            all_workspaces=all_workspaces,
-            max_pages=max_pages,
+            all_workspaces=False,
+            max_pages=50,
             pick=pick,
             allow_raw_id=False,
         )
@@ -1438,7 +1290,7 @@ def shell(
         try:
             raw_instances, _ = browser_api_module.list_job_instances(
                 job_id,
-                num=200,
+                limit=200,
                 session=session,
             )
         finally:

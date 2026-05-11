@@ -152,7 +152,7 @@ def create_hpc_job(
     if _is_invalid_hpc_spec_error(error_msg):
         friendly_msg = (
             f"{friendly_msg}. Hint: HPC requires the predef_quota_id, not the notebook quota_id. "
-            "Run `inspire resources specs --usage hpc --workspace ... --group ...` or inspect "
+            "Run `inspire hpc quota --workspace ... --group ...` or inspect "
             "`inspire --json hpc status <name>` -> `slurm_cluster_spec.predef_quota_id`."
         )
     raise InspireAPIError(f"Failed to create HPC job: {friendly_msg}")

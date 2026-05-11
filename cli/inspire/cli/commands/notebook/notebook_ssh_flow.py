@@ -198,7 +198,7 @@ def _run_notebook_command_with_reconnect(
                 "ConfigError",
                 f"No cached notebook connection for '{scrub_raw_ids(profile_name)}'.",
                 EXIT_CONFIG_ERROR,
-                hint="Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection.",
+                hint="Run `inspire notebook ssh connect <name> --workspace <workspace>` to create or refresh this notebook connection.",
             )
             return False
 
@@ -238,7 +238,7 @@ def _run_notebook_command_with_reconnect(
                 "ConfigError",
                 f"Cached notebook '{scrub_raw_ids(profile_name)}' is missing notebook metadata.",
                 EXIT_CONFIG_ERROR,
-                hint="Re-run 'inspire notebook ssh connect <notebook>' to re-bootstrap.",
+                hint="Re-run 'inspire notebook ssh connect <notebook> --workspace <workspace>' to re-bootstrap.",
             )
             return False
 
@@ -260,7 +260,7 @@ def _run_notebook_command_with_reconnect(
                 else "SSH connection dropped and auto-reconnect retries were exhausted."
             ),
             EXIT_API_ERROR,
-            hint="Re-run 'inspire notebook ssh connect <notebook>' to refresh the tunnel.",
+            hint="Re-run 'inspire notebook ssh connect <notebook> --workspace <workspace>' to refresh the tunnel.",
         )
         return False
 
@@ -391,7 +391,7 @@ def _run_interactive_notebook_ssh_with_reconnect(
                 "ConfigError",
                 f"No cached notebook connection for '{scrub_raw_ids(profile_name)}'.",
                 EXIT_CONFIG_ERROR,
-                hint="Run `inspire notebook ssh connect <name>` to create or refresh this notebook connection.",
+                hint="Run `inspire notebook ssh connect <name> --workspace <workspace>` to create or refresh this notebook connection.",
             )
             return
 
@@ -411,7 +411,7 @@ def _run_interactive_notebook_ssh_with_reconnect(
                 "APIError",
                 "SSH connection dropped and auto-reconnect retries were exhausted.",
                 EXIT_API_ERROR,
-                hint="Re-run 'inspire notebook ssh connect <notebook>' to refresh the tunnel.",
+                hint="Re-run 'inspire notebook ssh connect <notebook> --workspace <workspace>' to refresh the tunnel.",
             )
             return
 
@@ -457,7 +457,7 @@ def _run_interactive_notebook_ssh_with_reconnect(
                 "ConfigError",
                 f"Cached notebook '{scrub_raw_ids(profile_name)}' is missing notebook metadata.",
                 EXIT_CONFIG_ERROR,
-                hint="Re-run 'inspire notebook ssh connect <notebook>' to re-bootstrap.",
+                hint="Re-run 'inspire notebook ssh connect <notebook> --workspace <workspace>' to re-bootstrap.",
             )
             return
 
@@ -475,7 +475,7 @@ def _run_interactive_notebook_ssh_with_reconnect(
                 "APIError",
                 "SSH connection dropped and auto-reconnect retries were exhausted.",
                 EXIT_API_ERROR,
-                hint="Re-run 'inspire notebook ssh connect <notebook>' to refresh the tunnel.",
+                hint="Re-run 'inspire notebook ssh connect <notebook> --workspace <workspace>' to refresh the tunnel.",
             )
             return
 
@@ -510,6 +510,7 @@ def run_notebook_ssh(
     ctx: Context,
     *,
     notebook_id: str,
+    workspace: str,
     wait: bool,
     pubkey: Optional[str],
     port: int,
@@ -532,6 +533,13 @@ def run_notebook_ssh(
 
     base_url = get_base_url()
     config = load_config(ctx)
+    from inspire.config.workspaces import resolve_workspace_query_scope
+
+    workspace_ids, _ = resolve_workspace_query_scope(
+        config,
+        workspace=workspace,
+        session=session,
+    )
     requested_identifier = notebook_id
     cached_bridge, cached_notebook_id, tunnel_account = _cached_bridge_for_identifier(
         identifier=notebook_id,
@@ -551,6 +559,7 @@ def run_notebook_ssh(
             base_url=base_url,
             identifier=notebook_id,
             json_output=False,
+            workspace_ids=workspace_ids,
         )
 
     # Cache key = notebook name. If a legacy custom-named entry exists for
@@ -814,7 +823,7 @@ def run_notebook_ssh(
             "Tunnel setup completed, but SSH preflight failed.",
             EXIT_API_ERROR,
             hint=(
-                f"Retry 'inspire notebook ssh connect {scrub_raw_ids(profile_name)}' in a few seconds, "
+                f"Retry 'inspire notebook ssh connect {scrub_raw_ids(profile_name)} --workspace <workspace>' in a few seconds, "
                 f"or run 'inspire notebook ssh test {scrub_raw_ids(profile_name)}' to inspect connectivity. "
                 "Proxy readiness report: "
                 f"{scrub_raw_ids(proxy_status)} ({scrub_raw_ids(redact_proxy_url(proxy_url))})."

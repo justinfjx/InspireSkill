@@ -180,19 +180,24 @@ def _resolve_model_name(
 
 
 @click.command("list")
-@click.option("--workspace", default=None, help="Workspace name; omitted means the current workspace")
+@click.option("--workspace", required=True, help="Workspace name")
 @click.option("--project", default=None, help="Project name filter")
 @click.option("--keyword", default=None, help="Server-side model name/description search")
-@click.option("--page", type=int, default=1, show_default=True)
-@click.option("--page-size", type=int, default=-1, show_default=True, help="-1 = fetch all")
+@click.option(
+    "--limit",
+    "-n",
+    type=click.IntRange(1),
+    default=100,
+    show_default=True,
+    help="Maximum models to query and display.",
+)
 @pass_context
 def list_model(
     ctx: Context,
     workspace: Optional[str],
     project: Optional[str],
     keyword: Optional[str],
-    page: int,
-    page_size: int,
+    limit: int,
 ) -> None:
     """List registered models owned by the current user.
 
@@ -210,8 +215,8 @@ def list_model(
         user_id = _current_user_id(session)
         items, total = browser_api_module.list_models(
             workspace_id=resolved_workspace,
-            page=page,
-            page_size=page_size,
+            page=1,
+            page_size=limit,
             keyword=keyword,
             project_ids=[project_id] if project_id else None,
             user_id=user_id,
@@ -249,7 +254,7 @@ def list_model(
 
 @click.command("status")
 @click.argument("name")
-@click.option("--workspace", default=None, help="Workspace name")
+@click.option("--workspace", required=True, help="Workspace name")
 @click.option("--project", default=None, help="Project name filter")
 @click.option("--pick", type=int, default=None, help="Pick Nth duplicate name (1-indexed)")
 @pass_context
@@ -353,7 +358,7 @@ def status_model(
 
 @click.command("versions")
 @click.argument("name")
-@click.option("--workspace", default=None, help="Workspace name")
+@click.option("--workspace", required=True, help="Workspace name")
 @click.option("--project", default=None, help="Project name filter")
 @click.option("--pick", type=int, default=None, help="Pick Nth duplicate name (1-indexed)")
 @pass_context

@@ -111,7 +111,7 @@ def test_hpc_create_invalid_spec_error_includes_hpc_hint() -> None:
         _invoke(api)
 
     message = str(exc_info.value)
-    assert "resources specs --usage hpc" in message
+    assert "hpc quota --workspace" in message
     assert "predef_quota_id" in message
     assert len(api.calls) == 1
 

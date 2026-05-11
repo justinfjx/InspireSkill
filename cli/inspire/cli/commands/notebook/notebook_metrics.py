@@ -32,6 +32,7 @@ def _resolve_notebook_lcg(task_id: str, session: WebSession) -> Optional[str]:
 def _notebook_name_to_id(ctx: Context, name: str) -> str:
     from inspire.cli.commands.notebook import notebook_lookup as _nb
     from inspire.cli.utils.notebook_cli import WEB_AUTH_HINT, get_base_url, load_config, require_web_session
+    from inspire.config.workspaces import resolve_workspace_query_scope
 
     session = require_web_session(
         ctx,
@@ -39,6 +40,11 @@ def _notebook_name_to_id(ctx: Context, name: str) -> str:
     )
     config = load_config(ctx)
     base_url = get_base_url()
+    workspace_ids, _ = resolve_workspace_query_scope(
+        config,
+        workspace=str(getattr(ctx, "workspace", "") or ""),
+        session=session,
+    )
     nb_id, _ = _nb._resolve_notebook_id(
         ctx,
         session=session,
@@ -46,6 +52,7 @@ def _notebook_name_to_id(ctx: Context, name: str) -> str:
         base_url=base_url,
         identifier=name,
         json_output=getattr(ctx, "json_output", False),
+        workspace_ids=workspace_ids,
     )
     return nb_id
 

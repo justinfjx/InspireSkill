@@ -10,14 +10,18 @@ from typing import Optional
 
 import click
 
-from inspire.cli.context import Context, pass_context
-from inspire.cli.commands.hpc.hpc_commands import _resolve_hpc_name
+from inspire.cli.context import Context, EXIT_CONFIG_ERROR, pass_context
+from inspire.cli.commands.hpc.hpc_commands import _resolve_hpc_name_in_workspace
+from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.events import run_events_command
+from inspire.config import Config, ConfigError
 from inspire.platform.web.browser_api.hpc_jobs import list_hpc_job_events
+from inspire.platform.web.session import get_web_session
 
 
 @click.command("events")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--json",
     "json_output_local",
@@ -38,6 +42,7 @@ from inspire.platform.web.browser_api.hpc_jobs import list_hpc_job_events
 def events(
     ctx: Context,
     name: str,
+    workspace: str,
     json_output_local: bool,
     reason_filter: Optional[str],
     tail: Optional[int],
@@ -46,11 +51,24 @@ def events(
 
     \b
     Examples:
-      inspire hpc events <name>
-      inspire --json hpc events <name>
-      inspire hpc events <name> --reason Deleted
+      inspire hpc events <name> --workspace CPU资源空间
+      inspire --json hpc events <name> --workspace CPU资源空间
+      inspire hpc events <name> --workspace CPU资源空间 --reason Deleted
     """
-    job_id = _resolve_hpc_name(ctx, name)
+    try:
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        session = get_web_session()
+        job_id = _resolve_hpc_name_in_workspace(
+            ctx,
+            config=config,
+            session=session,
+            name=name,
+            workspace=workspace,
+            limit=10000,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
     run_events_command(
         ctx,
         resource_id=job_id,

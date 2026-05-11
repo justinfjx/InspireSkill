@@ -319,5 +319,5 @@ curl -sS -o /dev/null -w "sii:    %{http_code}\n" \
 ```bash
 inspire config show --compact
 inspire config check
-inspire --debug resources list
+inspire --debug resources availability --workspace <workspace>
 ```

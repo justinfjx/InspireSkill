@@ -15,7 +15,7 @@
 
 ## 2. 通用提交流程
 
-1. GPU job / serving 用 `inspire resources specs --usage <job|serving> --workspace 分布式训练空间` 选择合法 `--quota gpu,cpu,mem`；HPC / CPU Ray 用 `--workspace CPU资源空间`。
+1. GPU job / serving 用 `inspire job quota --workspace 分布式训练空间` 或 `inspire serving quota --workspace 分布式训练空间` 选择合法 `--quota gpu,cpu,mem`；HPC / CPU Ray 用 `inspire hpc quota --workspace CPU资源空间` 或 `inspire ray quota --workspace CPU资源空间`。
 2. `inspire image list` / `image detail` 确认镜像 `READY`。
 3. 用 create 命令提交；复杂条件先 `--dry-run`。
 4. 卡住或失败先看 events；已启动但健康度不明看 metrics；程序行为看 logs 或产出文件。
@@ -37,10 +37,10 @@ inspire job metrics --help
 
 ```bash
 inspire job create -n <name>-train -q 8,160,1800 --nodes 2 \
-  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group <GROUP> \
+  -c 'bash <repo>/train.sh' --workspace 分布式训练空间 --group <FULL_GROUP_NAME> \
   --project <PROJECT> --image <IMAGE> --priority 5
 
-inspire job logs --follow <name>-train
+inspire job logs <name>-train --workspace 分布式训练空间 --follow
 ```
 
 `job create` 本身不解析 `me:<repo>`；在启动命令里使用相对 `me` 的路径，或让脚本自己切到正确目录。需要先操作共享盘时，用 notebook 的 `exec --cwd me:<repo>`。
@@ -58,7 +58,7 @@ inspire job logs --follow <name>-train
 平台可能按所选项目策略裁剪可请求优先级。提交后用默认文本输出核对：
 
 ```bash
-inspire job status <name>
+inspire job status <name> --workspace 分布式训练空间
 ```
 
 如果显示为 LOW 且任务需要稳定运行，先 stop，再用更高优先级重提。
@@ -77,18 +77,18 @@ inspire job status <name>
 HPC 关键约束：
 
 1. `-c` 只写 Slurm 正文；程序必须显式 `srun` 启动。
-2. `--group "<name>"` 按 compute group 名称传。
+2. `--group "<name>"` 必须传完整 compute group 名称。
 3. Slurm 级参数超出节点规格时可能静默排队。
 4. `--image` 必须是完整 Docker 地址或当前 workspace 可见镜像，并带可用 Slurm 运行环境。
 5. 应用层并发不要把 CPU / 内存压满，给平台组件和系统进程留余量。
-6. 并非所有 CPU compute group 都支持 `hpc create`；提交前用 `inspire resources specs --usage hpc` 确认目标组可用。
+6. 并非所有 CPU compute group 都支持 `hpc create`；提交前用 `inspire hpc quota --workspace CPU资源空间` 确认目标组可用。
 
 示例：
 
 ```bash
 inspire hpc create -n <name>-preprocess \
   -c 'srun bash -lc "python preprocess.py"' \
-  --workspace CPU资源空间 --project <PROJECT> --group <GROUP> \
+  --workspace CPU资源空间 --project <PROJECT> --group <FULL_GROUP_NAME> \
   -q 0,20,256 --cpus-per-task 16 --memory-per-cpu 12 \
   --number-of-tasks 1 --instance-count 1 \
   --image <IMAGE>
@@ -103,7 +103,7 @@ inspire hpc create -n <name>-preprocess \
 Ray 当前只在部分 compute group 可用，日常先从 `CPU资源空间` 查：
 
 ```bash
-inspire resources specs --usage ray --workspace CPU资源空间
+inspire ray quota --workspace CPU资源空间
 ```
 
 示例：
@@ -112,8 +112,8 @@ inspire resources specs --usage ray --workspace CPU资源空间
 inspire ray create -n <name>-pipeline \
   -c 'python driver.py --mode run_and_exit' \
   --workspace CPU资源空间 --project <PROJECT> \
-  --head-image <IMAGE> --head-group <GROUP> --head-quota 0,4,16 \
-  --worker 'name=w1;image=<IMAGE>;group=<GROUP>;quota=0,4,16;min=1;max=8;shm=32'
+  --head-image <IMAGE> --head-group <FULL_GROUP_NAME> --head-quota 0,4,16 \
+  --worker 'name=w1;image=<IMAGE>;group=<FULL_GROUP_NAME>;quota=0,4,16;min=1;max=8;shm=32'
 ```
 
 Ray 特有坑：
@@ -133,14 +133,14 @@ Ray 特有坑：
 inspire model list --workspace 分布式训练空间
 inspire model versions <model-name> --workspace 分布式训练空间
 inspire serving configs --workspace 分布式训练空间
-inspire resources specs --usage serving --workspace 分布式训练空间
+inspire serving quota --workspace 分布式训练空间
 ```
 
 创建示例：
 
 ```bash
 inspire serving create --name <name> --model <model-name> --model-version 1 \
-  --workspace 分布式训练空间 --project <PROJECT> --group <GROUP> \
+  --workspace 分布式训练空间 --project <PROJECT> --group <FULL_GROUP_NAME> \
   --quota 1,18,200 --image <IMAGE> \
   --command "python serve.py" --port 8000 --priority 5 --dry-run
 ```
@@ -152,9 +152,9 @@ inspire serving create --name <name> --model <model-name> --model-version 1 \
 任务卡住或失败时优先查事件，确认调度器、控制器或节点给出的原因：
 
 ```bash
-inspire job events <name> --tail 50
-inspire hpc events <name> --tail 50
-inspire ray events <name> --tail 50
+inspire job events <name> --workspace 分布式训练空间 --tail 50
+inspire hpc events <name> --workspace CPU资源空间 --tail 50
+inspire ray events <name> --workspace CPU资源空间 --tail 50
 ```
 
 需要看实际 pod / component 列表时查 instances，并显式传 workspace：
@@ -168,10 +168,10 @@ inspire ray instances <name> --workspace CPU资源空间
 任务已启动但健康度不明时查指标。`metrics` 对应平台资源视图，适合看 GPU、显存、CPU、内存、磁盘和网络是否持续工作，以及多 pod / 多 task 是否负载均衡：
 
 ```bash
-inspire job metrics <name> --window 30m
-inspire job metrics <name> --metric gpu,gpu_mem,cpu,mem --sparkline --no-plot
-inspire hpc metrics <name> --metric cpu,mem,disk_read,disk_write --window 2h
-inspire serving metrics <name> --window 30m
+inspire job metrics <name> --workspace 分布式训练空间 --window 30m
+inspire job metrics <name> --workspace 分布式训练空间 --metric gpu,gpu_mem,cpu,mem --sparkline --no-plot
+inspire hpc metrics <name> --workspace CPU资源空间 --metric cpu,mem,disk_read,disk_write --window 2h
+inspire serving metrics <name> --workspace 分布式训练空间 --window 30m
 ```
 
 | 工具 | 主要回答 |
@@ -198,7 +198,7 @@ GPU job：
 | `events` 出现 `ImagePullBackOff` | `--image` 拼写错误或 registry 不可达 |
 | `logs` 为空但 `status=RUNNING` | 主进程未重定向 stdout，或日志路径不在 CLI 管理范围 |
 | `status=FAILED` 但无业务报错 | OOM、GPU 显存溢出、节点驱逐 |
-| `quota match failed` / 0 候选 | `--quota gpu,cpu,mem` 在当前 workspace 找不到对应规格。用 `resources specs` 重选；多组撞名时加 `--group <name>` |
+| `quota match failed` / 0 候选 | `--quota gpu,cpu,mem` 在当前 workspace 找不到对应规格。用 `<workload> quota` 重选；多组撞名时先用查询命令的 `--group <keyword>` 找完整 compute group 名称，再把完整名称传给 `create --group` |
 
 HPC：
 
@@ -208,5 +208,5 @@ HPC：
 | `steps=-/0` | 正文没用 `srun` 启动程序 |
 | `nodes=[]` | 调度未分配；可能是配额 / 优先级问题 |
 | `status=SUCCEEDED` 但目录 / `stdout.log` / 报告为空 | 程序没有真正跑到业务产出，或 CPU / 内存贴边 |
-| `quota match failed` / 0 候选 | `--quota gpu,cpu,mem` 在当前 workspace 找不到对应规格。用 `resources specs --usage hpc` 重选；多组撞名时加 `--group <name>` |
+| `quota match failed` / 0 候选 | `--quota gpu,cpu,mem` 在当前 workspace 找不到对应规格。用 `hpc quota` 重选；多组撞名时先用查询命令的 `--group <keyword>` 找完整 compute group 名称，再把完整名称传给 `create --group` |
 | `image not found` | 镜像名称不可见或地址不完整 |

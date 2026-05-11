@@ -187,7 +187,7 @@ def quota_user(ctx: Context) -> None:
 
     \b
     Note: user-level quota is admin-only on qz.sii.edu.cn. Regular users may
-    see `用户不存在`; use `resources specs` and live availability for ordinary
+    see `用户不存在`; use `<workload> quota` and live availability for ordinary
     compute decisions, and `inspire project list` only for project-level
     metadata.
     """
@@ -212,7 +212,7 @@ def quota_user(ctx: Context) -> None:
             msg = (
                 f"{msg}\n\n"
                 "Hint: user-level quota is admin-only on qz.sii.edu.cn; regular "
-                "users may see this error. Use `resources specs` and live "
+                "users may see this error. Use `<workload> quota` and live "
                 "availability for ordinary compute decisions; `inspire project "
                 "list` is project-level metadata."
             )
@@ -396,7 +396,7 @@ def delete_ssh_key(ctx: Context, name: str, force: bool) -> None:
 
 
 @click.command("permissions")
-@click.option("--workspace", default=None, help="Workspace name")
+@click.option("--workspace", required=True, help="Workspace name")
 @pass_context
 def permissions_user(
     ctx: Context, workspace: Optional[str],) -> None:
@@ -417,7 +417,7 @@ def permissions_user(
             click.echo("No permissions granted in this workspace.")
             return
 
-        workspace_label = workspace or "(current workspace)"
+        workspace_label = workspace
         click.echo(f"Permissions in workspace {workspace_label} ({len(perms)} granted)")
         for p in sorted(perms):
             click.echo(f"  {p}")

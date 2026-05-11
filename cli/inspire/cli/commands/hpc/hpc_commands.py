@@ -34,39 +34,6 @@ def _current_user_id(session) -> str:  # noqa: ANN001
     return user_id
 
 
-def _resolve_hpc_name(ctx: Context, name: str, *, pick: Optional[int] = None) -> str:
-    """Resolve an HPC job name to its platform id (``hpc-job-<uuid>``).
-
-    Scope: current user × session workspace, full page.
-    """
-
-    def _lister():
-        session = get_web_session()
-        created_by = _current_user_id(session)
-        jobs, _ = browser_api_module.list_hpc_jobs(
-            session=session, created_by=created_by, page_size=10000
-        )
-        return [
-            {
-                "name": j.name,
-                "id": j.job_id,
-                "status": j.status,
-                "workspace_id": j.workspace_id,
-                "created_at": j.created_at,
-            }
-            for j in jobs
-        ]
-
-    return resolve_by_name(
-        ctx,
-        name=name,
-        resource_type="hpc",
-        list_candidates=_lister,
-        json_output=ctx.json_output,
-        pick_index=pick,
-    )
-
-
 def _resolve_hpc_name_in_workspace(
     ctx: Context,
     *,
@@ -74,7 +41,8 @@ def _resolve_hpc_name_in_workspace(
     session,
     name: str,
     workspace: str,
-    num: int,
+    limit: int,
+    pick: Optional[int] = None,
 ) -> str:
     workspace_id = select_workspace_id(
         config,
@@ -90,7 +58,7 @@ def _resolve_hpc_name_in_workspace(
             workspace_id=workspace_id,
             created_by=user_id,
             page_num=1,
-            page_size=num,
+            page_size=limit,
             session=session,
         )
         return [
@@ -110,6 +78,7 @@ def _resolve_hpc_name_in_workspace(
         resource_type="hpc",
         list_candidates=_lister,
         json_output=ctx.json_output,
+        pick_index=pick,
     )
 
 
@@ -253,43 +222,45 @@ def _format_hpc_instances(instances: list[dict[str, Any]]) -> str:
 
 
 @click.command("list")
-@click.option("--workspace", default=None, help="Workspace name; omitted means the current workspace")
+@click.option("--workspace", required=True, help="Workspace name")
 @click.option("--status", "status_filter", default=None, help="Filter by HPC job status")
-@click.option("--page-num", type=int, default=1, show_default=True, help="Page number")
-@click.option("--page-size", type=int, default=50, show_default=True, help="Page size")
+@click.option(
+    "--limit",
+    "-n",
+    type=click.IntRange(1),
+    default=50,
+    show_default=True,
+    help="Maximum HPC jobs to query and display.",
+)
 @pass_context
 def list_hpc(
     ctx: Context,
     workspace: Optional[str],
     status_filter: Optional[str],
-    page_num: int,
-    page_size: int,
+    limit: int,
 ) -> None:
     """List the current user's HPC jobs.
 
     \b
     Examples:
-        inspire hpc list
         inspire hpc list --workspace CPU资源空间 --status RUNNING
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
-        resolved_workspace_id = None
-        if workspace is not None:
-            resolved_workspace_id = select_workspace_id(
-                config,
-                explicit_workspace_name=workspace,
-                session=session,
-            )
+        resolved_workspace_id = select_workspace_id(
+            config,
+            explicit_workspace_name=workspace,
+            session=session,
+        )
         created_by = _current_user_id(session)
 
         jobs, total = browser_api_module.list_hpc_jobs(
             workspace_id=resolved_workspace_id,
             created_by=created_by,
             status=status_filter,
-            page_num=page_num,
-            page_size=page_size,
+            page_num=1,
+            page_size=limit,
             session=session,
         )
         rows = [
@@ -332,7 +303,7 @@ def list_hpc(
     "--group",
     "compute_group",
     help=(
-        "Compute group name. Required unless supplied by --profile "
+        "Full compute group name. Required unless supplied by --profile "
         "(e.g. 'HPC-可上网区资源-2'; see 'inspire config context')."
     ),
 )
@@ -341,8 +312,8 @@ def list_hpc(
     "-q",
     help=(
         "Node resource as 'gpu,cpu,mem' (mem in GiB). The triple chooses "
-        "CPU/memory/GPU available per node. Use 'inspire resources specs "
-        "--usage hpc' to see valid triples. Slurm options below "
+        "CPU/memory/GPU available per node. Use 'inspire hpc quota "
+        "--workspace <name>' to see valid triples. Slurm options below "
         "(--cpus-per-task / --memory-per-cpu / --number-of-tasks) describe "
         "how your program uses each selected node."
     ),
@@ -644,13 +615,22 @@ def create_hpc(
 
 @click.command("status")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name.")
 @pass_context
-def status_hpc(ctx: Context, name: str) -> None:
+def status_hpc(ctx: Context, name: str, workspace: str) -> None:
     """Get status/details of an HPC job (pass the job name)."""
     try:
         config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
-        job_id = _resolve_hpc_name(ctx, name)
+        session = get_web_session()
+        job_id = _resolve_hpc_name_in_workspace(
+            ctx,
+            config=config,
+            session=session,
+            name=name,
+            workspace=workspace,
+            limit=10000,
+        )
         result = api.get_hpc_job_detail(job_id)
         data = _extract_data(result)
 
@@ -692,14 +672,15 @@ def status_hpc(ctx: Context, name: str) -> None:
     help="Workspace name. Required; -A is not accepted.",
 )
 @click.option(
-    "--num",
+    "--limit",
+    "-n",
     type=click.IntRange(1),
     default=500,
     show_default=True,
     help="Maximum HPC jobs to scan while resolving the name and maximum instances to query.",
 )
 @pass_context
-def instances_hpc(ctx: Context, name: str, workspace: str, num: int) -> None:
+def instances_hpc(ctx: Context, name: str, workspace: str, limit: int) -> None:
     """List pod/component instances for an HPC job."""
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -710,11 +691,11 @@ def instances_hpc(ctx: Context, name: str, workspace: str, num: int) -> None:
             session=session,
             name=name,
             workspace=workspace,
-            num=num,
+            limit=limit,
         )
         rows, total = browser_api_module.list_hpc_job_instances(
             job_id,
-            num=num,
+            limit=limit,
             session=session,
         )
 
@@ -738,6 +719,7 @@ def instances_hpc(ctx: Context, name: str, workspace: str, num: int) -> None:
 
 @click.command("id")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--pick",
     type=int,
@@ -745,10 +727,20 @@ def instances_hpc(ctx: Context, name: str, workspace: str, num: int) -> None:
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
 @pass_context
-def hpc_id(ctx: Context, name: str, pick: Optional[int]) -> None:
+def hpc_id(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> None:
     """Print the platform ID for an HPC job name."""
     try:
-        job_id = _resolve_hpc_name(ctx, name, pick=pick)
+        config, _ = Config.from_files_and_env(require_credentials=False)
+        session = get_web_session()
+        job_id = _resolve_hpc_name_in_workspace(
+            ctx,
+            config=config,
+            session=session,
+            name=name,
+            workspace=workspace,
+            limit=10000,
+            pick=pick,
+        )
         if ctx.json_output:
             click.echo(json_formatter.format_json({"name": name, "id": job_id}, allow_ids=True))
             return
@@ -765,6 +757,7 @@ def hpc_id(ctx: Context, name: str, pick: Optional[int]) -> None:
 
 @click.command("stop")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--pick",
     type=int,
@@ -772,12 +765,21 @@ def hpc_id(ctx: Context, name: str, pick: Optional[int]) -> None:
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
 @pass_context
-def stop_hpc(ctx: Context, name: str, pick: Optional[int]) -> None:
+def stop_hpc(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> None:
     """Stop an HPC job (pass the job name)."""
     try:
         config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
-        job_id = _resolve_hpc_name(ctx, name, pick=pick)
+        session = get_web_session()
+        job_id = _resolve_hpc_name_in_workspace(
+            ctx,
+            config=config,
+            session=session,
+            name=name,
+            workspace=workspace,
+            limit=10000,
+            pick=pick,
+        )
         api.stop_hpc_job(job_id)
 
         if ctx.json_output:
@@ -797,6 +799,7 @@ def stop_hpc(ctx: Context, name: str, pick: Optional[int]) -> None:
 
 @click.command("delete")
 @click.argument("name")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--yes",
     "-y",
@@ -810,7 +813,7 @@ def stop_hpc(ctx: Context, name: str, pick: Optional[int]) -> None:
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
 @pass_context
-def delete_hpc(ctx: Context, name: str, yes: bool, pick: Optional[int]) -> None:
+def delete_hpc(ctx: Context, name: str, workspace: str, yes: bool, pick: Optional[int]) -> None:
     """Permanently delete an HPC job entry (pass the job name).
 
     \b
@@ -828,8 +831,17 @@ def delete_hpc(ctx: Context, name: str, yes: bool, pick: Optional[int]) -> None:
         )
 
     try:
-        job_id = _resolve_hpc_name(ctx, name, pick=pick)
+        config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
+        job_id = _resolve_hpc_name_in_workspace(
+            ctx,
+            config=config,
+            session=session,
+            name=name,
+            workspace=workspace,
+            limit=10000,
+            pick=pick,
+        )
         result = browser_api_module.delete_hpc_job(job_id=job_id, session=session)
 
         if ctx.json_output:

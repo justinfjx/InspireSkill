@@ -24,7 +24,7 @@ from inspire.platform.web.browser_api.core import (
     _get_base_url,
     _request_json,
 )
-from inspire.platform.web.session import DEFAULT_WORKSPACE_ID, WebSession, get_web_session
+from inspire.platform.web.session import WebSession, get_web_session
 
 __all__ = [
     "RayJobInfo",
@@ -123,7 +123,7 @@ def list_ray_jobs(
         session = get_web_session()
 
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
     if not user_ids:
         user_data = _request_json(
             session,
@@ -183,7 +183,7 @@ def list_ray_job_users(
         session = get_web_session()
 
     if workspace_id is None:
-        workspace_id = session.workspace_id or DEFAULT_WORKSPACE_ID
+        raise ValueError("workspace_id is required")
 
     data = _assert_ok(
         _request_json(
@@ -408,7 +408,7 @@ def list_ray_job_events(
 def list_ray_job_instances(
     ray_job_id: str,
     *,
-    num: int = 500,
+    limit: int = 500,
     session: Optional[WebSession] = None,
 ) -> tuple[list[dict], int]:
     """Fetch the pod-level view of a Ray job (head + worker instances).
@@ -423,8 +423,8 @@ def list_ray_job_instances(
     ray_job_id = str(ray_job_id or "").strip()
     if not ray_job_id:
         raise ValueError("ray_job_id is required")
-    if num < 1:
-        raise ValueError("num must be positive")
+    if limit < 1:
+        raise ValueError("limit must be positive")
 
     if session is None:
         session = get_web_session()
@@ -438,7 +438,7 @@ def list_ray_job_instances(
             body={
                 "ray_job_id": ray_job_id,
                 "page_num": 1,
-                "page_size": num,
+                "page_size": limit,
             },
             timeout=30,
         ),

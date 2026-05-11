@@ -35,7 +35,7 @@ def _resolve_serving_name(
 ) -> str:
     """Resolve a serving name to its platform id (``sv-<uuid>``).
 
-    Scope: ``my_serving=True`` (default) × session workspace, full page.
+    Scope: ``my_serving=True`` (default) × explicit workspace, full page.
     """
 
     def _lister():
@@ -395,12 +395,18 @@ def _format_configs(data: dict[str, Any]) -> str:
 
 
 @click.command("list")
-@click.option("--workspace", default=None, help="Workspace name; omitted means the current workspace")
+@click.option("--workspace", required=True, help="Workspace name")
 @click.option("--project", default=None, help="Project name filter")
 @click.option("--status", "status_filter", default=None, help="Serving status filter")
 @click.option("--keyword", default=None, help="Server-side name/model search")
-@click.option("--page", type=int, default=1, show_default=True)
-@click.option("--page-size", type=int, default=50, show_default=True)
+@click.option(
+    "--limit",
+    "-n",
+    type=click.IntRange(1),
+    default=50,
+    show_default=True,
+    help="Maximum servings to query and display.",
+)
 @pass_context
 def list_serving(
     ctx: Context,
@@ -408,16 +414,14 @@ def list_serving(
     project: Optional[str],
     status_filter: Optional[str],
     keyword: Optional[str],
-    page: int,
-    page_size: int,
+    limit: int,
 ) -> None:
     """List the current user's inference servings.
 
     \b
     Examples:
-        inspire serving list
         inspire serving list --workspace 分布式训练空间 --project CI-情境智能
-        inspire serving list --keyword qwen --status RUNNING
+        inspire serving list --workspace 分布式训练空间 --keyword qwen --status RUNNING
     """
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -435,8 +439,8 @@ def list_serving(
             keyword=keyword,
             project_ids=[project_id] if project_id else None,
             statuses=[status_filter] if status_filter else None,
-            page=page,
-            page_size=page_size,
+            page=1,
+            page_size=limit,
             session=session,
         )
 
@@ -483,7 +487,7 @@ def list_serving(
 
 @click.command("status")
 @click.argument("name")
-@click.option("--workspace", default=None, help="Workspace name")
+@click.option("--workspace", required=True, help="Workspace name")
 @click.option("--pick", type=int, default=None, help="Pick Nth duplicate name (1-indexed)")
 @pass_context
 def status_serving(
@@ -563,7 +567,7 @@ def status_serving(
 
 @click.command("stop")
 @click.argument("name")
-@click.option("--workspace", default=None, help="Workspace name")
+@click.option("--workspace", required=True, help="Workspace name")
 @click.option(
     "--pick",
     type=int,
@@ -654,7 +658,7 @@ def delete_serving(
 
 
 @click.command("configs")
-@click.option("--workspace", default=None, help="Workspace name")
+@click.option("--workspace", required=True, help="Workspace name")
 @pass_context
 def configs_serving(
     ctx: Context,
@@ -663,7 +667,7 @@ def configs_serving(
     """Show available inference-serving choices for a workspace.
 
     Use this before `serving create` to inspect deployment settings exposed
-    by the platform. Use `resources specs --usage serving` to choose the
+    by the platform. Use `serving quota --workspace <name>` to choose the
     concrete `--quota gpu,cpu,mem` triple.
     """
     try:
@@ -704,7 +708,10 @@ def configs_serving(
     "-p",
     help="Project name. Required unless supplied by --profile.",
 )
-@click.option("--group", help="Compute group name. Required unless supplied by --profile.")
+@click.option(
+    "--group",
+    help="Full compute group name. Required unless supplied by --profile.",
+)
 @click.option(
     "--quota",
     "-q",
@@ -764,7 +771,7 @@ def create_serving(
     """Create an inference serving from a registered model.
 
     Pick the model with `model list/status/versions`, choose a serving spec
-    with `resources specs --usage serving`, then submit the service with a
+    with `serving quota --workspace <name>`, then submit the service with a
     visible image, startup command, and container port. Omit
     `--model-version` to use the latest version reported by the model list.
 
