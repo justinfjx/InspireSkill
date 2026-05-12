@@ -7,7 +7,7 @@ on:
       - main
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
   cancel-in-progress: true
 
 jobs:
@@ -49,7 +49,11 @@ jobs:
         run: uv run mypy
 
       - name: Unit tests
-        run: uv run pytest -q
+        run: >
+          uv run python -c 'import faulthandler, os, pytest, sys;
+          faulthandler.dump_traceback_later(240, file=sys.stderr, exit=True);
+          code = pytest.main(["-q"]); sys.stdout.flush(); sys.stderr.flush();
+          os._exit(code)'
 
       - name: Build package
         run: uv build
