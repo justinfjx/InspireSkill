@@ -28,6 +28,8 @@ from inspire.platform.web.browser_api.images import (
 
 class FakeWebSession:
     workspace_id = "ws-test-workspace"
+    all_workspace_ids = ["ws-test-workspace"]
+    all_workspace_names = {"ws-test-workspace": "Test Workspace"}
     storage_state = {}
 
 
@@ -623,7 +625,16 @@ def test_image_save_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["--json", "image", "save", "demo-notebook", "-n", "saved-img"],
+        [
+            "--json",
+            "image",
+            "save",
+            "demo-notebook",
+            "--workspace",
+            "Test Workspace",
+            "-n",
+            "saved-img",
+        ],
     )
     assert result.exit_code == 0
 
@@ -632,7 +643,7 @@ def test_image_save_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     assert captured["notebook_id"] == "notebook-abc"
 
 
-def test_image_save_public_flag_calls_update_image(
+def test_image_save_public_visibility_calls_update_image(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)
@@ -655,14 +666,24 @@ def test_image_save_public_flag_calls_update_image(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["image", "save", "demo-notebook", "-n", "shared-base", "--public"],
+        [
+            "image",
+            "save",
+            "demo-notebook",
+            "--workspace",
+            "Test Workspace",
+            "-n",
+            "shared-base",
+            "--visibility",
+            "public",
+        ],
     )
     assert result.exit_code == 0
     assert update_captured == {"image_id": "img-pub-001", "visibility": "VISIBILITY_PUBLIC"}
     assert "Visibility: public" in result.output
 
 
-def test_image_save_private_flag_calls_update_image(
+def test_image_save_private_visibility_calls_update_image(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)
@@ -684,7 +705,17 @@ def test_image_save_private_flag_calls_update_image(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["image", "save", "demo-notebook", "-n", "my-img", "--private"],
+        [
+            "image",
+            "save",
+            "demo-notebook",
+            "--workspace",
+            "Test Workspace",
+            "-n",
+            "my-img",
+            "--visibility",
+            "private",
+        ],
     )
     assert result.exit_code == 0
     assert seen_visibility == {"visibility": "VISIBILITY_PRIVATE"}
@@ -709,7 +740,7 @@ def test_image_set_visibility_command(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["image", "set-visibility", "my-image:v1", "--public"],
+        ["image", "set-visibility", "my-image:v1", "--visibility", "public"],
     )
     assert result.exit_code == 0
     assert captured == {"image_id": "image-abc-def", "visibility": "VISIBILITY_PUBLIC"}
@@ -718,7 +749,7 @@ def test_image_set_visibility_command(
 
     result2 = runner.invoke(
         cli_main,
-        ["image", "set-visibility", "my-image:v1", "--private"],
+        ["image", "set-visibility", "my-image:v1", "--visibility", "private"],
     )
     assert result2.exit_code == 0
     assert captured == {"image_id": "image-abc-def", "visibility": "VISIBILITY_PRIVATE"}
@@ -777,7 +808,18 @@ def test_image_save_fallback_resolves_image_id_via_list(
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["image", "save", "demo-notebook", "-n", "saved-img"])
+    result = runner.invoke(
+        cli_main,
+        [
+            "image",
+            "save",
+            "demo-notebook",
+            "--workspace",
+            "Test Workspace",
+            "-n",
+            "saved-img",
+        ],
+    )
 
     assert result.exit_code == 0
     assert "Notebook saved as image: saved-img:v1" in result.output
@@ -801,14 +843,25 @@ def test_image_save_unknown_when_fallback_fails(
     monkeypatch.setattr(browser_api_module, "list_images_by_source", _raise)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["image", "save", "demo-notebook", "-n", "saved-img"])
+    result = runner.invoke(
+        cli_main,
+        [
+            "image",
+            "save",
+            "demo-notebook",
+            "--workspace",
+            "Test Workspace",
+            "-n",
+            "saved-img",
+        ],
+    )
 
     assert result.exit_code == 0
     assert "Notebook saved as image: saved-img:v1" in result.output
     assert "unknown" not in result.output
 
 
-def test_image_delete_with_force(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_image_delete_with_yes(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)
     _patch_image_name_resolver(monkeypatch, {"stale-image:v1": "img-del-001"})
 
@@ -821,7 +874,7 @@ def test_image_delete_with_force(monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     monkeypatch.setattr(browser_api_module, "delete_image", fake_delete)
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["image", "delete", "stale-image:v1", "--force"])
+    result = runner.invoke(cli_main, ["image", "delete", "stale-image:v1", "--yes"])
     assert result.exit_code == 0
     assert "stale-image:v1" in result.output
     assert "img-del-001" not in result.output
@@ -839,7 +892,7 @@ def test_image_delete_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["--json", "image", "delete", "stale-image:v2", "--force"])
+    result = runner.invoke(cli_main, ["--json", "image", "delete", "stale-image:v2", "--yes"])
     assert result.exit_code == 0
 
     payload = json.loads(result.output)
@@ -848,7 +901,7 @@ def test_image_delete_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> N
     assert payload["data"]["status"] == "deleted"
 
 
-def test_image_delete_prompts_without_force(
+def test_image_delete_prompts_without_yes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     _patch_config_and_session(monkeypatch, tmp_path)

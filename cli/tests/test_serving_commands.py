@@ -9,7 +9,12 @@ total when the caller is paginating. Complements the wire-format tests in
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import Any
 
+from click.testing import CliRunner
+
+from inspire import config as config_module
+from inspire.cli.commands.serving import serving_commands as serving_commands_module
 from inspire.cli.commands.serving.serving_commands import (
     _build_resource_spec_price,
     _format_configs,
@@ -18,6 +23,8 @@ from inspire.cli.commands.serving.serving_commands import (
     _serving_model_label,
     _serving_resource_label,
 )
+from inspire.cli.main import main as cli_main
+from inspire.platform.web import browser_api as browser_api_module
 
 
 def _rows(n: int) -> list[dict[str, str]]:
@@ -53,7 +60,7 @@ def test_format_list_rows_full_page_uses_total_line() -> None:
 
 
 def test_format_list_rows_paginated_uses_showing_line() -> None:
-    # 5 visible rows but server reports 230 total → "Showing 5 of 230".
+    # 5 visible rows but server reports 230 total -> "Showing 5 of 230".
     out = _format_list_rows(_rows(5), total=230)
     assert "Showing 5 of 230" in out
     assert "Total:" not in out
@@ -131,3 +138,96 @@ def test_build_resource_spec_price_uses_canonical_gpu_type() -> None:
         "logic_compute_group_id": "lcg-1",
         "quota_id": "quota-1",
     }
+
+
+class FakeSession:
+    storage_state: dict[str, Any] = {}
+
+
+def _patch_delete_deps(monkeypatch) -> dict[str, Any]:  # noqa: ANN001
+    calls: dict[str, Any] = {}
+    config = config_module.Config(username="user", password="pass")
+
+    monkeypatch.setattr(
+        config_module.Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(serving_commands_module, "get_web_session", lambda: FakeSession())
+    monkeypatch.setattr(
+        serving_commands_module,
+        "_resolve_workspace_id",
+        lambda config, workspace: "ws-1",
+    )
+    monkeypatch.setattr(
+        serving_commands_module,
+        "_resolve_serving_name",
+        lambda ctx, name, workspace_id=None, pick=None: "sv-1",
+    )
+
+    def fake_delete_serving(*, inference_serving_id: str, session=None) -> dict[str, Any]:
+        calls["serving_id"] = inference_serving_id
+        return {"ok": True}
+
+    monkeypatch.setattr(browser_api_module, "delete_serving", fake_delete_serving)
+    return calls
+
+
+def test_serving_delete_prompts_by_default(monkeypatch) -> None:  # noqa: ANN001
+    calls = _patch_delete_deps(monkeypatch)
+
+    result = CliRunner().invoke(
+        cli_main,
+        ["serving", "delete", "demo", "--workspace", "Test Workspace"],
+        input="n\n",
+    )
+
+    assert result.exit_code == 1
+    assert calls == {}
+
+
+def test_serving_delete_yes_skips_prompt(monkeypatch) -> None:  # noqa: ANN001
+    calls = _patch_delete_deps(monkeypatch)
+
+    result = CliRunner().invoke(
+        cli_main,
+        ["serving", "delete", "demo", "--workspace", "Test Workspace", "--yes"],
+    )
+
+    assert result.exit_code == 0
+    assert calls["serving_id"] == "sv-1"
+    assert "Inference serving deleted: demo" in result.output
+
+
+def test_serving_create_rejects_invalid_custom_domain() -> None:
+    result = CliRunner().invoke(
+        cli_main,
+        [
+            "serving",
+            "create",
+            "--name",
+            "demo",
+            "--model",
+            "model-a",
+            "--workspace",
+            "Test Workspace",
+            "--project",
+            "Project",
+            "--group",
+            "H200 Room",
+            "--quota",
+            "1,18,200",
+            "--image",
+            "serve:v1",
+            "--command",
+            "python serve.py",
+            "--port",
+            "8000",
+            "--custom-domain",
+            "Bad_Domain",
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Invalid value for '--custom-domain'" in result.output

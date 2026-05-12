@@ -35,7 +35,6 @@ from inspire.cli.utils.notebook_cli import (
     get_base_url,
     load_config,
     require_web_session,
-    resolve_json_output,
 )
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.cli.utils.notebook_post_start import (
@@ -44,7 +43,11 @@ from inspire.cli.utils.notebook_post_start import (
 )
 from inspire.cli.utils.tunnel_reconnect import rebuild_notebook_bridge_profile
 from inspire.config import ConfigError
-from inspire.config.workspaces import resolve_workspace_query_scope
+from inspire.config.workspaces import (
+    resolve_workspace_operation_scope,
+    resolve_workspace_query_scope,
+    validate_workspace_operation_name,
+)
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web import session as web_session_module
 from inspire.platform.web.browser_api import NotebookFailedError
@@ -183,12 +186,6 @@ def _workspace_display(session, workspace_id: str) -> str:  # noqa: ANN001
     help="Local shell script to upload and run in the notebook after RUNNING",
 )
 @click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
-@click.option(
     "--priority",
     type=click.IntRange(1, 10),
     default=10,
@@ -225,7 +222,6 @@ def create_notebook_cmd(
     wait: bool,
     post_start: Optional[str],
     post_start_script: Optional[Path],
-    json_output: bool,
     priority: Optional[int],
     group: Optional[str],
     profile_name: Optional[str],
@@ -260,7 +256,7 @@ def create_notebook_cmd(
         wait=wait,
         post_start=post_start,
         post_start_script=post_start_script,
-        json_output=json_output,
+        json_output=ctx.json_output,
         priority=priority,
         project_explicit=project_explicit,
         group=group,
@@ -270,19 +266,12 @@ def create_notebook_cmd(
 
 @click.command("stop")
 @click.argument("notebook")
-@click.option("--workspace", required=True, help="Workspace name or 'all'.")
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
+@click.option("--workspace", required=True, help="Workspace name.")
 @pass_context
 def stop_notebook_cmd(
     ctx: Context,
     notebook: str,
     workspace: str,
-    json_output: bool,
 ) -> None:
     """Stop a running notebook instance.
 
@@ -290,8 +279,6 @@ def stop_notebook_cmd(
     Examples:
         inspire notebook stop my-notebook --workspace 分布式训练空间
     """
-    json_output = resolve_json_output(ctx, json_output)
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
@@ -300,7 +287,7 @@ def stop_notebook_cmd(
     base_url = get_base_url()
     config = load_config(ctx)
     try:
-        workspace_ids, _ = resolve_workspace_query_scope(
+        workspace_id = resolve_workspace_operation_scope(
             config,
             workspace=workspace,
             session=session,
@@ -314,8 +301,8 @@ def stop_notebook_cmd(
         config=config,
         base_url=base_url,
         identifier=notebook,
-        json_output=json_output,
-        workspace_ids=workspace_ids,
+        json_output=ctx.json_output,
+        workspace_ids=[workspace_id],
     )
 
     try:
@@ -324,7 +311,7 @@ def stop_notebook_cmd(
         _handle_error(ctx, "APIError", f"Failed to stop notebook: {scrub_raw_ids(e)}", EXIT_API_ERROR)
         return
 
-    if json_output:
+    if ctx.json_output:
         click.echo(
             json_formatter.format_json(
                 {
@@ -346,18 +333,12 @@ def stop_notebook_cmd(
 
 @click.command("delete")
 @click.argument("notebook")
-@click.option("--workspace", required=True, help="Workspace name or 'all'.")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--yes",
     "-y",
     is_flag=True,
     help="Skip the interactive confirmation prompt.",
-)
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
 )
 @pass_context
 def delete_notebook_cmd(
@@ -365,7 +346,6 @@ def delete_notebook_cmd(
     notebook: str,
     workspace: str,
     yes: bool,
-    json_output: bool,
 ) -> None:
     """Permanently delete a notebook instance.
 
@@ -380,8 +360,6 @@ def delete_notebook_cmd(
         inspire notebook delete my-notebook --workspace 分布式训练空间
         inspire notebook delete my-notebook --workspace 分布式训练空间 --yes
     """
-    json_output = resolve_json_output(ctx, json_output)
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
@@ -390,7 +368,7 @@ def delete_notebook_cmd(
     base_url = get_base_url()
     config = load_config(ctx)
     try:
-        workspace_ids, _ = resolve_workspace_query_scope(
+        workspace_id = resolve_workspace_operation_scope(
             config,
             workspace=workspace,
             session=session,
@@ -404,11 +382,11 @@ def delete_notebook_cmd(
         config=config,
         base_url=base_url,
         identifier=notebook,
-        json_output=json_output,
-        workspace_ids=workspace_ids,
+        json_output=ctx.json_output,
+        workspace_ids=[workspace_id],
     )
 
-    if not yes and not json_output:
+    if not yes and not ctx.json_output:
         click.confirm(
             f"Permanently delete notebook '{scrub_raw_ids(notebook)}'? This cannot be undone.",
             abort=True,
@@ -422,7 +400,7 @@ def delete_notebook_cmd(
         )
         return
 
-    if json_output:
+    if ctx.json_output:
         click.echo(
             json_formatter.format_json(
                 {
@@ -439,7 +417,7 @@ def delete_notebook_cmd(
 
 @click.command("start")
 @click.argument("notebook")
-@click.option("--workspace", required=True, help="Workspace name or 'all'.")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--wait/--no-wait",
     default=False,
@@ -457,12 +435,6 @@ def delete_notebook_cmd(
     default=None,
     help="Local shell script to upload and run in the notebook after RUNNING",
 )
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
 @pass_context
 def start_notebook_cmd(
     ctx: Context,
@@ -471,7 +443,6 @@ def start_notebook_cmd(
     wait: bool,
     post_start: Optional[str],
     post_start_script: Optional[Path],
-    json_output: bool,
 ) -> None:
     """Start a stopped notebook instance.
 
@@ -485,8 +456,6 @@ def start_notebook_cmd(
     """
     if post_start and post_start_script:
         raise click.UsageError("Use either --post-start or --post-start-script, not both.")
-
-    json_output = resolve_json_output(ctx, json_output)
 
     session = require_web_session(
         ctx,
@@ -506,7 +475,7 @@ def start_notebook_cmd(
         return
 
     try:
-        workspace_ids, _ = resolve_workspace_query_scope(
+        workspace_id = resolve_workspace_operation_scope(
             config,
             workspace=workspace,
             session=session,
@@ -520,8 +489,8 @@ def start_notebook_cmd(
         config=config,
         base_url=base_url,
         identifier=notebook,
-        json_output=json_output,
-        workspace_ids=workspace_ids,
+        json_output=ctx.json_output,
+        workspace_ids=[workspace_id],
     )
 
     try:
@@ -532,20 +501,20 @@ def start_notebook_cmd(
         )
         return
 
-    if not json_output:
+    if not ctx.json_output:
         click.echo(f"Notebook '{scrub_raw_ids(notebook)}' is being started.")
 
     notebook_detail = None
     if wait or post_start_spec is not None:
-        if not wait and post_start_spec is not None and not json_output:
+        if not wait and post_start_spec is not None and not ctx.json_output:
             click.echo(NO_WAIT_POST_START_WARNING, err=True)
-        if not json_output:
+        if not ctx.json_output:
             click.echo("Waiting for notebook to reach RUNNING status...")
         try:
             notebook_detail = browser_api_module.wait_for_notebook_running(
                 notebook_id=notebook_id, session=session
             )
-            if not json_output:
+            if not ctx.json_output:
                 click.echo("Notebook is now RUNNING.")
         except NotebookFailedError as e:
             _handle_error(
@@ -574,10 +543,10 @@ def start_notebook_cmd(
             session=session,
             post_start_spec=post_start_spec,
             gpu_count=gpu_count,
-            json_output=json_output,
+            json_output=ctx.json_output,
         )
 
-    if json_output:
+    if ctx.json_output:
         click.echo(
             json_formatter.format_json(
                 {
@@ -599,18 +568,11 @@ def start_notebook_cmd(
 @click.command("status")
 @click.argument("notebook")
 @click.option("--workspace", required=True, help="Workspace name or 'all'.")
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
 @pass_context
 def notebook_status(
     ctx: Context,
     notebook: str,
     workspace: str,
-    json_output: bool,
 ) -> None:
     """Get status of a notebook instance.
 
@@ -618,8 +580,6 @@ def notebook_status(
     Examples:
         inspire notebook status my-notebook --workspace 分布式训练空间
     """
-    json_output = resolve_json_output(ctx, json_output)
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
@@ -643,7 +603,7 @@ def notebook_status(
         config=config,
         base_url=base_url,
         identifier=notebook,
-        json_output=json_output,
+        json_output=ctx.json_output,
         workspace_ids=workspace_ids,
     )
 
@@ -674,7 +634,7 @@ def notebook_status(
     if data.get("code") == 0:
         notebook_payload = data.get("data", {})
         notebook_detail = notebook_payload if isinstance(notebook_payload, dict) else {}
-        if json_output:
+        if ctx.json_output:
             click.echo(json_formatter.format_json(notebook_detail))
         else:
             _print_notebook_detail(notebook_detail)
@@ -692,21 +652,13 @@ def notebook_status(
 @click.command("id")
 @click.argument("notebook")
 @click.option("--workspace", required=True, help="Workspace name or 'all'.")
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
 @pass_context
 def notebook_id_cmd(
     ctx: Context,
     notebook: str,
     workspace: str,
-    json_output: bool,
 ) -> None:
     """Print the platform ID for a notebook name."""
-    json_output = resolve_json_output(ctx, json_output)
     session = require_web_session(ctx, hint=WEB_AUTH_HINT)
     base_url = get_base_url()
     config = load_config(ctx)
@@ -725,11 +677,11 @@ def notebook_id_cmd(
         config=config,
         base_url=base_url,
         identifier=notebook,
-        json_output=json_output,
+        json_output=ctx.json_output,
         workspace_ids=workspace_ids,
     )
 
-    if json_output:
+    if ctx.json_output:
         click.echo(
             json_formatter.format_json({"name": notebook, "id": notebook_id}, allow_ids=True)
         )
@@ -763,12 +715,6 @@ def notebook_id_cmd(
     default="",
     help="Filter by notebook name (keyword search)",
 )
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
 @pass_context
 def list_notebooks(
     ctx: Context,
@@ -776,7 +722,6 @@ def list_notebooks(
     limit: int,
     status: tuple[str, ...],
     keyword: str,
-    json_output: bool,
 ) -> None:
     """List notebook/interactive instances.
 
@@ -789,10 +734,8 @@ def list_notebooks(
         inspire notebook list --workspace 分布式训练空间 --keyword my-notebook
         inspire notebook list --workspace GPU资源空间 -s RUNNING -n 5
         inspire notebook list --workspace all
-        inspire notebook list --workspace all --json
+        inspire --json notebook list --workspace all
     """
-    json_output = resolve_json_output(ctx, json_output)
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
@@ -872,12 +815,12 @@ def list_notebooks(
         return
 
     all_items = _sort_notebook_items(all_items)
-    _print_notebook_list(all_items, json_output)
+    _print_notebook_list(all_items, ctx.json_output)
 
 
 @click.command("connect")
 @click.argument("notebook")
-@click.option("--workspace", required=True, help="Workspace name or 'all'.")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--wait/--no-wait",
     default=True,
@@ -892,6 +835,7 @@ def list_notebooks(
 )
 @click.option(
     "--port",
+    type=click.IntRange(1, 65535),
     default=31337,
     show_default=True,
     help="Advanced: connection service port inside notebook",
@@ -957,6 +901,11 @@ def ssh_notebook_cmd(
     from inspire.accounts import normalize_environment
 
     normalize_environment()
+    try:
+        validate_workspace_operation_name(workspace)
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
 
     # Fast path: if a cached bridge already exists for this notebook
     # name, hand off to the reconnect flow (no bootstrap needed).
@@ -973,6 +922,14 @@ def ssh_notebook_cmd(
         if _cfg and notebook in _cfg.bridges:
             click.get_current_context().invoke(_reconnect, notebook=notebook)
             return
+
+    session = require_web_session(ctx, hint=WEB_AUTH_HINT)
+    config = load_config(ctx)
+    try:
+        resolve_workspace_operation_scope(config, workspace=workspace, session=session)
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
 
     run_notebook_ssh(
         ctx,

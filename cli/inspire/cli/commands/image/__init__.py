@@ -4,8 +4,8 @@ Usage:
     inspire image list [--source official|public|private|all]
     inspire image detail <name>
     inspire image register -n "name" -v v1.0
-    inspire image save <notebook-name> -n "name" [--public|--private]
-    inspire image set-visibility <name> --public|--private
+    inspire image save <notebook-name> --workspace <workspace> -n "name" [--visibility public|private]
+    inspire image set-visibility <name> --visibility public|private
     inspire image delete <name>
 """
 
@@ -39,9 +39,9 @@ def image():
     Examples:
         inspire image list                              # List official images
         inspire image list --source private             # List personal-visible images
-        inspire image save <notebook-name> -n my-img    # Save notebook as image
-        inspire image save <notebook-name> -n shared --public
-        inspire image set-visibility <name> --public    # Flip visibility
+        inspire image save <notebook-name> --workspace CPU资源空间 -n my-img
+        inspire image save <notebook-name> --workspace CPU资源空间 -n shared --visibility public
+        inspire image set-visibility <name> --visibility public
         inspire image register -n my-img -v v1.0        # Register external image
     """
     pass

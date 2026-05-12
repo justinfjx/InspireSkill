@@ -201,8 +201,7 @@ def _batch_profiles(data: dict[str, Any]) -> dict[str, dict[str, dict[str, str]]
 
 def _ensure_no_condition_defaults(defaults: dict[str, Any], *, item_key: str) -> None:
     condition_fields = set(PROFILE_FIELDS)
-    ray_head_fields = {"head_image", "head_group", "head_quota"}
-    disallowed = condition_fields | ray_head_fields | {"compute_group"}
+    disallowed = condition_fields | {"compute_group"}
     bad = sorted(key for key in defaults if key in disallowed)
     if bad:
         joined = ", ".join(bad)
@@ -646,6 +645,18 @@ def _prepare_ray_item(
 ):
     from inspire.cli.commands.ray.ray_commands import _assemble_create_body
 
+    removed = [
+        key
+        for key in ("head_image", "head_group", "head_quota", "head_image_type", "head_shm")
+        if key in item
+    ]
+    if removed:
+        joined = ", ".join(sorted(removed))
+        raise ConfigError(
+            f"Unsupported Ray batch fields: {joined}. "
+            "Use image, group, quota, image_type, and shm_size instead."
+        )
+
     return _assemble_create_body(
         ctx,
         config=config,
@@ -656,14 +667,11 @@ def _prepare_ray_item(
         project=_require_condition_str(item, "project", kind="ray"),
         workspace=_require_condition_str(item, "workspace", kind="ray"),
         priority=_optional_int(item, "priority", min_value=1) or 10,
-        head_image=_optional_str(item, "head_image")
-        or _require_condition_str(item, "image", kind="ray"),
-        head_image_type=_optional_str(item, "head_image_type") or "SOURCE_PUBLIC",
-        head_group=_optional_str(item, "head_group")
-        or _require_condition_str(item, "group", kind="ray"),
-        head_quota=_optional_str(item, "head_quota")
-        or _require_condition_str(item, "quota", kind="ray"),
-        head_shm=_optional_int(item, "head_shm", min_value=1),
+        image=_require_condition_str(item, "image", kind="ray"),
+        image_type=_optional_str(item, "image_type") or "SOURCE_PUBLIC",
+        group=_require_condition_str(item, "group", kind="ray"),
+        quota=_require_condition_str(item, "quota", kind="ray"),
+        shm_size=_optional_int(item, "shm_size", min_value=1),
         workers=_ray_worker_specs(item, config=config, local_profiles=local_profiles),
     )
 
@@ -995,7 +1003,7 @@ def ray_batch(ctx: Context, config_path: Path, dry_run: bool) -> None:
 
     Top-level `jobs` is required. Each expanded item must describe the Ray
     create request with visible names. `profile = "<name>"` can fill
-    workspace/project/head image/group/quota. Worker objects may also set
+    workspace/project/image/group/quota. Worker objects may also set
     `profile = "<name>"` to fill image/group/quota.
 
     \b

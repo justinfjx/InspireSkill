@@ -169,14 +169,8 @@ def _render_human(data: dict[str, Any]) -> None:
 
 
 @click.command("context")
-@click.option(
-    "--json",
-    "json_output_local",
-    is_flag=True,
-    help="Output as JSON (machine-readable). Equivalent to the top-level --json.",
-)
 @pass_context
-def show_context(ctx: Context, json_output_local: bool) -> None:
+def show_context(ctx: Context) -> None:
     """Display the active account's projects / workspaces / compute groups.
 
     All identifiers are platform names (e.g. ``CI-情境智能``, ``H200-3号机房``)
@@ -187,9 +181,9 @@ def show_context(ctx: Context, json_output_local: bool) -> None:
     \b
     Examples:
         inspire config context
-        inspire config context --json
+        inspire --json config context
     """
-    effective_json = bool(ctx.json_output or json_output_local)
+    effective_json = ctx.json_output
 
     try:
         cfg, _sources = Config.from_files_and_env(

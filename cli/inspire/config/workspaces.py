@@ -104,6 +104,36 @@ def resolve_workspace_query_scope(
     return [resolved], False
 
 
+def resolve_workspace_operation_scope(
+    config: Any,
+    *,
+    workspace: Optional[str],
+    session: Any,
+) -> str:
+    """Resolve a required single workspace name for write-like commands."""
+    raw = validate_workspace_operation_name(workspace)
+    resolved = select_workspace_id(
+        config,
+        explicit_workspace_name=raw,
+        session=session,
+    )
+    if not resolved:
+        raise ConfigError(f"Unknown workspace name: {raw!r}.")
+    return resolved
+
+
+def validate_workspace_operation_name(workspace: Optional[str]) -> str:
+    """Validate the visible workspace name shape for write-like commands."""
+    raw = (workspace or "").strip()
+    if not raw:
+        raise ConfigError("Workspace is required. Pass --workspace <workspace-name>.")
+    if raw.lower() in {"all", "current"}:
+        raise ConfigError("--workspace must be a workspace name for this command.")
+    if _WORKSPACE_ID_RE.match(raw):
+        raise ConfigError("--workspace takes a workspace name, not a raw workspace ID.")
+    return raw
+
+
 def select_workspace_id(
     config: Any,
     *,
@@ -132,6 +162,8 @@ def select_workspace_id(
     key = explicit_workspace_name.strip()
     if not key:
         raise ConfigError("Workspace name cannot be empty")
+    if key.lower() in {"all", "current"}:
+        raise ConfigError("--workspace takes a workspace name, not 'all' or 'current'.")
     if _WORKSPACE_ID_RE.match(key):
         raise ConfigError("--workspace takes a workspace name, not a raw workspace ID.")
 
@@ -166,7 +198,9 @@ def workspace_required_hint(config: Any | None = None) -> str:
 
 __all__ = [
     "select_workspace_id",
+    "resolve_workspace_operation_scope",
     "resolve_workspace_query_scope",
+    "validate_workspace_operation_name",
     "workspace_label",
     "workspace_name_map",
     "workspace_required_hint",

@@ -24,6 +24,8 @@ from inspire.config.workspaces import select_workspace_id, workspace_label
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.session import SessionExpiredError, get_web_session
 
+IMAGE_TYPE_CHOICES = ["SOURCE_PUBLIC", "SOURCE_PRIVATE", "SOURCE_OFFICIAL"]
+
 
 def _current_user_id(session) -> str:  # noqa: ANN001
     me = browser_api_module.get_current_user(session=session)
@@ -425,7 +427,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
 
     Required keys: ``name``, ``image`` (URL or image_id), ``group`` (compute
     group name), ``quota`` (``gpu,cpu,mem`` triple), ``min``, ``max``.
-    Optional: ``image_type`` (default SOURCE_PUBLIC), ``shm`` (shm_gi).
+    Optional: ``image-type`` (default SOURCE_PUBLIC), ``shm-size`` (shm_gi).
 
     Tokens are separated by ``;`` so the ``,`` inside ``quota=4,80,800``
     doesn't collide with the outer separator.
@@ -446,7 +448,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     if missing:
         raise click.BadParameter(
             f"worker spec missing keys: {sorted(missing)}. "
-            "Required: name, image, group, quota, min, max. Optional: image_type, shm. "
+            "Required: name, image, group, quota, min, max. Optional: image-type, shm-size. "
             "Format: 'name=...;image=...;group=...;quota=gpu,cpu,mem;min=N;max=N'."
         )
     try:
@@ -458,22 +460,40 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
         out["max"] = int(out["max"])
     except ValueError as e:
         raise click.BadParameter(f"min/max must be integers: {e}")
-    if "shm" in out and out["shm"] not in ("", None):
+    if out["min"] < 1 or out["max"] < 1:
+        raise click.BadParameter("worker min and max must be >= 1.")
+    if out["max"] < out["min"]:
+        raise click.BadParameter("worker max must be >= min.")
+    if "image_type" in out or "shm" in out:
+        raise click.BadParameter("Use worker keys image-type and shm-size, not image_type or shm.")
+    image_type = str(out.get("image-type") or "SOURCE_PUBLIC").strip()
+    if image_type not in IMAGE_TYPE_CHOICES:
+        raise click.BadParameter(
+            "worker image-type must be one of "
+            + ", ".join(IMAGE_TYPE_CHOICES)
+            + "."
+        )
+    out["image_type"] = image_type
+    out.pop("image-type", None)
+    if "shm-size" in out and out["shm-size"] not in ("", None):
         try:
-            out["shm"] = int(out["shm"])
+            out["shm_size"] = int(out["shm-size"])
         except ValueError as e:
-            raise click.BadParameter(f"shm must be an integer GiB value: {e}")
+            raise click.BadParameter(f"shm-size must be an integer GiB value: {e}")
+        if out["shm_size"] < 1:
+            raise click.BadParameter("worker shm-size must be >= 1.")
     else:
-        out.pop("shm", None)
-    out.setdefault("image_type", "SOURCE_PUBLIC")
+        out.pop("shm_size", None)
+    out.pop("shm-size", None)
     return out
 
 
 @click.command("create")
-@click.option("--name", "-n", help="Ray job name")
+@click.option("--name", "-n", required=True, help="Ray job name")
 @click.option(
     "--command",
     "-c",
+    required=True,
     help="Driver startup command. The Ray job stays alive while this command keeps running.",
 )
 @click.option("--description", default="", help="Free-form description")
@@ -487,7 +507,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     "--profile",
     "profile_name",
     default=None,
-    help="Ray condition profile for workspace/project and head image/group/quota.",
+    help="Ray condition profile for workspace/project/group/quota/image.",
 )
 @click.option(
     "--priority",
@@ -500,34 +520,32 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     ),
 )
 @click.option(
-    "--head-image",
     "--image",
     default=None,
-    help="Head node image name or Docker URL (resolved through the visible image catalog)",
+    help="Head node image name or Docker URL. Required unless supplied by --profile.",
 )
 @click.option(
-    "--head-image-type",
+    "--image-type",
+    type=click.Choice(IMAGE_TYPE_CHOICES),
     default="SOURCE_PUBLIC",
     show_default=True,
-    help="SOURCE_PUBLIC / SOURCE_PRIVATE / SOURCE_OFFICIAL",
+    help="Head node image source type.",
 )
 @click.option(
-    "--head-group",
     "--group",
     default=None,
-    help="Full compute group name for the head node; see 'inspire config context'",
+    help="Full compute group name. Required unless supplied by --profile.",
 )
 @click.option(
-    "--head-quota",
     "--quota",
     default=None,
     help=(
-        "Head resource quota as 'gpu,cpu,mem' (mem in GiB). "
+        "Head node resource quota as 'gpu,cpu,mem' (mem in GiB). "
         "CLI resolves the triple against 'inspire ray quota --workspace <name>'."
     ),
 )
 @click.option(
-    "--head-shm",
+    "--shm-size",
     type=click.IntRange(1),
     default=None,
     help="Head shared memory in GiB (optional)",
@@ -539,7 +557,7 @@ def _parse_worker_spec(raw: str) -> dict[str, Any]:
     help=(
         "Worker group spec (repeatable). Format (note ';' separator): "
         "'name=<grp>;image=<url-or-name>;group=<full-group-name>;quota=<gpu,cpu,mem>;"
-        "min=<n>;max=<n>[;image_type=SOURCE_PUBLIC][;shm=<gib>]'"
+        "min=<n>;max=<n>[;image-type=SOURCE_PUBLIC][;shm-size=<gib>]'"
     ),
 )
 @click.option(
@@ -557,11 +575,11 @@ def create_ray(
     workspace: Optional[str],
     profile_name: Optional[str],
     priority: Optional[int],
-    head_image: Optional[str],
-    head_image_type: str,
-    head_group: Optional[str],
-    head_quota: Optional[str],
-    head_shm: Optional[int],
+    image: Optional[str],
+    image_type: str,
+    group: Optional[str],
+    quota: Optional[str],
+    shm_size: Optional[int],
     workers: tuple[str, ...],
     dry_run: bool,
 ) -> None:
@@ -580,9 +598,9 @@ def create_ray(
           -c 'python driver.py --mode run_and_exit' \\
           --workspace CPU资源空间 \\
           --project CI-情境智能 \\
-          --head-image ray-base:v1 \\
-          --head-group HPC-可上网区资源-2 --head-quota 0,4,16 \\
-          --worker 'name=decode;image=ray-base:v1;group=HPC-可上网区资源-2;quota=0,20,80;min=1;max=8;shm=32'
+          --image ray-base:v1 \\
+          --group HPC-可上网区资源-2 --quota 0,4,16 \\
+          --worker 'name=decode;image=ray-base:v1;group=HPC-可上网区资源-2;quota=0,20,80;min=1;max=8;shm-size=32'
 
     """
     try:
@@ -596,16 +614,16 @@ def create_ray(
             values={
                 "workspace": workspace,
                 "project": project,
-                "group": head_group,
-                "image": head_image,
-                "quota": head_quota,
+                "group": group,
+                "image": image,
+                "quota": quota,
             },
         )
         workspace = fields["workspace"]
         project = fields["project"]
-        head_group = fields["group"]
-        head_image = fields["image"]
-        head_quota = fields["quota"]
+        group = fields["group"]
+        image = fields["image"]
+        quota = fields["quota"]
         body = _assemble_create_body(
             ctx,
             config=config,
@@ -616,11 +634,11 @@ def create_ray(
             project=project,
             workspace=workspace,
             priority=priority,
-            head_image=head_image,
-            head_image_type=head_image_type,
-            head_group=head_group,
-            head_quota=head_quota,
-            head_shm=head_shm,
+            image=image,
+            image_type=image_type,
+            group=group,
+            quota=quota,
+            shm_size=shm_size,
             workers=workers,
         )
 
@@ -678,11 +696,11 @@ def _assemble_create_body(
     project: Optional[str],
     workspace: Optional[str],
     priority: Optional[int],
-    head_image: Optional[str],
-    head_image_type: str,
-    head_group: Optional[str],
-    head_quota: Optional[str],
-    head_shm: Optional[int],
+    image: Optional[str],
+    image_type: str,
+    group: Optional[str],
+    quota: Optional[str],
+    shm_size: Optional[int],
     workers: tuple[str, ...],
 ) -> dict[str, Any]:
     from inspire.cli.utils.quota_resolver import (
@@ -700,17 +718,22 @@ def _assemble_create_body(
             "--command is required; it is the Ray driver startup command."
         )
     for field_name, value in (
-        ("image", head_image),
-        ("group", head_group),
-        ("quota", head_quota),
+        ("image", image),
+        ("group", group),
+        ("quota", quota),
         ("workspace", workspace),
         ("project", project),
     ):
         if not value:
             raise click.UsageError(profile_required_message("ray", field_name))
-    head_image_value = cast(str, head_image)
-    head_group_value = cast(str, head_group)
-    head_quota_value = cast(str, head_quota)
+    image_value = cast(str, image)
+    image_type_value = image_type.strip()
+    if image_type_value not in IMAGE_TYPE_CHOICES:
+        raise click.UsageError(
+            f"--image-type must be one of: {', '.join(IMAGE_TYPE_CHOICES)}"
+        )
+    group_value = cast(str, group)
+    quota_value = cast(str, quota)
     if not workers:
         raise click.UsageError(
             "At least one --worker is required. Format: "
@@ -742,15 +765,15 @@ def _assemble_create_body(
         except QuotaMatchError as exc:
             raise click.UsageError(str(exc)) from exc
 
-    head_resolved = _resolve_ray(head_quota_value, head_group_value)
+    head_resolved = _resolve_ray(quota_value, group_value)
     head_node: dict[str, Any] = {
-        "mirror_id": _resolve_image_id(head_image_value, session=session, ctx=ctx),
-        "image_type": head_image_type,
+        "mirror_id": _resolve_image_id(image_value, session=session, ctx=ctx),
+        "image_type": image_type_value,
         "logic_compute_group_id": head_resolved.logic_compute_group_id,
         "quota_id": head_resolved.quota_id,
     }
-    if head_shm is not None:
-        head_node["shm_gi"] = head_shm
+    if shm_size is not None:
+        head_node["shm_gi"] = shm_size
 
     worker_groups: list[dict[str, Any]] = []
     for raw in workers:
@@ -765,8 +788,8 @@ def _assemble_create_body(
             "max_replicas": spec["max"],
             "quota_id": worker_resolved.quota_id,
         }
-        if "shm" in spec:
-            group_block["shm_gi"] = spec["shm"]
+        if "shm_size" in spec:
+            group_block["shm_gi"] = spec["shm_size"]
         worker_groups.append(group_block)
 
     body: dict[str, Any] = {

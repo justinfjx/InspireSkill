@@ -1097,7 +1097,7 @@ def test_config_check_accepts_local_json_alias(
     monkeypatch.setattr(auth_module.AuthManager, "get_api", lambda _cls, cfg=None: DummyAPI())
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["config", "check", "--json"])
+    result = runner.invoke(cli_main, ["--json", "config", "check"])
 
     assert result.exit_code == EXIT_SUCCESS
     payload = json.loads(result.output)
@@ -1259,7 +1259,10 @@ def test_init_json_global_contract_via_top_level_flag(
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
 
-    result = runner.invoke(cli_main, ["--json", "init", "--template", "--project", "--force"])
+    result = runner.invoke(
+        cli_main,
+        ["--json", "init", "--template", "--scope", "project", "--force"],
+    )
 
     assert result.exit_code == EXIT_SUCCESS
     payload = json.loads(result.output)
@@ -1583,8 +1586,7 @@ def test_notebook_start_name_conflict_prompts_selection(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["notebook", "start", "ring-8h100-test", "--workspace", "all"],
-        input="2\n",
+        ["notebook", "start", "ring-8h100-test", "--workspace", "b"],
     )
 
     assert result.exit_code == EXIT_SUCCESS

@@ -27,7 +27,7 @@ def test_init_template_project_succeeds_with_active_account(
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["init", "--template", "--project", "--force"])
+    result = runner.invoke(cli_main, ["init", "--template", "--scope", "project", "--force"])
 
     project_config = repo_dir / ".inspire" / "config.toml"
     assert result.exit_code == EXIT_SUCCESS
@@ -50,7 +50,7 @@ def test_init_fails_fast_when_no_active_account(
     )
 
     runner = CliRunner()
-    result = runner.invoke(cli_main, ["init", "--template", "--project", "--force"])
+    result = runner.invoke(cli_main, ["init", "--template", "--scope", "project", "--force"])
 
     assert result.exit_code == EXIT_GENERAL_ERROR
     assert "No active account configured. Run `inspire account add` first." in result.output

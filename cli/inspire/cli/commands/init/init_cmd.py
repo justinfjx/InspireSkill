@@ -157,24 +157,10 @@ def _bootstrap_first_account_if_needed(
 
 @click.command()
 @click.option(
-    "--json",
-    "json_output_local",
-    is_flag=True,
-    help="Output as JSON (machine-readable). Equivalent to top-level --json.",
-)
-@click.option(
-    "--global",
-    "-g",
-    "global_flag",
-    is_flag=True,
-    help="Force all options to global config (~/.config/inspire/)",
-)
-@click.option(
-    "--project",
-    "-p",
-    "project_flag",
-    is_flag=True,
-    help="Force all options to project config (./.inspire/)",
+    "--scope",
+    type=click.Choice(["project", "global"], case_sensitive=False),
+    default=None,
+    help="Write template/smart config to project or global scope.",
 )
 @click.option(
     "--force",
@@ -212,9 +198,7 @@ def _bootstrap_first_account_if_needed(
 @pass_context
 def init(
     ctx: Context,
-    json_output_local: bool,
-    global_flag: bool,
-    project_flag: bool,
+    scope: str | None,
     force: bool,
     template_flag: bool,
     username: str | None,
@@ -228,9 +212,9 @@ def init(
     path alias should use, then writes account config plus this repository's
     ./.inspire/config.toml.
 
-    Legacy non-discovery modes are still available. `--template` writes a
-    placeholder config. `--global` or `--project` forces environment-variable
-    detection / smart init into one config file instead of running discovery.
+    `--template` writes a placeholder config. `--scope project|global` forces
+    environment-variable detection / smart init into one config file instead
+    of running discovery.
 
     Discovery writes account-scoped catalogs to the active account config and
     project-scoped context/path aliases to ./.inspire/config.toml.
@@ -258,18 +242,20 @@ def init(
 
         \b
         # Create a placeholder project config instead of discovery
-        inspire init --template
+        inspire init --template --scope project
 
         \b
-        # Legacy: detect env vars and write only project/global config
-        inspire init --project
-        inspire init --global
+        # Detect env vars and write only project/global config
+        inspire init --scope project
+        inspire init --scope global
     """
-    ctx.json_output = bool(ctx.json_output or json_output_local)
     effective_json = ctx.json_output
     warnings: list[str] = []
 
-    run_discovery = not template_flag and not global_flag and not project_flag
+    scope_value = scope.lower() if scope else None
+    global_flag = scope_value == "global"
+    project_flag = scope_value == "project"
+    run_discovery = not template_flag and scope_value is None
 
     def _warn(msg: str) -> None:
         warnings.append(msg)
@@ -290,11 +276,9 @@ def init(
 
         if not run_discovery and (username or base_url or select_project_name):
             _warn(
-                "--username, --base-url, and --select-project are only effective with plain `inspire init` and were ignored."
+                "--username, --base-url, and --select-project are only effective with "
+                "plain `inspire init` and were ignored."
             )
-
-        if global_flag and project_flag:
-            raise ValueError("Cannot specify both --global and --project")
 
         if run_discovery:
             if effective_json and not force and (global_path.exists() or project_path.exists()):

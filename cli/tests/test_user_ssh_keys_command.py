@@ -131,7 +131,7 @@ def test_ssh_keys_delete_resolves_by_name(monkeypatch) -> None:
 
     result = CliRunner().invoke(
         cli_main,
-        ["user", "ssh-keys", "delete", "main-key", "--force"],
+        ["user", "ssh-keys", "delete", "main-key", "--yes"],
     )
 
     assert result.exit_code == 0
@@ -150,7 +150,7 @@ def test_ssh_keys_delete_rejects_id_shaped_input(monkeypatch) -> None:
             "ssh-keys",
             "delete",
             "ssh-12345678-1234-1234-1234-123456789abc",
-            "--force",
+            "--yes",
         ],
     )
 

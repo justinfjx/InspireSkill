@@ -45,14 +45,14 @@ def _build_remote_shell_command(*, remote_cwd: Optional[str], env_exports: str) 
 
 
 @click.command("shell")
-@click.argument("notebook", required=False)
+@click.argument("notebook")
 @click.option(
     "--cwd",
     default=None,
     help="Remote working directory or path alias (default: 'me' alias, else $HOME)",
 )
 @pass_context
-def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> None:
+def bridge_ssh(ctx: Context, notebook: str, cwd: Optional[str]) -> None:
     """Open an interactive SSH shell to a cached notebook.
 
     Requires a cached notebook connection. Create one with
@@ -64,15 +64,14 @@ def bridge_ssh(ctx: Context, notebook: Optional[str], cwd: Optional[str]) -> Non
         inspire notebook shell my-notebook
         inspire notebook shell my-notebook --cwd me
     """
-    if notebook is not None:
-        from inspire.cli.utils.id_resolver import reject_id_at_boundary
+    from inspire.cli.utils.id_resolver import reject_id_at_boundary
 
-        notebook = reject_id_at_boundary(
-            ctx,
-            notebook,
-            resource_type="notebook",
-            list_command="inspire notebook list",
-        )
+    notebook = reject_id_at_boundary(
+        ctx,
+        notebook,
+        resource_type="notebook",
+        list_command="inspire notebook list",
+    )
     bridge = notebook
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)

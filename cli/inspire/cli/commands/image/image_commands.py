@@ -9,7 +9,7 @@ import click
 from inspire.cli.context import (
     Context,
     EXIT_API_ERROR,
-    EXIT_VALIDATION_ERROR,
+    EXIT_CONFIG_ERROR,
     pass_context,
 )
 from inspire.cli.formatters import human_formatter, json_formatter
@@ -18,9 +18,10 @@ from inspire.cli.utils.id_resolver import resolve_by_name
 from inspire.cli.utils.notebook_cli import (
     WEB_AUTH_HINT,
     require_web_session,
-    resolve_json_output,
 )
 from inspire.cli.utils.raw_ids import scrub_raw_ids
+from inspire.config import ConfigError
+from inspire.config.workspaces import resolve_workspace_operation_scope
 from inspire.platform.web import browser_api as browser_api_module
 
 
@@ -122,17 +123,10 @@ def _dedupe_images_by_id(images: list[dict]) -> list[dict]:
     show_default=True,
     help="Image source filter",
 )
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
 @pass_context
 def list_images_cmd(
     ctx: Context,
     source: str,
-    json_output: bool,
 ) -> None:
     """List available Docker images.
 
@@ -141,10 +135,8 @@ def list_images_cmd(
         inspire image list                     # Official images
         inspire image list --source private    # Personal-visible images
         inspire image list --source all        # All sources
-        inspire image list --source all --json # JSON output
+        inspire --json image list --source all # JSON output
     """
-    json_output = resolve_json_output(ctx, json_output)
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
@@ -176,7 +168,7 @@ def list_images_cmd(
         _handle_error(ctx, "APIError", f"Failed to list images: {e}", EXIT_API_ERROR)
         return
 
-    if json_output:
+    if ctx.json_output:
         payload = {"images": results, "total": len(results)}
         if warnings:
             payload["warnings"] = warnings
@@ -196,17 +188,10 @@ def list_images_cmd(
 
 @click.command("detail")
 @click.argument("name")
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
 @pass_context
 def image_detail(
     ctx: Context,
     name: str,
-    json_output: bool,
 ) -> None:
     """Show detailed information about an image.
 
@@ -215,10 +200,8 @@ def image_detail(
     \b
     Examples:
         inspire image detail my-image:v1
-        inspire image detail unified-base:v2 --json
+        inspire --json image detail unified-base:v2
     """
-    json_output = resolve_json_output(ctx, json_output)
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
@@ -232,7 +215,7 @@ def image_detail(
         _handle_error(ctx, "APIError", f"Failed to get image detail: {e}", EXIT_API_ERROR)
         return
 
-    if json_output:
+    if ctx.json_output:
         click.echo(json_formatter.format_json(_image_to_dict(image)))
         return
 
@@ -283,12 +266,6 @@ def image_detail(
     default=False,
     help="Wait for image to reach READY status",
 )
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
 @pass_context
 def register_image_cmd(
     ctx: Context,
@@ -298,7 +275,6 @@ def register_image_cmd(
     visibility: str,
     method: str,
     wait: bool,
-    json_output: bool,
 ) -> None:
     """Register an external Docker image on the platform.
 
@@ -323,8 +299,6 @@ def register_image_cmd(
         inspire image register -n my-img -v v2.0 --method address
         inspire image register -n my-img -v v1.0 --visibility public --wait
     """
-    json_output = resolve_json_output(ctx, json_output)
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
@@ -354,17 +328,17 @@ def register_image_cmd(
     image_label = scrub_raw_ids(f"{name}:{version}")
 
     if wait and image_id:
-        if not json_output:
+        if not ctx.json_output:
             click.echo(f"Image '{image_label}' registered. Waiting for READY status...")
         try:
             browser_api_module.wait_for_image_ready(image_id=image_id, session=session)
-            if not json_output:
+            if not ctx.json_output:
                 click.echo(f"Image '{image_label}' is now READY.")
         except (TimeoutError, ValueError) as e:
             _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
             return
 
-    if json_output:
+    if ctx.json_output:
         click.echo(json_formatter.format_json({"image_id": image_id, "result": result}))
         return
 
@@ -387,14 +361,15 @@ _VISIBILITY_PUBLIC = "VISIBILITY_PUBLIC"
 _VISIBILITY_PRIVATE = "VISIBILITY_PRIVATE"
 
 
-def _parse_visibility_flag(public: Optional[bool]) -> Optional[str]:
-    if public is None:
+def _parse_visibility_value(visibility: Optional[str]) -> Optional[str]:
+    if visibility is None:
         return None
-    return _VISIBILITY_PUBLIC if public else _VISIBILITY_PRIVATE
+    return _VISIBILITY_PUBLIC if visibility.lower() == "public" else _VISIBILITY_PRIVATE
 
 
 @click.command("save")
 @click.argument("notebook")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--name",
     "-n",
@@ -420,32 +395,21 @@ def _parse_visibility_flag(public: Optional[bool]) -> Optional[str]:
     help="Wait for image to reach READY status",
 )
 @click.option(
-    "--public/--private",
-    "public",
+    "--visibility",
+    type=click.Choice(["private", "public"], case_sensitive=False),
     default=None,
-    help=(
-        "Visibility of the saved image. --public makes it visible to all users; "
-        "--private keeps it visible only to you. Omit to accept platform default "
-        "(currently private). Applied via a follow-up /image/update call; "
-        "/mirror/save itself does not accept this field."
-    ),
-)
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
+    help="Image visibility. Omit to accept the platform default.",
 )
 @pass_context
 def save_image_cmd(
     ctx: Context,
     notebook: str,
+    workspace: str,
     name: str,
     version: str,
     description: str,
     wait: bool,
-    public: Optional[bool],
-    json_output: bool,
+    visibility: Optional[str],
 ) -> None:
     """Save a running notebook as a custom Docker image.
 
@@ -459,12 +423,10 @@ def save_image_cmd(
 
     \b
     Examples:
-        inspire image save my-notebook -n my-saved-image
-        inspire image save my-notebook -n my-img -v v2 --wait
-        inspire image save my-notebook -n shared-base -v v1 --public
+        inspire image save my-notebook --workspace 分布式训练空间 -n my-saved-image
+        inspire image save my-notebook --workspace 分布式训练空间 -n my-img -v v2 --wait
+        inspire image save my-notebook --workspace 分布式训练空间 -n shared-base -v v1 --visibility public
     """
-    json_output = resolve_json_output(ctx, json_output)
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
@@ -476,6 +438,15 @@ def save_image_cmd(
     from inspire.cli.utils.notebook_cli import get_base_url, load_config
 
     config = load_config(ctx)
+    try:
+        workspace_id = resolve_workspace_operation_scope(
+            config,
+            workspace=workspace,
+            session=session,
+        )
+    except ConfigError as e:
+        _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
+        return
     base_url = get_base_url()
     notebook_id, _ = _resolve_notebook_id(
         ctx,
@@ -483,10 +454,11 @@ def save_image_cmd(
         config=config,
         base_url=base_url,
         identifier=notebook,
-        json_output=json_output,
+        json_output=ctx.json_output,
+        workspace_ids=[workspace_id],
     )
 
-    requested_visibility = _parse_visibility_flag(public)
+    requested_visibility = _parse_visibility_value(visibility)
 
     try:
         result = browser_api_module.save_notebook_as_image(
@@ -539,7 +511,7 @@ def save_image_cmd(
             visibility_applied = True
         except Exception as e:
             visibility_applied = False
-            if not json_output:
+            if not ctx.json_output:
                 click.echo(
                     "Warning: could not force "
                     f"visibility={requested_visibility} via /image/update: {scrub_raw_ids(e)}",
@@ -547,26 +519,27 @@ def save_image_cmd(
                 )
     elif requested_visibility and not image_id:
         visibility_applied = False
-        if not json_output:
-                click.echo(
-                    "Warning: save returned no image handle and list fallback didn't find the image; "
-                    f"visibility not applied. Re-run 'inspire image set-visibility {image_label} --public/--private' "
-                    "after confirming the image via 'inspire image list --source private'.",
-                    err=True,
-                )
+        if not ctx.json_output:
+            click.echo(
+                "Warning: save returned no image handle and list fallback didn't find the image; "
+                f"visibility not applied. Re-run 'inspire image set-visibility {image_label} "
+                "--visibility <private|public>' after confirming the image via "
+                "'inspire image list --source private'.",
+                err=True,
+            )
 
     if wait and image_id:
-        if not json_output:
+        if not ctx.json_output:
             click.echo(f"Image '{image_label}' is being saved. Waiting for READY status...")
         try:
             browser_api_module.wait_for_image_ready(image_id=image_id, session=session)
-            if not json_output:
+            if not ctx.json_output:
                 click.echo(f"Image '{image_label}' is now READY.")
         except (TimeoutError, ValueError) as e:
             _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
             return
 
-    if json_output:
+    if ctx.json_output:
         click.echo(
             json_formatter.format_json(
                 {
@@ -600,67 +573,49 @@ def save_image_cmd(
 @click.command("set-visibility")
 @click.argument("name")
 @click.option(
-    "--public/--private",
-    "public",
+    "--visibility",
+    type=click.Choice(["private", "public"], case_sensitive=False),
     required=True,
     default=None,
-    help="Target visibility. --public = visible to all users; --private = creator only.",
-)
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
+    help="Target visibility.",
 )
 @pass_context
 def set_image_visibility_cmd(
     ctx: Context,
     name: str,
-    public: Optional[bool],
-    json_output: bool,
+    visibility: str,
 ) -> None:
     """Flip an existing custom image's visibility (public ↔ private).
 
     \b
     Examples:
-        inspire image set-visibility my-image:v1 --public
-        inspire image set-visibility my-image:v1 --private
+        inspire image set-visibility my-image:v1 --visibility public
+        inspire image set-visibility my-image:v1 --visibility private
     """
-    json_output = resolve_json_output(ctx, json_output)
-
-    if public is None:
-        _handle_error(
-            ctx,
-            "ValidationError",
-            "One of --public / --private is required.",
-            EXIT_VALIDATION_ERROR,
-        )
-        return
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
     )
 
     image_id = _resolve_image_name(ctx, name)
-    visibility = _parse_visibility_flag(public)
-    assert visibility is not None
+    visibility_value = _parse_visibility_value(visibility)
+    assert visibility_value is not None
 
     try:
         result = browser_api_module.update_image(
             image_id=image_id,
-            visibility=visibility,
+            visibility=visibility_value,
             session=session,
         )
     except Exception as e:
         _handle_error(ctx, "APIError", f"Failed to update image visibility: {e}", EXIT_API_ERROR)
         return
 
-    label = "public" if visibility == _VISIBILITY_PUBLIC else "private"
-    if json_output:
+    label = "public" if visibility_value == _VISIBILITY_PUBLIC else "private"
+    if ctx.json_output:
         click.echo(
             json_formatter.format_json(
-                {"name": name, "visibility": visibility, "result": result}
+                {"name": name, "visibility": visibility_value, "result": result}
             )
         )
         return
@@ -676,9 +631,10 @@ def set_image_visibility_cmd(
 @click.command("delete")
 @click.argument("name")
 @click.option(
-    "--force",
+    "--yes",
+    "-y",
     is_flag=True,
-    help="Skip confirmation prompt",
+    help="Skip confirmation prompt.",
 )
 @click.option(
     "--pick",
@@ -686,29 +642,20 @@ def set_image_visibility_cmd(
     default=None,
     help="Pick the Nth candidate (1-indexed) when the name is ambiguous.",
 )
-@click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
 @pass_context
 def delete_image_cmd(
     ctx: Context,
     name: str,
-    force: bool,
+    yes: bool,
     pick: Optional[int],
-    json_output: bool,
 ) -> None:
     """Delete a custom Docker image (pass ``<name>:<version>``).
 
     \b
     Examples:
         inspire image delete my-image:v1
-        inspire image delete my-image:v1 --force
+        inspire image delete my-image:v1 --yes
     """
-    json_output = resolve_json_output(ctx, json_output)
-
     session = require_web_session(
         ctx,
         hint=WEB_AUTH_HINT,
@@ -716,7 +663,7 @@ def delete_image_cmd(
 
     image_id = _resolve_image_name(ctx, name, pick=pick)
 
-    if not force and not json_output:
+    if not yes and not ctx.json_output:
         if not click.confirm(f"Delete image '{scrub_raw_ids(name)}'?"):
             click.echo("Cancelled.")
             return
@@ -727,7 +674,7 @@ def delete_image_cmd(
         _handle_error(ctx, "APIError", f"Failed to delete image: {e}", EXIT_API_ERROR)
         return
 
-    if json_output:
+    if ctx.json_output:
         click.echo(
             json_formatter.format_json(
                 {"name": name, "status": "deleted", "result": result}

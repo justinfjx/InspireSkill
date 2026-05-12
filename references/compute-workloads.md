@@ -112,14 +112,14 @@ inspire ray quota --workspace CPU资源空间
 inspire ray create -n <name>-pipeline \
   -c 'python driver.py --mode run_and_exit' \
   --workspace CPU资源空间 --project <PROJECT> \
-  --head-image <IMAGE> --head-group <FULL_GROUP_NAME> --head-quota 0,4,16 \
-  --worker 'name=w1;image=<IMAGE>;group=<FULL_GROUP_NAME>;quota=0,4,16;min=1;max=8;shm=32'
+  --image <IMAGE> --group <FULL_GROUP_NAME> --quota 0,4,16 \
+  --worker 'name=w1;image=<IMAGE>;group=<FULL_GROUP_NAME>;quota=0,4,16;min=1;max=8;shm-size=32'
 ```
 
 Ray 特有坑：
 
 - 镜像必须带 Ray runtime。
-- `--head-quota` 和 worker `quota=` 用 Ray 专属规格表。
+- `--quota` 和 worker `quota=` 用 Ray 专属规格表。
 - `min` 和 `max` 都必须大于等于 1。
 - driver 不退出，集群就一直占配额；长守护任务要接受手动 stop 的运维模型。
 

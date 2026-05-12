@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-import os
-import sys
-import time
-from datetime import datetime
 from typing import Optional
 
 import click
@@ -502,333 +497,15 @@ def _list_workspace_resources(ctx: Context, show_all: bool, no_cache: bool) -> N
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
 
 
-def _progress_bar(current: int, total: int, width: int = 20) -> str:
-    if total == 0:
-        return "░" * width
-    filled = int(width * current / total)
-    return "█" * filled + "░" * (width - filled)
-
-
-def _render_nodes_display(
-    availability: list,
-    *,
-    phase: str,
-    timestamp: str,
-    interval: int,
-    progress_state: dict[str, int],
-) -> None:
-    os.system("clear")
-
-    if phase == "fetching":
-        fetched = progress_state["fetched"]
-        total = progress_state["total"] or 1
-        bar = _progress_bar(fetched, total)
-        if total > 1:
-            click.echo(f"🔄 [{bar}] Fetching {fetched}/{total} nodes...\n")
-        else:
-            click.echo(f"🔄 [{bar}] Fetching availability...\n")
-    else:
-        bar = _progress_bar(1, 1)
-        click.echo(f"✅ [{bar}] Updated at {timestamp} (Workspace) (interval: {interval}s)\n")
-
-    if not availability:
-        if phase != "fetching":
-            click.echo("No GPU resources found")
-        return
-
-    total_free = 0
-    rows = []
-    for a in availability:
-        free_gpus = a.free_gpus
-        total_free += free_gpus
-
-        if free_gpus >= 64:
-            indicator = "🟢"
-        elif free_gpus >= 16:
-            indicator = "🟡"
-        elif free_gpus > 0:
-            indicator = "🟠"
-        else:
-            indicator = "🔴"
-
-        rows.append((a.gpu_type, a.group_name, a.ready_nodes, a.free_nodes, free_gpus, indicator))
-
-    rows.append(("Total", "", "", "", total_free, ""))
-    click.echo(
-        "\n".join(
-            render_table(
-                ("GPU", "Location", "Ready", "Free", "GPUs", ""),
-                rows,
-                [8, 24, 8, 8, 8, 2],
-                aligns=["left", "left", "right", "right", "right", "left"],
-                line_char="─",
-            )
-        )
-    )
-    click.echo("")
-    click.echo("Ctrl+C to stop")
-
-
-def _render_accurate_display(
-    availability: list,
-    *,
-    phase: str,
-    timestamp: str,
-    interval: int,
-) -> None:
-    os.system("clear")
-
-    if phase == "fetching":
-        click.echo("🔄 Fetching accurate availability...\n")
-    else:
-        click.echo(f"✅ Updated at {timestamp} (Accurate) (interval: {interval}s)\n")
-
-    if not availability:
-        if phase != "fetching":
-            click.echo("No GPU resources found")
-        return
-
-    sorted_avail = sorted(availability, key=lambda x: x.available_gpus, reverse=True)
-
-    total_available = 0
-    total_used = 0
-    total_low_pri = 0
-    total_gpus = 0
-    rows = []
-
-    for a in sorted_avail:
-        free_gpus = a.available_gpus
-
-        if free_gpus >= 100:
-            status = "✓"
-        elif free_gpus >= 32:
-            status = "○"
-        elif free_gpus >= 8:
-            status = "◐"
-        elif free_gpus > 0:
-            status = "⚠"
-        else:
-            status = "✗"
-
-        rows.append(
-            (
-                a.gpu_type,
-                a.group_name,
-                a.available_gpus,
-                a.used_gpus,
-                a.low_priority_gpus,
-                a.total_gpus,
-                status,
-            )
-        )
-
-        total_available += a.available_gpus
-        total_used += a.used_gpus
-        total_low_pri += a.low_priority_gpus
-        total_gpus += a.total_gpus
-
-    rows.append(
-        (
-            "TOTAL",
-            "",
-            total_available,
-            total_used,
-            total_low_pri,
-            total_gpus,
-            "",
-        )
-    )
-    lines = render_table(
-        ("GPU Type", "Compute Group", "Available", "Used", "Low Pri", "Total", ""),
-        rows,
-        [22, 25, 10, 8, 8, 8, 2],
-        aligns=["left", "left", "right", "right", "right", "right", "left"],
-        line_char="─",
-    )
-    lines.append("")
-    lines.append("Ctrl+C to stop")
-
-    click.echo("\n".join(lines))
-
-
-def _render_display(
-    *,
-    mode: str,
-    availability: list,
-    phase: str,
-    timestamp: str,
-    interval: int,
-    progress_state: dict[str, int],
-) -> None:
-    if mode == "nodes":
-        _render_nodes_display(
-            availability,
-            phase=phase,
-            timestamp=timestamp,
-            interval=interval,
-            progress_state=progress_state,
-        )
-    else:
-        _render_accurate_display(availability, phase=phase, timestamp=timestamp, interval=interval)
-
-
-def _watch_resources(
-    ctx: Context,
-    show_all: bool,
-    interval: int,
-    workspace: bool,
-    use_global: bool,
-) -> None:
-    api_logger = logging.getLogger("inspire.inspire_api_control")
-    original_level = api_logger.level
-    api_logger.setLevel(logging.CRITICAL)
-
-    mode = "nodes" if workspace or use_global else "accurate"
-
-    try:
-        if mode == "nodes":
-            get_web_session(require_workspace=True)
-        else:
-            get_web_session()
-    except Exception as e:
-        click.echo(human_formatter.format_error(f"Failed to get web session: {e}"), err=True)
-        sys.exit(EXIT_AUTH_ERROR)
-
-    progress_state = {"fetched": 0, "total": 0}
-
-    def on_progress(fetched: int, total: int) -> None:
-        if mode != "nodes":
-            return
-        progress_state["fetched"] = fetched
-        progress_state["total"] = total
-        now = datetime.now().strftime("%H:%M:%S")
-        _render_display(
-            mode=mode,
-            availability=availability,
-            phase="fetching",
-            timestamp=now,
-            interval=interval,
-            progress_state=progress_state,
-        )
-
-    try:
-        availability: list = []
-        while True:
-            progress_state["fetched"] = 0
-            progress_state["total"] = 0
-
-            now = datetime.now().strftime("%H:%M:%S")
-            _render_display(
-                mode=mode,
-                availability=availability,
-                phase="fetching",
-                timestamp=now,
-                interval=interval,
-                progress_state=progress_state,
-            )
-
-            try:
-                if mode == "nodes":
-                    clear_availability_cache()
-                    config = None
-                    try:
-                        config, _ = Config.from_files_and_env(require_credentials=False)
-                    except Exception:
-                        pass
-                    availability = fetch_resource_availability(
-                        config=config,
-                        known_only=not show_all,
-                        progress_callback=on_progress,
-                    )
-                else:
-                    availability = browser_api_module.get_accurate_gpu_availability()
-                    known_groups = _known_compute_groups_from_config(show_all=show_all)
-                    if not show_all:
-                        availability = [a for a in availability if a.group_id in known_groups]
-                        for entry in availability:
-                            if not entry.group_name:
-                                entry.group_name = known_groups.get(
-                                    entry.group_id, entry.group_name
-                                )
-            except (SessionExpiredError, ValueError) as e:
-                api_logger.setLevel(original_level)
-                click.echo(human_formatter.format_error(str(e)), err=True)
-                sys.exit(EXIT_AUTH_ERROR)
-            except Exception as e:
-                os.system("clear")
-                click.echo(f"⚠️  API error: {e}")
-                click.echo(f"Retrying in {interval}s...")
-                time.sleep(interval)
-                continue
-
-            now = datetime.now().strftime("%H:%M:%S")
-            _render_display(
-                mode=mode,
-                availability=availability,
-                phase="done",
-                timestamp=now,
-                interval=interval,
-                progress_state=progress_state,
-            )
-
-            time.sleep(interval)
-
-    except KeyboardInterrupt:
-        click.echo("\nStopped watching.")
-        sys.exit(0)
-    finally:
-        api_logger.setLevel(original_level)
-
-
 def run_resources_list(
     ctx: Context,
     *,
     no_cache: bool,
-    watch: bool,
-    interval: int,
     workspace: str,
     group: Optional[str],
     limit: Optional[int],
-    use_global: bool,
     include_cpu: bool,
 ) -> None:
-    if include_cpu and use_global:
-        _handle_error(
-            ctx,
-            "InvalidOption",
-            "CPU totals are only available in accurate mode. Remove --global.",
-            EXIT_CONFIG_ERROR,
-        )
-        return
-
-    if watch:
-        if ctx.json_output:
-            click.echo(
-                json_formatter.format_json_error(
-                    "InvalidOption",
-                    "Watch mode not supported with JSON output",
-                    EXIT_CONFIG_ERROR,
-                ),
-                err=True,
-            )
-            sys.exit(EXIT_CONFIG_ERROR)
-        _handle_error(
-            ctx,
-            "InvalidOption",
-            "Watch mode is disabled for workspace-scoped resources queries. Use `resources nodes --workspace <name|all>` for node-level snapshots.",
-            EXIT_CONFIG_ERROR,
-        )
-        return
-
-    if use_global:
-        _handle_error(
-            ctx,
-            "InvalidOption",
-            "--global is removed. Use --workspace all or resources nodes --workspace <name|all>.",
-            EXIT_CONFIG_ERROR,
-        )
-        return
-
     _list_accurate_resources(
         ctx,
         workspace=workspace,
@@ -863,20 +540,6 @@ def run_resources_list(
     is_flag=True,
     help="Include CPU-only compute groups with CPU and memory totals",
 )
-@click.option(
-    "--watch",
-    "-w",
-    is_flag=True,
-    help="Continuously watch availability (refreshes every 30s)",
-)
-@click.option(
-    "--interval",
-    "-i",
-    type=click.IntRange(1),
-    default=30,
-    show_default=True,
-    help="Watch refresh interval in seconds.",
-)
 @click.option("--limit", "-n", type=click.IntRange(min=1), default=None, help="Maximum rows to show.")
 @pass_context
 def availability_resources(
@@ -885,8 +548,6 @@ def availability_resources(
     workspace: str,
     group: Optional[str],
     include_cpu: bool,
-    watch: bool,
-    interval: int,
     limit: Optional[int],
 ) -> None:
     """List compute-group availability.
@@ -903,11 +564,8 @@ def availability_resources(
     run_resources_list(
         ctx,
         no_cache=no_cache,
-        watch=watch,
-        interval=interval,
         workspace=workspace,
         group=group,
         limit=limit,
-        use_global=False,
         include_cpu=include_cpu,
     )

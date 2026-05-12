@@ -42,7 +42,7 @@ inspire notebook exec <name>-base --cwd public "mkdir -p models data outputs"
 
 ```bash
 inspire notebook install-deps <name>-base --slurm --ray
-inspire image save <name>-base -n <img> -v v1 --public --wait
+inspire image save <name>-base --workspace CPU资源空间 -n <img> -v v1 --visibility public --wait
 ```
 
 验收点：

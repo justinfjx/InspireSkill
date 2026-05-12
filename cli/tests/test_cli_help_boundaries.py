@@ -138,7 +138,10 @@ def test_init_help_explains_plain_init_discovery() -> None:
     assert "asks which storage tier the `me` path alias should use" in output
     assert "top-level `me` points at the selected path tier" in output
     assert "`ssd` suggested for the path hot tier" in output
-    assert "Legacy: detect env vars" in output
+    assert "--scope [project|global]" in result.output
+    assert "--global" not in result.output
+    assert "--project, -p" not in result.output
+    assert "--json" not in result.output
 
 
 def test_init_rejects_removed_discover_flag() -> None:
@@ -292,3 +295,70 @@ def test_ray_create_help_has_no_raw_json_body_escape_hatch() -> None:
 
     assert result.exit_code == 0
     assert "--json-body" not in result.output
+    assert "--head-image" not in result.output
+    assert "--head-group" not in result.output
+    assert "--head-quota" not in result.output
+    assert "--head-shm" not in result.output
+    assert "--image TEXT" in result.output
+    assert "--group TEXT" in result.output
+    assert "--quota TEXT" in result.output
+
+
+def test_operation_help_has_no_command_local_json_or_removed_confirm_flags() -> None:
+    runner = CliRunner()
+    cases = (
+        ["init", "--help"],
+        ["config", "show", "--help"],
+        ["config", "check", "--help"],
+        ["config", "context", "--help"],
+        ["project", "list", "--help"],
+        ["notebook", "lifecycle", "--help"],
+        ["notebook", "metrics", "--help"],
+        ["job", "metrics", "--help"],
+        ["hpc", "metrics", "--help"],
+        ["serving", "metrics", "--help"],
+        ["image", "register", "--help"],
+        ["image", "save", "--help"],
+        ["image", "set-visibility", "--help"],
+        ["image", "delete", "--help"],
+    )
+    for args in cases:
+        result = runner.invoke(cli_main, args)
+        assert result.exit_code == 0, args
+        assert "Alias for global --json" not in result.output
+        assert "Equivalent to top-level" not in result.output
+
+    delete_result = runner.invoke(cli_main, ["image", "delete", "--help"])
+    assert "--force" not in delete_result.output
+    assert "--yes" in delete_result.output
+
+    ssh_delete = runner.invoke(cli_main, ["user", "ssh-keys", "delete", "--help"])
+    assert ssh_delete.exit_code == 0
+    assert "--force" not in ssh_delete.output
+    assert "--yes" in ssh_delete.output
+
+
+def test_removed_visibility_and_model_source_options_are_absent() -> None:
+    runner = CliRunner()
+    for args in (
+        ["image", "save", "--help"],
+        ["image", "set-visibility", "--help"],
+        ["model", "register", "--help"],
+    ):
+        result = runner.invoke(cli_main, args)
+        assert result.exit_code == 0, args
+        assert "--public" not in result.output
+        assert "--private" not in result.output
+        assert "--source-type" not in result.output
+
+    save_result = runner.invoke(cli_main, ["image", "save", "--help"])
+    assert "--workspace TEXT" in save_result.output
+    assert "--visibility [private|public]" in save_result.output
+
+
+def test_resources_availability_has_no_watch_option() -> None:
+    result = CliRunner().invoke(cli_main, ["resources", "availability", "--help"])
+
+    assert result.exit_code == 0
+    assert "--watch" not in result.output
+    assert "--interval" not in result.output

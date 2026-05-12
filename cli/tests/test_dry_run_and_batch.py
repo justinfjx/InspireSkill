@@ -248,6 +248,34 @@ def test_job_create_profile_fills_condition_fields(
     assert api.training_calls == []
 
 
+def test_job_create_rejects_profile_with_explicit_condition_field(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    api = _patch_submit_deps(monkeypatch, tmp_path)
+
+    result = CliRunner().invoke(
+        cli_main,
+        [
+            "job",
+            "create",
+            "--name",
+            "profile-job",
+            "--profile",
+            "h200",
+            "--workspace",
+            "cpu",
+            "--command",
+            "python train.py",
+            "--dry-run",
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "--profile cannot be combined with scheduling fields: --workspace" in result.output
+    assert api.training_calls == []
+
+
 def test_batch_matrix_dry_run_expands_json_without_submit(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -412,7 +440,7 @@ def test_batch_does_not_fall_back_to_config_job_defaults(
     assert api.training_calls == []
 
 
-def test_batch_defaults_and_job_override_are_the_only_default_sources(
+def test_batch_rejects_profile_merged_with_condition_override(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -461,14 +489,12 @@ def test_batch_defaults_and_job_override_are_the_only_default_sources(
         ["--json", "job", "batch", str(batch_path), "--dry-run"],
     )
 
-    assert result.exit_code == 0, result.output
+    assert result.exit_code != 0
     payload = json.loads(result.output)
-    create_kwargs = [item["create_kwargs"] for item in payload["data"]["items"]]
-    assert [item["image"] for item in create_kwargs] == [
-        "registry.batch/default:latest",
-        "registry.batch/override:latest",
+    assert payload["success"] is False
+    assert "--profile cannot be combined with scheduling fields: --image" in payload["error"][
+        "message"
     ]
-    assert [item["task_priority"] for item in create_kwargs] == [6, 8]
 
 
 def test_notebook_batch_matrix_dry_run_expands_json_without_submit(

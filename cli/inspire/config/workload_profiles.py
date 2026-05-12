@@ -101,12 +101,19 @@ def apply_workload_profile(
     profile_name: str | None,
     values: dict[str, Any],
 ) -> dict[str, str | None]:
-    """Apply a workload profile under explicit values.
-
-    Explicit command or batch fields win. Missing fields are filled from the
-    named profile only when a profile is requested.
-    """
+    """Apply a workload profile when no scheduling fields override it."""
     profile = get_workload_profile(profiles, kind, profile_name)
+    if profile_name:
+        conflicts = [
+            field
+            for field in PROFILE_FIELDS
+            if _clean_text(values.get(field)) is not None
+        ]
+        if conflicts:
+            joined = ", ".join(f"--{field}" for field in conflicts)
+            raise ConfigError(
+                f"--profile cannot be combined with scheduling fields: {joined}."
+            )
     merged: dict[str, str | None] = {}
     for field in PROFILE_FIELDS:
         explicit = _clean_text(values.get(field))

@@ -34,7 +34,6 @@ from inspire.cli.context import (
 )
 from inspire.cli.formatters import json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
-from inspire.cli.utils.notebook_cli import resolve_json_output
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import ConfigError
 from inspire.platform.web.browser_api.metrics import (
@@ -433,7 +432,6 @@ def build_metrics_command(
         is_flag=True,
         help="Open the rendered PNG in the system default viewer after writing it.",
     )
-    @click.option("--json", "json_output", is_flag=True, help="Alias for global --json.")
     @pass_context
     def metrics_cmd(
         ctx: Context,
@@ -449,7 +447,6 @@ def build_metrics_command(
         no_plot: bool,
         sparkline: bool,
         open_after: bool,
-        json_output: bool,
     ) -> None:
         """Query historical GPU / CPU / memory / disk / network utilization.
 
@@ -461,7 +458,7 @@ def build_metrics_command(
         setattr(ctx, "workspace", workspace)
         task_id = name_resolver(ctx, name)
 
-        json_output = resolve_json_output(ctx, json_output)
+        json_output = ctx.json_output
 
         try:
             metrics = _resolve_metrics(metric_selector)

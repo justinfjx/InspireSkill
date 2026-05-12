@@ -46,14 +46,8 @@ def _format_duration(start: str, end: str) -> str:
 
 @click.command("lifecycle")
 @click.argument("name")
-@click.option(
-    "--json",
-    "json_output_local",
-    is_flag=True,
-    help="Output as JSON. Equivalent to top-level `--json`.",
-)
 @pass_context
-def lifecycle(ctx: Context, name: str, json_output_local: bool) -> None:
+def lifecycle(ctx: Context, name: str) -> None:
     """Show the run-cycle timeline for a notebook instance.
 
     Each row is one start → stop cycle (restarts after auto-recycle or
@@ -76,7 +70,7 @@ def lifecycle(ctx: Context, name: str, json_output_local: bool) -> None:
         _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
         return
 
-    if json_output_local or ctx.json_output:
+    if ctx.json_output:
         click.echo(
             json_formatter.format_json({"notebook_id": notebook_id, "runs": runs})
         )

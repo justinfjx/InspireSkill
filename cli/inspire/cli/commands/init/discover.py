@@ -238,7 +238,7 @@ def _build_project_aliases(
     """Build the ``[projects]`` table keyed by the platform's real project name.
 
     Keys are the project names returned by the platform (``"CI-情境智能"`` etc.),
-    not short slugs. Agents that read ``inspire config context --json`` see
+    not short slugs. Agents that read ``inspire --json config context`` see
     meaningful identifiers, not random 2-letter aliases.
     """
     existing_map = existing or {}

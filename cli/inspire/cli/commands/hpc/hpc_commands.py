@@ -334,7 +334,13 @@ def list_hpc(
     "--image",
     help="Docker image URL or visible image name. Required unless supplied by --profile.",
 )
-@click.option("--image-type", default="SOURCE_PRIVATE", show_default=True, help="Image source type")
+@click.option(
+    "--image-type",
+    type=click.Choice(["SOURCE_PUBLIC", "SOURCE_PRIVATE", "SOURCE_OFFICIAL"]),
+    default="SOURCE_PRIVATE",
+    show_default=True,
+    help="Image source type.",
+)
 @click.option(
     "--instance-count",
     type=click.IntRange(1),

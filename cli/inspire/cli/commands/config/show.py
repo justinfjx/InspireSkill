@@ -237,12 +237,6 @@ def _show_env(cfg: Config, compact: bool, filter_category: str | None) -> None:
 
 @click.command("show")
 @click.option(
-    "--json",
-    "json_output_local",
-    is_flag=True,
-    help="Output as JSON (machine-readable). Equivalent to top-level --json.",
-)
-@click.option(
     "--format",
     "-f",
     "output_format",
@@ -265,7 +259,6 @@ def _show_env(cfg: Config, compact: bool, filter_category: str | None) -> None:
 @pass_context
 def show_config(
     ctx: Context,
-    json_output_local: bool,
     output_format: str,
     compact: bool,
     filter_category: str | None,
@@ -282,12 +275,11 @@ def show_config(
     \b
     Examples:
         inspire config show
+        inspire --json config show
         inspire config show --format json
-        inspire config show --json
         inspire config show --filter API
         inspire config show --compact
     """
-    ctx.json_output = bool(ctx.json_output or json_output_local)
     effective_json = ctx.json_output
 
     try:

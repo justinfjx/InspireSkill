@@ -201,20 +201,13 @@ def _build_base_url_resolution(
 
 
 @click.command("check")
-@click.option(
-    "--json",
-    "json_output_local",
-    is_flag=True,
-    help="Output as JSON (machine-readable). Equivalent to top-level --json.",
-)
 @pass_context
-def check_config(ctx: Context, json_output_local: bool) -> None:
+def check_config(ctx: Context) -> None:
     """Check configuration files and platform authentication.
 
     Verifies required account settings, validates host-shaped values, and
     confirms the active account can authenticate to the platform.
     """
-    ctx.json_output = bool(ctx.json_output or json_output_local)
     effective_json = ctx.json_output
 
     try:

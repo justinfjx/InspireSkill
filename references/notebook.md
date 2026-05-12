@@ -115,7 +115,7 @@ inspire notebook exec base-box --cwd me:<repo> \
    pip config set global.trusted-host nexus.sii.shaipower.online && \
    pip install -r requirements.txt && python -m pytest -q"
 inspire notebook install-deps base-box --slurm --ray
-inspire image save base-box -n <IMAGE_NAME> -v v1 --public --wait
+inspire image save base-box --workspace CPU资源空间 -n <IMAGE_NAME> -v v1 --visibility public --wait
 ```
 
 `image save` 会触发一段中等时长的镜像保存过程；保存过程中不可操作该 notebook；保存完毕后 notebook 不会被自动停止，仍可继续连接和使用。保存出的镜像才是后续 workload 应复用的稳定环境。

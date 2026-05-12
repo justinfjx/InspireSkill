@@ -33,6 +33,7 @@ from inspire.cli.commands.init import (
     _generate_toml_content,
 )
 from inspire.cli.commands.config import config as config_command
+from inspire.cli.main import main as cli_main
 
 # ===========================================================================
 # Config Schema tests
@@ -696,7 +697,7 @@ class TestInitCommand:
         monkeypatch.setenv("INSPIRE_USERNAME", "testuser")
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--template", "--project"])
+        result = runner.invoke(init, ["--template", "--scope", "project"])
 
         assert result.exit_code == 0
         assert "Creating template config" in result.output
@@ -710,11 +711,14 @@ class TestInitCommand:
     def test_init_json_template_output(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """Test that init supports command-local --json output."""
+        """Test that init uses the global --json output switch."""
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
 
-        result = runner.invoke(init, ["--json", "--template", "--project", "--force"])
+        result = runner.invoke(
+            cli_main,
+            ["--json", "init", "--template", "--scope", "project", "--force"],
+        )
 
         assert result.exit_code == 0
         payload = json.loads(result.output)
@@ -734,7 +738,10 @@ class TestInitCommand:
         (config_dir / "config.toml").write_text("[auth]\nusername = 'existing'")
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--json", "--template", "--project"])
+        result = runner.invoke(
+            cli_main,
+            ["--json", "init", "--template", "--scope", "project"],
+        )
 
         assert result.exit_code != 0
         payload = json.loads(result.output)
@@ -776,17 +783,17 @@ class TestInitCommand:
         config_file.write_text("[auth]\nusername = 'existing'")
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--template", "--project", "--force"])
+        result = runner.invoke(init, ["--template", "--scope", "project", "--force"])
 
         assert result.exit_code == 0
         content = config_file.read_text()
         assert "existing" not in content
         assert "your_username" in content
 
-    def test_init_project_flag_forces_all_to_project(
+    def test_init_scope_project_forces_all_to_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
     ) -> None:
-        """Test that --project forces all options to project config."""
+        """Test that --scope project forces all options to project config."""
         monkeypatch.chdir(tmp_path)
 
         # Set both global and project scope env vars
@@ -794,7 +801,7 @@ class TestInitCommand:
         monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")  # project
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--project", "--force"])
+        result = runner.invoke(init, ["--scope", "project", "--force"])
 
         assert result.exit_code == 0
 
@@ -814,7 +821,7 @@ class TestInitCommand:
         monkeypatch.setenv("INSPIRE_PASSWORD", "secretpass")
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--project", "--force"])
+        result = runner.invoke(init, ["--scope", "project", "--force"])
 
         assert result.exit_code == 0
         project_config = tmp_path / PROJECT_CONFIG_DIR / CONFIG_FILENAME
@@ -826,17 +833,21 @@ class TestInitCommand:
         assert "secretpass" not in content
         assert "# password - use env var INSPIRE_PASSWORD for security" in content
 
-    def test_init_both_flags_error(
+    def test_init_old_scope_flags_are_removed(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
     ) -> None:
-        """Test that --global and --project together is an error."""
+        """Test that --global and --project are no longer accepted."""
         monkeypatch.chdir(tmp_path)
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--global", "--project"])
+        result = runner.invoke(init, ["--global"])
 
         assert result.exit_code != 0
-        assert "Cannot specify both" in result.output
+        assert "No such option: --global" in result.output
+
+        result = runner.invoke(init, ["--project"])
+        assert result.exit_code != 0
+        assert "No such option: --project" in result.output
 
     def test_init_auto_split_only_project(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
@@ -849,7 +860,7 @@ class TestInitCommand:
         monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--project", "--force"])
+        result = runner.invoke(init, ["--scope", "project", "--force"])
 
         assert result.exit_code == 0
 
@@ -1143,8 +1154,10 @@ class TestConfigShowCommand:
         assert "values" in data
         assert "INSPIRE_USERNAME" in data["values"]
 
-    def test_config_show_json_alias(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test config show supports --json alias."""
+    def test_config_show_rejects_command_local_json(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test config show only accepts the global --json switch."""
         monkeypatch.setenv("INSPIRE_USERNAME", "testuser")
         monkeypatch.setenv("INSPIRE_PASSWORD", "testpass")
         monkeypatch.chdir(tmp_path)
@@ -1152,11 +1165,8 @@ class TestConfigShowCommand:
         runner = CliRunner()
         result = runner.invoke(config_command, ["show", "--json"])
 
-        assert result.exit_code == 0
-        data = json.loads(result.output)
-        assert "config_files" in data
-        assert "values" in data
-        assert "INSPIRE_USERNAME" in data["values"]
+        assert result.exit_code != 0
+        assert "No such option: --json" in result.output
 
     def test_config_show_filter(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test config show with category filter."""

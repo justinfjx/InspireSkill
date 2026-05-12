@@ -21,7 +21,6 @@ from inspire.cli.utils.notebook_cli import (
     WEB_AUTH_HINT,
     load_config,
     require_web_session,
-    resolve_json_output,
 )
 from inspire.config import ConfigError
 from inspire.config.workspaces import resolve_workspace_query_scope
@@ -200,12 +199,6 @@ def _select_workspace_ids_for_listing(
 
 @click.command("list")
 @click.option(
-    "--json",
-    "json_output",
-    is_flag=True,
-    help="Alias for global --json",
-)
-@click.option(
     "--workspace",
     required=True,
     help="Workspace name or 'all'.",
@@ -213,7 +206,6 @@ def _select_workspace_ids_for_listing(
 @pass_context
 def list_projects_cmd(
     ctx: Context,
-    json_output: bool,
     workspace: str,
 ) -> None:
     """List project-level metadata.
@@ -221,9 +213,9 @@ def list_projects_cmd(
     \b
     Examples:
         inspire project list --workspace all
-        inspire project list --json   # JSON output with all fields
+        inspire --json project list --workspace all
     """
-    json_output = resolve_json_output(ctx, json_output)
+    json_output = ctx.json_output
 
     session = require_web_session(
         ctx,

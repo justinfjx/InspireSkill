@@ -364,16 +364,16 @@ def add_ssh_key(
 
 @ssh_keys_user.command("delete")
 @click.argument("name")
-@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 @pass_context
-def delete_ssh_key(ctx: Context, name: str, force: bool) -> None:
+def delete_ssh_key(ctx: Context, name: str, yes: bool) -> None:
     """Delete an SSH public key by name."""
     try:
         session = get_web_session()
         key = _resolve_ssh_key_by_name(ctx, name, session=session)
         key_name = _ssh_key_name(key) or name
 
-        if not force and not ctx.json_output:
+        if not yes and not ctx.json_output:
             if not click.confirm(f"Delete SSH key '{scrub_raw_ids(key_name)}'?"):
                 click.echo("Cancelled.")
                 return

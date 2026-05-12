@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Optional, cast
 
 import click
@@ -24,6 +25,8 @@ from inspire.config.workload_profiles import apply_workload_profile, profile_req
 from inspire.config.workspaces import select_workspace_id
 from inspire.platform.web import browser_api as browser_api_module
 from inspire.platform.web.session import get_web_session
+
+_CUSTOM_DOMAIN_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$")
 
 
 def _resolve_serving_name(
@@ -71,6 +74,19 @@ def _resolve_workspace_id(config: Config, workspace: Optional[str], *, session=N
     if workspace is None:
         return None
     return select_workspace_id(config, explicit_workspace_name=workspace, session=session)
+
+
+def _validate_custom_domain(_ctx: click.Context, _param: click.Parameter, value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if not _CUSTOM_DOMAIN_RE.fullmatch(text):
+        raise click.BadParameter(
+            "must use lowercase letters, digits, and hyphens, and cannot start or end with a hyphen"
+        )
+    return text
 
 
 def _resolve_project_id(
@@ -615,6 +631,12 @@ def stop_serving(
 @click.argument("name")
 @click.option("--workspace", required=True, help="Workspace name")
 @click.option(
+    "--yes",
+    "-y",
+    is_flag=True,
+    help="Skip the interactive confirmation prompt.",
+)
+@click.option(
     "--pick",
     type=click.IntRange(1),
     default=None,
@@ -625,6 +647,7 @@ def delete_serving(
     ctx: Context,
     name: str,
     workspace: Optional[str],
+    yes: bool,
     pick: Optional[int],
 ) -> None:
     """Delete an inference serving entry (pass the serving name)."""
@@ -638,6 +661,11 @@ def delete_serving(
             workspace_id=workspace_id,
             pick=pick,
         )
+        if not yes and not ctx.json_output:
+            click.confirm(
+                f"Permanently delete inference serving '{scrub_raw_ids(name)}'? This cannot be undone.",
+                abort=True,
+            )
         data = browser_api_module.delete_serving(
             inference_serving_id=inference_serving_id,
             session=session,
@@ -649,6 +677,8 @@ def delete_serving(
 
         click.echo(human_formatter.format_success(f"Inference serving deleted: {name}"))
 
+    except click.Abort:
+        raise
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
     except AuthenticationError as e:
@@ -747,6 +777,7 @@ def configs_serving(
 @click.option(
     "--custom-domain",
     default=None,
+    callback=_validate_custom_domain,
     help="Optional domain prefix: lowercase letters, digits, and hyphens",
 )
 @click.option("--description", default="", help="Serving description")

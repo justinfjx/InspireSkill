@@ -32,16 +32,15 @@ def _bridge_public_payload(bridge: BridgeProfile) -> dict[str, object]:
 
 
 @click.command("test")
-@click.argument("notebook", required=False)
+@click.argument("notebook")
 @pass_context
 def tunnel_test(ctx: Context, notebook: str) -> None:
     """Test SSH connection to a cached notebook and show timing.
 
-    NOTEBOOK is the cached notebook name (omit to use the default).
+    NOTEBOOK is the cached notebook name.
 
     \b
     Examples:
-        inspire notebook ssh test
         inspire notebook ssh test my-notebook
     """
     import time

@@ -43,14 +43,14 @@ inspire image detail <name>:<version>
 适用于“在 notebook 里装好环境，再保存成项目通用基底”。创建 notebook、安装依赖和远程验证属于 [notebook.md](notebook.md)；本文只覆盖固化动作和后续镜像状态。
 
 ```bash
-inspire image save <notebook-name> -n <img-name> -v v1 --public --wait
+inspire image save <notebook-name> --workspace <WORKSPACE> -n <img-name> -v v1 --visibility public --wait
 ```
 
 使用要点：
 
 - `NOTEBOOK` 是 notebook 名称。
 - 用 `--wait` 等到镜像进入 `READY`，否则后续任务可能拉不到镜像。
-- `--public` / `--private` 控制平台可见性；敏感依赖、内部数据或个人实验镜像默认保持私有。
+- `--visibility public|private` 控制平台可见性；敏感依赖、内部数据或个人实验镜像默认保持私有。
 - `image save` 会触发一段中等时长的镜像保存过程；保存过程中不可操作该 notebook；保存完毕后 notebook 不会被自动停止，仍可继续连接和使用。
 - 固化后再用 `image list` 或 `image detail` 确认名称、版本和状态。
 
@@ -85,8 +85,8 @@ inspire image register -n my-img -v v1.0 --method address
 可见性翻转用于已经存在的自定义镜像：
 
 ```bash
-inspire image set-visibility <name>:<version> --public
-inspire image set-visibility <name>:<version> --private
+inspire image set-visibility <name>:<version> --visibility public
+inspire image set-visibility <name>:<version> --visibility private
 ```
 
 公开前确认镜像内没有账号 token、私有 wheel、内部数据或临时调试文件。

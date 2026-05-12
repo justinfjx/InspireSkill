@@ -25,7 +25,7 @@ def project():
     \b
     Examples:
         inspire project list                # project metadata table
-        inspire project list --json         # JSON with all fields
+        inspire --json project list --workspace all
         inspire project detail <project-name> # single-project detail
         inspire project owners              # "负责人" dropdown contents
     """

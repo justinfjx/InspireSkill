@@ -464,7 +464,6 @@ def versions_model(
 )
 @click.option("--tag", "tags", multiple=True, help="Custom model tag")
 @click.option("--description", default="", help="Model description")
-@click.option("--source-type", type=click.IntRange(1), default=1, show_default=True)
 @pass_context
 def register_model(
     ctx: Context,
@@ -475,7 +474,6 @@ def register_model(
     model_type: tuple[str, ...],
     tags: tuple[str, ...],
     description: str,
-    source_type: int,
 ) -> None:
     """Register a platform-visible model directory in the model repository.
 
@@ -508,7 +506,7 @@ def register_model(
             model_type=model_type,
             tags=tags,
             description=description,
-            model_source_type=source_type,
+            model_source_type=1,
             session=session,
         )
 

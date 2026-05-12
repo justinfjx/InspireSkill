@@ -350,6 +350,7 @@ def _resolve_web_job_id(
     pick: Optional[int] = None,
     allow_raw_id: bool = False,
     scan_limit: Optional[int] = None,
+    workspace_must_be_single: bool = False,
 ) -> str:
     job = (job or "").strip()
     if not job:
@@ -368,6 +369,8 @@ def _resolve_web_job_id(
             "CLI commands take a job name. "
             "Use `inspire job list --workspace <name|all>` to find the name."
         )
+    if workspace_must_be_single and (workspace or "").strip().lower() == "all":
+        raise ConfigError("--workspace must be a workspace name for this command.")
 
     limit = 0 if pick is not None else 2
     page_size = max(1, int(scan_limit)) if scan_limit is not None else 100
@@ -942,7 +945,7 @@ def instances(
 
 @click.command("stop")
 @click.argument("job")
-@click.option("--workspace", required=True, help="Workspace name or 'all'.")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--pick",
     type=click.IntRange(1),
@@ -966,6 +969,7 @@ def stop(ctx: Context, job: str, workspace: Optional[str], pick: Optional[int]) 
             all_workspaces=False,
             max_pages=50,
             pick=pick,
+            workspace_must_be_single=True,
         )
         api = AuthManager.get_api(config)
 
@@ -992,7 +996,7 @@ def stop(ctx: Context, job: str, workspace: Optional[str], pick: Optional[int]) 
 
 @click.command("delete")
 @click.argument("job")
-@click.option("--workspace", required=True, help="Workspace name or 'all'.")
+@click.option("--workspace", required=True, help="Workspace name.")
 @click.option(
     "--yes",
     "-y",
@@ -1026,6 +1030,7 @@ def delete(ctx: Context, job: str, workspace: Optional[str], yes: bool, pick: Op
             all_workspaces=False,
             max_pages=50,
             pick=pick,
+            workspace_must_be_single=True,
         )
     except ConfigError as e:
         _handle_error(ctx, "ConfigError", str(e), EXIT_CONFIG_ERROR)
@@ -1079,7 +1084,7 @@ def delete(ctx: Context, job: str, workspace: Optional[str], yes: bool, pick: Op
     default=30,
     help="Poll interval in seconds (default: 30)",
 )
-@click.option("--workspace", required=True, help="Workspace name or 'all'.")
+@click.option("--workspace", required=True, help="Workspace name.")
 @pass_context
 def wait(
     ctx: Context,
@@ -1264,7 +1269,7 @@ def show_command(
     default=None,
     help="Pick the Nth matching job (1-indexed) when multiple jobs share a name",
 )
-@click.option("--workspace", required=True, help="Workspace name or 'all'.")
+@click.option("--workspace", required=True, help="Workspace name.")
 @pass_context
 def shell(
     ctx: Context,
@@ -1302,6 +1307,7 @@ def shell(
             max_pages=50,
             pick=pick,
             allow_raw_id=False,
+            workspace_must_be_single=True,
         )
         session = get_web_session()
         try:

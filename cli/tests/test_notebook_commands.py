@@ -509,8 +509,7 @@ def test_notebook_start_name_conflict_prompts_selection(
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["notebook", "start", "ring-8h100-test", "--workspace", "all"],
-        input="2\n",
+        ["notebook", "start", "ring-8h100-test", "--workspace", "b"],
     )
 
     assert result.exit_code == EXIT_SUCCESS
