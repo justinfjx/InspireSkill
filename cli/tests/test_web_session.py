@@ -120,6 +120,38 @@ def test_browser_launch_runtime_error_detection() -> None:
     assert not ws_auth._is_browser_launch_runtime_error(RuntimeError("Timeout 60000ms exceeded"))
 
 
+def test_workspace_routes_from_payload_extracts_workspace_list() -> None:
+    payload = {
+        "data": {
+            "routes": [
+                {"name": "operations", "routes": [{"path": "not-a-workspace"}]},
+                {
+                    "name": "userWorkspaceList",
+                    "routes": [
+                        {"name": "CPU资源空间", "path": "ws-11111111-1111-1111-1111-111111111111"},
+                        {"name": "invalid", "path": "default"},
+                        {
+                            "name": "分布式训练空间",
+                            "path": "ws-22222222-2222-2222-2222-222222222222",
+                        },
+                    ],
+                },
+            ]
+        }
+    }
+
+    ids, names = ws_auth._workspace_routes_from_payload(payload)
+
+    assert ids == [
+        "ws-11111111-1111-1111-1111-111111111111",
+        "ws-22222222-2222-2222-2222-222222222222",
+    ]
+    assert names == {
+        "ws-11111111-1111-1111-1111-111111111111": "CPU资源空间",
+        "ws-22222222-2222-2222-2222-222222222222": "分布式训练空间",
+    }
+
+
 def test_playwright_install_args_include_deps_for_root_linux_apt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

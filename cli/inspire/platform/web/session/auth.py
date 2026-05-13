@@ -68,6 +68,44 @@ def _raise_browser_closed_error(exc: BaseException) -> None:
     ) from exc
 
 
+_WORKSPACE_ID_PATTERN = re.compile(
+    r"^ws-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+
+
+def _workspace_routes_from_payload(payload: dict[str, Any]) -> tuple[list[str], dict[str, str]]:
+    workspace_ids: list[str] = []
+    workspace_names: dict[str, str] = {}
+    for route_group in (payload.get("data") or {}).get("routes") or []:
+        if not isinstance(route_group, dict):
+            continue
+        if route_group.get("name") != "userWorkspaceList":
+            continue
+        for entry in route_group.get("routes") or []:
+            if not isinstance(entry, dict):
+                continue
+            ws_id = str(entry.get("path") or "").strip()
+            ws_name = str(entry.get("name") or "").strip()
+            if ws_id and _WORKSPACE_ID_PATTERN.match(ws_id) and ws_id != DEFAULT_WORKSPACE_ID:
+                if ws_id not in workspace_names:
+                    workspace_ids.append(ws_id)
+                    workspace_names[ws_id] = ws_name
+    return workspace_ids, workspace_names
+
+
+def _merge_workspace_routes(
+    current_ids: list[str],
+    current_names: dict[str, str],
+    new_ids: list[str],
+    new_names: dict[str, str],
+) -> None:
+    for ws_id in new_ids:
+        if ws_id not in current_names:
+            current_ids.append(ws_id)
+        if new_names.get(ws_id):
+            current_names[ws_id] = new_names[ws_id]
+
+
 def get_credentials() -> tuple[str, str]:
     """Get web credentials from layered config (project/global/env/default)."""
     config = _load_runtime_config()
@@ -185,30 +223,11 @@ def login_with_playwright(
         if pass_locator:
             _submit_login_form(pass_locator)
 
-        # Visit a real page to ensure app session cookies and localStorage are set.
-        # Use domcontentloaded with fallback since some pages have long-polling.
-        try:
-            page.goto(
-                f"{base_url}/jobs/distributedTraining", wait_until="networkidle", timeout=15000
-            )
-        except Exception:
-            try:
-                page.goto(
-                    f"{base_url}/jobs/distributedTraining",
-                    wait_until="domcontentloaded",
-                    timeout=30000,
-                )
-            except Exception as exc:
-                if _is_browser_closed_error(exc):
-                    _raise_browser_closed_error(exc)
-                raise
-        page.wait_for_timeout(1000)
-
         def _wait_for_api_auth() -> None:
             deadline = time.time() + 30
             headers = {
                 "Accept": "application/json",
-                "Referer": f"{base_url}/jobs/distributedTraining",
+                "Referer": f"{base_url}/login",
             }
             while time.time() < deadline:
                 try:
@@ -229,15 +248,25 @@ def login_with_playwright(
             )
 
         _wait_for_api_auth()
+        # Once authenticated cookies are available, stop the page quickly and
+        # use request APIs for discovery.  Some minimal GPU notebook images can
+        # start Chromium but crash while rendering the full Qizhi SPA because
+        # fontconfig is incomplete; rendering the SPA is unnecessary for CLI
+        # session capture.
+        try:
+            page.close()
+        except Exception:
+            pass
 
         user_detail: dict | None = None
+        request_headers = {
+            "Accept": "application/json",
+            "Referer": f"{base_url}/login",
+        }
         try:
             user_detail_resp = context.request.get(
                 f"{base_url}/api/v1/user/detail",
-                headers={
-                    "Accept": "application/json",
-                    "Referer": f"{base_url}/jobs/distributedTraining",
-                },
+                headers=request_headers,
                 timeout=10000,
             )
             if user_detail_resp.status == 200:
@@ -248,57 +277,30 @@ def login_with_playwright(
         except Exception:
             user_detail = None
 
-        # Extract workspace_id (spaceId) from the authenticated browser state.
-        try:
-            detected = page.evaluate("() => window.localStorage.getItem('spaceId')")
-        except Exception:
-            detected = None
-
-        detected_str = str(detected or "").strip()
-        workspace_id = detected_str or DEFAULT_WORKSPACE_ID
-
-        # Discover all workspace IDs via /api/v1/user/routes/{spaceId}
+        # Discover all workspace IDs via /api/v1/user/routes/default.
         # The response contains a "userWorkspaceList" route with all workspaces
         # the user can access, each with name (display name) and path (ws-... ID).
         all_workspace_ids: list[str] = []
         all_workspace_names: dict[str, str] = {}
-        if workspace_id and workspace_id != DEFAULT_WORKSPACE_ID:
+        for routes_workspace_id in ("default",):
             try:
                 routes_resp = context.request.get(
-                    f"{base_url}/api/v1/user/routes/{workspace_id}",
-                    headers={
-                        "Accept": "application/json",
-                        "Referer": f"{base_url}/jobs/distributedTraining",
-                    },
+                    f"{base_url}/api/v1/user/routes/{routes_workspace_id}",
+                    headers=request_headers,
                     timeout=15000,
                 )
                 if routes_resp.status == 200:
-                    routes_data = routes_resp.json()
-                    ws_pattern = re.compile(
-                        r"^ws-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+                    route_ids, route_names = _workspace_routes_from_payload(routes_resp.json())
+                    _merge_workspace_routes(
+                        all_workspace_ids,
+                        all_workspace_names,
+                        route_ids,
+                        route_names,
                     )
-                    # Find the "userWorkspaceList" route group
-                    for route_group in (routes_data.get("data") or {}).get("routes") or []:
-                        if not isinstance(route_group, dict):
-                            continue
-                        if route_group.get("name") != "userWorkspaceList":
-                            continue
-                        for entry in route_group.get("routes") or []:
-                            if not isinstance(entry, dict):
-                                continue
-                            ws_id = str(entry.get("path") or "").strip()
-                            ws_name = str(entry.get("name") or "").strip()
-                            if ws_id and ws_pattern.match(ws_id) and ws_id != DEFAULT_WORKSPACE_ID:
-                                if ws_id not in all_workspace_names:
-                                    all_workspace_ids.append(ws_id)
-                                    all_workspace_names[ws_id] = ws_name
             except Exception:
                 pass
 
-        # Ensure the primary workspace_id is included
-        if workspace_id and workspace_id != DEFAULT_WORKSPACE_ID:
-            if workspace_id not in all_workspace_ids:
-                all_workspace_ids.insert(0, workspace_id)
+        workspace_id = all_workspace_ids[0] if all_workspace_ids else DEFAULT_WORKSPACE_ID
 
         # Capture storage state (cookies + localStorage)
         storage_state = context.storage_state()

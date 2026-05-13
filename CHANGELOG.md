@@ -6,6 +6,12 @@
 
 当前无未发布变更。
 
+## 5.1.10（2026-05-13）
+
+### Fixed
+
+- 修复部分可上网 GPU Notebook 自定义镜像缺失 fontconfig 配置时，Chromium 能启动但在启智登录成功后渲染 SPA 过程中崩溃，导致 `inspire init` 报 `Playwright Chromium closed during Inspire login` 的问题。登录流程现在在认证 cookie 可用后立即通过 Browser API 捕获 session 和 workspace 列表，不再依赖完整渲染启智前端页面。
+
 ## 5.1.9（2026-05-13）
 
 ### Fixed
