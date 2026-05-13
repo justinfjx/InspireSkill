@@ -9,7 +9,11 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 from inspire.config import Config
 
 from .models import DEFAULT_WORKSPACE_ID, WebSession
-from .browser_launch import chromium_launch_kwargs, playwright_install_hint
+from .browser_launch import (
+    chromium_launch_kwargs,
+    is_playwright_browser_runtime_error,
+    playwright_install_hint,
+)
 from .proxy import get_playwright_proxy
 
 if TYPE_CHECKING:
@@ -40,16 +44,7 @@ def _is_browser_closed_error(exc: BaseException) -> bool:
 
 
 def _is_browser_launch_runtime_error(exc: BaseException) -> bool:
-    text = str(exc)
-    return any(
-        marker in text
-        for marker in (
-            "BrowserType.launch:",
-            "Executable doesn't exist",
-            "error while loading shared libraries",
-            "Host system is missing dependencies",
-        )
-    )
+    return is_playwright_browser_runtime_error(exc)
 
 
 def _raise_browser_launch_runtime_error(exc: BaseException) -> None:

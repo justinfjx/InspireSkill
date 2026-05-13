@@ -17,6 +17,7 @@ from inspire.config import (
     PROJECT_CONFIG_DIR,
     Config,
 )
+from inspire.platform.web.session.browser_launch import is_playwright_browser_runtime_error
 from .toml_helpers import _toml_dumps
 
 from inspire.platform.web.browser_api.core import _set_base_url
@@ -364,22 +365,32 @@ def _resolve_discover_runtime(
     else:
         try:
             session = web_session_module.get_web_session(require_workspace=True)
-        except (ValueError, RuntimeError):
+        except (ValueError, RuntimeError) as exc:
             _ensure_playwright_browser()
-            username, password, base_url = _resolve_credentials_interactive(
-                config,
-                cli_username=cli_username,
-                cli_base_url=cli_base_url,
-                confirm_config_username=True,
-            )
-            prompted_credentials = (username, password, base_url)
-            click.echo("Logging in...")
-            session = web_session_module.login_with_playwright(
-                username,
-                password,
-                base_url=base_url,
-            )
-            click.echo("Logged in.")
+            if is_playwright_browser_runtime_error(exc):
+                try:
+                    session = web_session_module.get_web_session(
+                        force_refresh=True,
+                        require_workspace=True,
+                    )
+                except (ValueError, RuntimeError) as retry_exc:
+                    if is_playwright_browser_runtime_error(retry_exc):
+                        raise
+            if session is None:
+                username, password, base_url = _resolve_credentials_interactive(
+                    config,
+                    cli_username=cli_username,
+                    cli_base_url=cli_base_url,
+                    confirm_config_username=True,
+                )
+                prompted_credentials = (username, password, base_url)
+                click.echo("Logging in...")
+                session = web_session_module.login_with_playwright(
+                    username,
+                    password,
+                    base_url=base_url,
+                )
+                click.echo("Logged in.")
 
     if prompted_credentials:
         account_key = prompted_credentials[0]

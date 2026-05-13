@@ -6,6 +6,12 @@
 
 当前无未发布变更。
 
+## 5.1.9（2026-05-13）
+
+### Fixed
+
+- 修复 `inspire init` 在 Notebook 容器首次接受 Playwright 系统依赖安装后，仍转入 username / password 重新确认提示的问题。现在浏览器运行时修复完成后会直接使用原账号配置刷新 Web session，只有真实账号或 session 失败时才提示重新确认登录信息。
+
 ## 5.1.8（2026-05-13）
 
 ### Fixed

@@ -175,6 +175,77 @@ def test_discover_relogin_confirms_configured_username(
     assert prompts[0] == ("Platform login username (login ID, not display name)", "仝")
 
 
+def test_discover_runtime_retries_configured_login_after_browser_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from inspire.platform.web.session.models import WebSession
+
+    cfg = type(
+        "Cfg",
+        (),
+        {
+            "username": "253108120116",
+            "password": "secret",
+            "base_url": "https://qz.sii.edu.cn",
+        },
+    )()
+    session = WebSession(
+        storage_state={"cookies": [{"name": "session", "value": "abc"}]},
+        workspace_id="ws-real",
+        login_username="253108120116",
+        base_url="https://qz.sii.edu.cn",
+        created_at=0,
+    )
+    calls: list[dict[str, object]] = []
+
+    class FakeWebSessionModule:
+        @staticmethod
+        def get_web_session(**kwargs):  # noqa: ANN001
+            calls.append(kwargs)
+            if len(calls) == 1:
+                raise RuntimeError(
+                    "Playwright Chromium could not start for Inspire login. Repair the "
+                    "browser runtime and Linux container dependencies with:"
+                )
+            return session
+
+        @staticmethod
+        def login_with_playwright(*_args, **_kwargs):  # noqa: ANN001
+            raise AssertionError("configured login retry should avoid prompting")
+
+    repaired: list[bool] = []
+    monkeypatch.setattr(
+        discover_module,
+        "_ensure_playwright_browser",
+        lambda: repaired.append(True),
+    )
+    monkeypatch.setattr(
+        discover_module.click,
+        "prompt",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("unexpected prompt")),
+    )
+
+    resolved_session, prompted_credentials, account_key, workspace_id = (
+        discover_module._resolve_discover_runtime(
+            config=cfg,
+            web_session_module=FakeWebSessionModule,
+            default_workspace_id="__default__",
+            cli_username=None,
+            cli_base_url=None,
+        )
+    )
+
+    assert resolved_session is session
+    assert prompted_credentials is None
+    assert account_key == "253108120116"
+    assert workspace_id == "ws-real"
+    assert repaired == [True]
+    assert calls == [
+        {"require_workspace": True},
+        {"force_refresh": True, "require_workspace": True},
+    ]
+
+
 def test_persist_prompted_credentials_updates_auth_username() -> None:
     global_data = {
         "auth": {"username": "仝"},

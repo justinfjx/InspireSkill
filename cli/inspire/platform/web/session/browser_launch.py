@@ -47,6 +47,21 @@ def playwright_install_hint(*, include_system_deps: bool | None = None) -> str:
     )
 
 
+def is_playwright_browser_runtime_error(exc: BaseException) -> bool:
+    """Return true for browser executable or system-library startup failures."""
+    text = str(exc)
+    return any(
+        marker in text
+        for marker in (
+            "Playwright Chromium could not start",
+            "BrowserType.launch:",
+            "Executable doesn't exist",
+            "error while loading shared libraries",
+            "Host system is missing dependencies",
+        )
+    )
+
+
 def chromium_launch_kwargs(*, headless: bool = True, proxy: Any = None) -> dict[str, Any]:
     """Return Chromium launch kwargs that also work in Inspire containers.
 
@@ -66,6 +81,7 @@ def chromium_launch_kwargs(*, headless: bool = True, proxy: Any = None) -> dict[
 __all__ = [
     "CHROMIUM_CONTAINER_ARGS",
     "chromium_launch_kwargs",
+    "is_playwright_browser_runtime_error",
     "playwright_install_args",
     "playwright_install_hint",
     "should_install_playwright_system_deps",
