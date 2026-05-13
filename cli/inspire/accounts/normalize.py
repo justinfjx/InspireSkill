@@ -136,7 +136,7 @@ def normalize_environment(
         report.playwright_install_attempted = True
         report.playwright_install_succeeded = _install_playwright_chromium()
         if report.playwright_install_succeeded:
-            report.playwright_ready = True
+            report.playwright_ready = _playwright_chromium_available()
 
     # Quarantining is destructive (rename), so we announce it even when not
     # interactive — scripted callers still need to know which files moved.
@@ -178,47 +178,44 @@ def _print_remaining_observations(report: NormalizationReport) -> None:
             print(
                 "  Playwright chromium install failed. SSO login will fail until you run "
                 "manually:\n"
-                f"    {playwright_install_hint()}\n"
+                f"    {playwright_install_hint(include_system_deps=False)}\n"
                 "    # or, on a non-uv install: playwright "
-                + " ".join(playwright_install_args()),
+                + " ".join(playwright_install_args(include_system_deps=False)),
+                file=sys.stderr,
+            )
+        elif report.playwright_install_attempted and report.playwright_install_succeeded:
+            print(
+                "  Playwright chromium is installed but cannot start in this environment. "
+                "If `inspire init` asks to install Linux system dependencies, accept it; "
+                "or run manually:\n"
+                f"    {playwright_install_hint()}",
                 file=sys.stderr,
             )
         else:
             print(
                 "  Playwright chromium not detected. SSO login will need it. Install with:\n"
-                f"    {playwright_install_hint()}\n"
+                f"    {playwright_install_hint(include_system_deps=False)}\n"
                 "    # or, on a non-uv install: playwright "
-                + " ".join(playwright_install_args()),
+                + " ".join(playwright_install_args(include_system_deps=False)),
                 file=sys.stderr,
             )
 
 
 def _playwright_chromium_available() -> bool:
-    """Best-effort check that Playwright's chromium browser is on disk.
-
-    Cheap: globs the well-known cache locations rather than spawning the
-    Playwright Node.js host (which costs >1 s per invocation).
-    """
+    """Best-effort check that Playwright's Chromium runtime can launch."""
     try:
-        import playwright  # noqa: F401
+        from playwright.sync_api import sync_playwright
+        from inspire.platform.web.session.browser_launch import chromium_launch_kwargs
     except ImportError:
         return False
 
-    custom = os.environ.get("PLAYWRIGHT_BROWSERS_PATH", "").strip()
-    candidates: list[Path] = []
-    if custom and custom != "0":
-        candidates.append(Path(custom))
-    candidates.extend(
-        (
-            Path.home() / "Library" / "Caches" / "ms-playwright",
-            Path.home() / ".cache" / "ms-playwright",
-            Path.home() / "AppData" / "Local" / "ms-playwright",
-        )
-    )
-    for cache_dir in candidates:
-        if cache_dir.exists() and any(cache_dir.glob("chromium*")):
-            return True
-    return False
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(**chromium_launch_kwargs(headless=True))
+            browser.close()
+        return True
+    except Exception:
+        return False
 
 
 def _install_playwright_chromium(timeout_s: int = 600) -> bool:
@@ -229,7 +226,10 @@ def _install_playwright_chromium(timeout_s: int = 600) -> bool:
     on PATH from this process.
     """
     candidates: list[list[str]] = []
-    install_args = playwright_install_args()
+    # Account setup should not mutate the base image's apt layer. It may
+    # download the browser binary, but Linux system dependencies are installed
+    # only from `inspire init`, after a launch probe fails and the user accepts.
+    install_args = playwright_install_args(include_system_deps=False)
     direct = shutil.which("playwright")
     if direct:
         candidates.append([direct, *install_args])

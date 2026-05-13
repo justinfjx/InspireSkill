@@ -6,6 +6,13 @@
 
 当前无未发布变更。
 
+## 5.1.8（2026-05-13）
+
+### Fixed
+
+- 收紧 Playwright 系统依赖安装边界：安装器和 `inspire account add` 不再主动运行 `playwright install --with-deps chromium`，避免在已有镜像环境中无提示改动 apt 层；它们只预装浏览器二进制并做启动探测。
+- `inspire init` 仍会在 Chromium 无法启动时提示安装 Linux 系统依赖，只有用户确认后才运行 `--with-deps` 修复。已有可用 Playwright / Chromium 运行时会被 launch probe 识别并直接复用。
+
 ## 5.1.7（2026-05-13）
 
 ### Fixed

@@ -40,9 +40,11 @@ def playwright_install_args(*, include_system_deps: bool | None = None) -> list[
     return args
 
 
-def playwright_install_hint() -> str:
+def playwright_install_hint(*, include_system_deps: bool | None = None) -> str:
     """Return an install command suitable for user-facing diagnostics."""
-    return "uvx --from inspire-skill playwright " + " ".join(playwright_install_args())
+    return "uvx --from inspire-skill playwright " + " ".join(
+        playwright_install_args(include_system_deps=include_system_deps)
+    )
 
 
 def chromium_launch_kwargs(*, headless: bool = True, proxy: Any = None) -> dict[str, Any]:

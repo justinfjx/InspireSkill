@@ -86,11 +86,26 @@ need curl
 need tar
 need mktemp
 
-playwright_install_args() {
+playwright_system_deps_args() {
   if [[ "$(uname -s)" == "Linux" ]] && [[ "$(id -u)" == "0" ]] && command -v apt-get >/dev/null 2>&1; then
     printf '%s\n' install --with-deps chromium
   else
     printf '%s\n' install chromium
+  fi
+}
+
+playwright_probe() {
+  if command -v uv >/dev/null 2>&1; then
+    uvx --from "$SPEC" python - "$@" >/dev/null 2>&1 <<'PY'
+from inspire.platform.web.session.browser_launch import chromium_launch_kwargs
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(**chromium_launch_kwargs(headless=True))
+    browser.close()
+PY
+  else
+    return 1
   fi
 }
 
@@ -160,7 +175,7 @@ if (( INSTALL_CLI )); then
   fi
 
   log "installing Playwright Chromium for SSO login"
-  PLAYWRIGHT_INSTALL_ARGS=($(playwright_install_args))
+  PLAYWRIGHT_INSTALL_ARGS=(install chromium)
   if command -v uv >/dev/null 2>&1; then
     if uvx --from "$SPEC" playwright "${PLAYWRIGHT_INSTALL_ARGS[@]}" >/dev/null; then
       ok "Playwright Chromium installed"
@@ -175,6 +190,20 @@ if (( INSTALL_CLI )); then
     fi
   else
     warn "couldn't find a Playwright CLI to install Chromium automatically."
+  fi
+
+  if [[ "$INSTALLER" == "uv" ]]; then
+    if playwright_probe; then
+      ok "Playwright Chromium launch check passed"
+    else
+      PLAYWRIGHT_DEPS_ARGS=($(playwright_system_deps_args))
+      if [[ "${PLAYWRIGHT_DEPS_ARGS[*]}" == *"--with-deps"* ]]; then
+        warn "Playwright Chromium is installed but cannot start; `inspire init` will ask before installing Linux system dependencies."
+        warn "Manual repair command: uvx --from $PACKAGE playwright ${PLAYWRIGHT_DEPS_ARGS[*]}"
+      else
+        warn "Playwright Chromium is installed but cannot start; rerun `inspire init` for diagnostics."
+      fi
+    fi
   fi
 fi
 
