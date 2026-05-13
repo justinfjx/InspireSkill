@@ -102,7 +102,7 @@ def _bootstrap_first_account_if_needed(
 
     if cli_username is None:
         username = click.prompt(
-            "Platform login username",
+            "Platform login username (login ID, not display name)",
             default=account_name,
             show_default=True,
         )
@@ -179,7 +179,10 @@ def _bootstrap_first_account_if_needed(
     "--username",
     "-u",
     default=None,
-    help="Platform username (prompted if not configured). Used by plain init discovery.",
+    help=(
+        "Platform login username, such as phone, student ID, or email "
+        "(not the display name). Used by plain init discovery."
+    ),
 )
 @click.option(
     "--base-url",

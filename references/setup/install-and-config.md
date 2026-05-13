@@ -71,7 +71,9 @@ inspire account add <name>
 inspire config show --compact
 ```
 
-`inspire account add` 会询问平台 username、password、base URL、代理和是否设为活动账号。结果写入 `~/.inspire/accounts/<name>/config.toml`，包含身份、`base_url`、代理等。
+`inspire account add` 会询问平台登录 username、password、base URL、代理和是否设为活动账号。这里的 username 必须是登录 ID（手机号、学号 / 工号或邮箱等），不是网页右上角显示的中文姓名。结果写入 `~/.inspire/accounts/<name>/config.toml`，包含身份、`base_url`、代理等。
+
+如果在启智 Notebook 容器内安装 InspireSkill，CLI 不会继承打开该 Notebook 时浏览器里的 SSO 登录态，仍需要用账号密码生成自己的 Web session。Notebook 内可运行，但 `inspire config show --compact` 里的 `INSPIRE_USERNAME` 也必须是登录 ID；如果误填成显示名，重新运行 `inspire init --username <login-id>` 或重建账号配置。
 
 账号配置不包含远端工作目录。远端路径通过项目级 `[path_aliases]` 管理，`inspire init` 会写入默认 alias，例如 `me`、`public`、`global-me` 以及按存储池区分的 `ssd.me` / `hdd.me` / `qb-ilm2.me`。
 

@@ -124,6 +124,7 @@ def _resolve_credentials_interactive(
     cli_username: str | None,
     cli_base_url: str | None,
     allow_config_password: bool = False,
+    confirm_config_username: bool = False,
 ) -> tuple[str, str, str]:
     """Resolve base_url, username, and password, prompting when missing."""
     placeholder = "https://api.example.com"
@@ -144,10 +145,19 @@ def _resolve_credentials_interactive(
     username = (cli_username or "").strip()
     if not username:
         cfg_username = str(getattr(config, "username", "") or "").strip()
-        if cfg_username:
+        if cfg_username and confirm_config_username:
+            username = click.prompt(
+                "Platform login username (login ID, not display name)",
+                default=cfg_username,
+                type=str,
+            ).strip()
+        elif cfg_username:
             username = cfg_username
     if not username:
-        username = click.prompt("Username", type=str).strip()
+        username = click.prompt(
+            "Platform login username (login ID, not display name)",
+            type=str,
+        ).strip()
     if not username:
         click.echo(click.style("Username is required.", fg="red"))
         raise SystemExit(1)
@@ -347,6 +357,7 @@ def _resolve_discover_runtime(
                 config,
                 cli_username=cli_username,
                 cli_base_url=cli_base_url,
+                confirm_config_username=True,
             )
             prompted_credentials = (username, password, base_url)
             click.echo("Logging in...")
@@ -980,8 +991,14 @@ def _persist_prompted_credentials(
 ) -> None:
     if not prompted_credentials:
         return
-    _, prompted_password, prompted_base_url = prompted_credentials
-    account_section["password"] = prompted_password
+    prompted_username, prompted_password, prompted_base_url = prompted_credentials
+    auth = global_data.get("auth")
+    if not isinstance(auth, dict):
+        auth = {}
+        global_data["auth"] = auth
+    auth["username"] = prompted_username
+    auth["password"] = prompted_password
+    account_section.pop("password", None)
     api = global_data.get("api")
     if not isinstance(api, dict):
         api = {}

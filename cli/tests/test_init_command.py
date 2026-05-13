@@ -6,6 +6,7 @@ import pytest
 from click.testing import CliRunner
 
 from inspire.cli.context import EXIT_GENERAL_ERROR, EXIT_SUCCESS
+from inspire.cli.commands.init import discover as discover_module
 from inspire.cli.commands.init import init_cmd as init_cmd_module
 from inspire.cli.main import main as cli_main
 from inspire.config import Config
@@ -135,3 +136,63 @@ def test_init_bootstraps_first_account_before_discover(
     ).read_text(encoding="utf-8")
     assert 'username = "zillionx"' in account_config
     assert 'base_url = "https://qz.sii.edu.cn"' in account_config
+
+
+def test_discover_relogin_confirms_configured_username(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = type(
+        "Cfg",
+        (),
+        {
+            "username": "仝",
+            "password": "",
+            "base_url": "https://qz.sii.edu.cn",
+        },
+    )()
+    prompts: list[tuple[str, object]] = []
+
+    def fake_prompt(text: str, **kwargs):  # noqa: ANN001
+        prompts.append((text, kwargs.get("default")))
+        if text.startswith("Platform login username"):
+            return "253108120116"
+        if text == "Password":
+            return "secret"
+        raise AssertionError(f"unexpected prompt: {text}")
+
+    monkeypatch.setattr(discover_module.click, "prompt", fake_prompt)
+
+    username, password, base_url = discover_module._resolve_credentials_interactive(
+        cfg,
+        cli_username=None,
+        cli_base_url=None,
+        confirm_config_username=True,
+    )
+
+    assert username == "253108120116"
+    assert password == "secret"
+    assert base_url == "https://qz.sii.edu.cn"
+    assert prompts[0] == ("Platform login username (login ID, not display name)", "仝")
+
+
+def test_persist_prompted_credentials_updates_auth_username() -> None:
+    global_data = {
+        "auth": {"username": "仝"},
+        "api": {"base_url": "https://qz.sii.edu.cn"},
+    }
+    account_section = {"password": "old-secret"}
+
+    discover_module._persist_prompted_credentials(
+        global_data=global_data,
+        account_section=account_section,
+        prompted_credentials=(
+            "253108120116",
+            "new-secret",
+            "https://qz.sii.edu.cn",
+        ),
+    )
+
+    assert global_data["auth"]["username"] == "253108120116"
+    assert global_data["auth"]["password"] == "new-secret"
+    assert global_data["api"]["base_url"] == "https://qz.sii.edu.cn"
+    assert "password" not in account_section

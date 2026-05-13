@@ -22,7 +22,11 @@ DEFAULT_PROXY_HINT = "http://127.0.0.1:7897"
 @click.argument("name")
 @click.option(
     "--username",
-    help="Platform login username. Defaults to the account name; asked interactively if omitted.",
+    help=(
+        "Platform login username, such as phone, student ID, or email "
+        "(not the display name). Defaults to the account name; asked "
+        "interactively if omitted."
+    ),
 )
 @click.option(
     "--password",
@@ -59,7 +63,7 @@ def add(
 ) -> None:
     """Create a new account at ``~/.inspire/accounts/<name>/``.
 
-    By default walks you through five short prompts — platform username,
+    By default walks you through five short prompts — platform login username,
     password (with confirmation), base URL, proxy, and whether to switch
     to the new account. Any value passed via a flag skips the matching
     prompt. Pass ``--non-interactive`` to silence every prompt; missing
@@ -91,7 +95,7 @@ def add(
             username = validated
         else:
             username = click.prompt(
-                "Platform login username",
+                "Platform login username (login ID, not display name)",
                 default=validated,
                 show_default=True,
             )

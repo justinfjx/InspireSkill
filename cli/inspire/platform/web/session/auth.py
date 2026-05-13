@@ -187,7 +187,11 @@ def login_with_playwright(
                 except Exception:
                     pass
                 page.wait_for_timeout(500)
-            raise ValueError("Login did not complete; check credentials")
+            raise ValueError(
+                "Login did not complete. Check that the password is correct and "
+                "`auth.username` is the platform login ID (phone, student ID, or email), "
+                "not the display name."
+            )
 
         _wait_for_api_auth()
 
