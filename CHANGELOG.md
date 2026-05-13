@@ -6,6 +6,13 @@
 
 当前无未发布变更。
 
+## 5.1.5（2026-05-13）
+
+### Fixed
+
+- 修复 `inspire init` 在账号 Web session 失效后重新登录时只提示密码、不允许修正平台登录 username 的问题。现在重新登录会确认 `auth.username` 是否为登录 ID（手机号、学号 / 工号或邮箱等），并在登录成功后把确认后的 username 和密码写回当前账号配置。
+- 改善账号初始化提示、登录失败错误和安装配置文档，明确 `INSPIRE_USERNAME` / `auth.username` 必须是平台登录 ID，不是网页显示名；在启智 Notebook 容器内安装时仍需要独立生成 CLI Web session，不会继承打开 Notebook 的浏览器 SSO 登录态。
+
 ## 5.1.4（2026-05-12）
 
 ### Changed
