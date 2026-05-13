@@ -86,6 +86,14 @@ need curl
 need tar
 need mktemp
 
+playwright_install_args() {
+  if [[ "$(uname -s)" == "Linux" ]] && [[ "$(id -u)" == "0" ]] && command -v apt-get >/dev/null 2>&1; then
+    printf '%s\n' install --with-deps chromium
+  else
+    printf '%s\n' install chromium
+  fi
+}
+
 # ---- install CLI via uv tool / pipx ----------------------------------------
 # Install from PyPI, so the user path stays on published releases.
 SPEC="$PACKAGE"
@@ -152,17 +160,18 @@ if (( INSTALL_CLI )); then
   fi
 
   log "installing Playwright Chromium for SSO login"
+  PLAYWRIGHT_INSTALL_ARGS=($(playwright_install_args))
   if command -v uv >/dev/null 2>&1; then
-    if uvx --from "$SPEC" playwright install chromium >/dev/null; then
+    if uvx --from "$SPEC" playwright "${PLAYWRIGHT_INSTALL_ARGS[@]}" >/dev/null; then
       ok "Playwright Chromium installed"
     else
-      warn "couldn't install Playwright Chromium automatically; run: uvx --from $PACKAGE playwright install chromium"
+      warn "couldn't install Playwright Chromium automatically; run: uvx --from $PACKAGE playwright ${PLAYWRIGHT_INSTALL_ARGS[*]}"
     fi
   elif command -v playwright >/dev/null 2>&1; then
-    if playwright install chromium >/dev/null; then
+    if playwright "${PLAYWRIGHT_INSTALL_ARGS[@]}" >/dev/null; then
       ok "Playwright Chromium installed"
     else
-      warn "couldn't install Playwright Chromium automatically; run: playwright install chromium"
+      warn "couldn't install Playwright Chromium automatically; run: playwright ${PLAYWRIGHT_INSTALL_ARGS[*]}"
     fi
   else
     warn "couldn't find a Playwright CLI to install Chromium automatically."

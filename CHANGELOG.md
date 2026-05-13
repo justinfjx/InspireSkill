@@ -6,6 +6,13 @@
 
 当前无未发布变更。
 
+## 5.1.7（2026-05-13）
+
+### Fixed
+
+- 修复启智 Notebook 的最小 Ubuntu 镜像内安装 InspireSkill 后，`inspire init` 因 Playwright Chromium 缺少 `libglib-2.0.so.0` 等系统动态库而在 `BrowserType.launch` 阶段失败的问题。Linux root + `apt-get` 环境下，安装器、`account add` 和 `init` 的浏览器修复路径现在会使用 `playwright install --with-deps chromium`。
+- 改善 Playwright 浏览器启动失败诊断：当 Chromium 可执行文件缺失或系统依赖缺失时，`inspire init` 会给出可执行的修复命令，并在交互初始化路径中重新尝试安装浏览器运行时。
+
 ## 5.1.6（2026-05-13）
 
 ### Fixed

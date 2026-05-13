@@ -8,6 +8,7 @@ import requests
 
 from inspire.platform.web import session as ws
 from inspire.platform.web.session import auth as ws_auth
+from inspire.platform.web.session import browser_launch
 from inspire.platform.web.session.browser_launch import (
     CHROMIUM_CONTAINER_ARGS,
     chromium_launch_kwargs,
@@ -107,6 +108,48 @@ def test_browser_closed_error_detection() -> None:
         RuntimeError("Page.goto: Target page, context or browser has been closed")
     )
     assert not ws_auth._is_browser_closed_error(RuntimeError("Timeout 60000ms exceeded"))
+
+
+def test_browser_launch_runtime_error_detection() -> None:
+    assert ws_auth._is_browser_launch_runtime_error(
+        RuntimeError(
+            "BrowserType.launch: Target page, context or browser has been closed\n"
+            "error while loading shared libraries: libglib-2.0.so.0"
+        )
+    )
+    assert not ws_auth._is_browser_launch_runtime_error(RuntimeError("Timeout 60000ms exceeded"))
+
+
+def test_playwright_install_args_include_deps_for_root_linux_apt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(browser_launch.sys, "platform", "linux")
+    monkeypatch.setattr(browser_launch.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        browser_launch.shutil,
+        "which",
+        lambda name: "/usr/bin/apt-get" if name == "apt-get" else None,
+    )
+
+    assert browser_launch.playwright_install_args() == [
+        "install",
+        "--with-deps",
+        "chromium",
+    ]
+
+
+def test_playwright_install_args_skip_deps_when_not_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(browser_launch.sys, "platform", "linux")
+    monkeypatch.setattr(browser_launch.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(
+        browser_launch.shutil,
+        "which",
+        lambda name: "/usr/bin/apt-get" if name == "apt-get" else None,
+    )
+
+    assert browser_launch.playwright_install_args() == ["install", "chromium"]
 
 
 def test_build_requests_session_applies_toml_proxy(monkeypatch: pytest.MonkeyPatch) -> None:

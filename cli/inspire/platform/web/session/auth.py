@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 from inspire.config import Config
 
 from .models import DEFAULT_WORKSPACE_ID, WebSession
-from .browser_launch import chromium_launch_kwargs
+from .browser_launch import chromium_launch_kwargs, playwright_install_hint
 from .proxy import get_playwright_proxy
 
 if TYPE_CHECKING:
@@ -37,6 +37,28 @@ def _has_real_workspace_id(session: WebSession) -> bool:
 def _is_browser_closed_error(exc: BaseException) -> bool:
     text = str(exc)
     return "Target page, context or browser has been closed" in text
+
+
+def _is_browser_launch_runtime_error(exc: BaseException) -> bool:
+    text = str(exc)
+    return any(
+        marker in text
+        for marker in (
+            "BrowserType.launch:",
+            "Executable doesn't exist",
+            "error while loading shared libraries",
+            "Host system is missing dependencies",
+        )
+    )
+
+
+def _raise_browser_launch_runtime_error(exc: BaseException) -> None:
+    raise RuntimeError(
+        "Playwright Chromium could not start for Inspire login. Repair the "
+        "browser runtime and Linux container dependencies with:\n"
+        f"    {playwright_install_hint()}\n"
+        "Then retry `inspire init`."
+    ) from exc
 
 
 def _raise_browser_closed_error(exc: BaseException) -> None:
@@ -95,20 +117,8 @@ def login_with_playwright(
         try:
             browser = p.chromium.launch(**chromium_launch_kwargs(headless=headless, proxy=proxy))
         except Exception as exc:
-            if "Executable doesn't exist" in str(exc):
-                # ConfigError surfaces through the standard CLI error path
-                # (`exit_with_error` / `_handle_error`) instead of bubbling up
-                # as an "Unhandled exception" traceback. `inspire account add`
-                # offers to install chromium proactively; this branch only
-                # fires when a user reaches login without going through
-                # account add (e.g. uv tool upgrade across major versions).
-                from inspire.config import ConfigError
-                raise ConfigError(
-                    "Playwright chromium is not installed; SSO login cannot proceed. "
-                    "Install once with:\n"
-                    "    uvx --from inspire-skill playwright install chromium\n"
-                    "or, on a non-uv install: `playwright install chromium`."
-                ) from None
+            if _is_browser_launch_runtime_error(exc):
+                _raise_browser_launch_runtime_error(exc)
             raise
         context = browser.new_context(proxy=proxy, ignore_https_errors=True)
         page = context.new_page()

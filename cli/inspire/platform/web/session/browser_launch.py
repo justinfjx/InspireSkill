@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+import sys
 from typing import Any
 
 
@@ -10,6 +13,36 @@ CHROMIUM_CONTAINER_ARGS = (
     "--disable-setuid-sandbox",
     "--disable-dev-shm-usage",
 )
+
+
+def should_install_playwright_system_deps() -> bool:
+    """Return true when Playwright can repair Linux browser dependencies.
+
+    Inspire notebooks commonly run as root in minimal Ubuntu containers. In
+    that environment ``playwright install --with-deps chromium`` can install
+    missing shared libraries such as libglib in the same one-time setup step.
+    """
+    if not sys.platform.startswith("linux"):
+        return False
+    if not hasattr(os, "geteuid") or os.geteuid() != 0:
+        return False
+    return shutil.which("apt-get") is not None
+
+
+def playwright_install_args(*, include_system_deps: bool | None = None) -> list[str]:
+    """Return arguments for the Playwright CLI install command."""
+    if include_system_deps is None:
+        include_system_deps = should_install_playwright_system_deps()
+    args = ["install"]
+    if include_system_deps:
+        args.append("--with-deps")
+    args.append("chromium")
+    return args
+
+
+def playwright_install_hint() -> str:
+    """Return an install command suitable for user-facing diagnostics."""
+    return "uvx --from inspire-skill playwright " + " ".join(playwright_install_args())
 
 
 def chromium_launch_kwargs(*, headless: bool = True, proxy: Any = None) -> dict[str, Any]:
@@ -28,4 +61,10 @@ def chromium_launch_kwargs(*, headless: bool = True, proxy: Any = None) -> dict[
     return kwargs
 
 
-__all__ = ["CHROMIUM_CONTAINER_ARGS", "chromium_launch_kwargs"]
+__all__ = [
+    "CHROMIUM_CONTAINER_ARGS",
+    "chromium_launch_kwargs",
+    "playwright_install_args",
+    "playwright_install_hint",
+    "should_install_playwright_system_deps",
+]

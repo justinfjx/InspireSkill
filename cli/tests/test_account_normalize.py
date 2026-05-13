@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 
+import inspire.accounts.normalize as normalize_module
 from inspire.accounts import normalize_environment, NORMALIZATION_SENTINEL
 from inspire.accounts.normalize import _LEGACY_FILES_UNDER_INSPIRE_HOME
 
@@ -179,3 +180,19 @@ def test_playwright_missing_auto_install_fails(
     assert report.playwright_install_attempted is True
     assert report.playwright_install_succeeded is False
     assert report.playwright_ready is False
+
+
+def test_install_playwright_chromium_uses_shared_install_args(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[list[str]] = []
+    monkeypatch.setattr(normalize_module, "playwright_install_args", lambda: ["install", "x"])
+    monkeypatch.setattr(normalize_module.shutil, "which", lambda _name: None)
+
+    def fake_run(cmd: list[str], **_kwargs) -> None:
+        calls.append(cmd)
+
+    monkeypatch.setattr(normalize_module.subprocess, "run", fake_run)
+
+    assert normalize_module._install_playwright_chromium()
+    assert calls == [[normalize_module.sys.executable, "-m", "playwright", "install", "x"]]

@@ -18,6 +18,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from inspire.accounts.storage import inspire_home
+from inspire.platform.web.session.browser_launch import (
+    playwright_install_args,
+    playwright_install_hint,
+)
 
 NORMALIZATION_SENTINEL = ".environment-normalized-v3"
 
@@ -174,17 +178,17 @@ def _print_remaining_observations(report: NormalizationReport) -> None:
             print(
                 "  Playwright chromium install failed. SSO login will fail until you run "
                 "manually:\n"
-                "    playwright install chromium\n"
-                "    # or, when InspireSkill is installed via uv tool:\n"
-                "    uvx --from inspire-skill playwright install chromium",
+                f"    {playwright_install_hint()}\n"
+                "    # or, on a non-uv install: playwright "
+                + " ".join(playwright_install_args()),
                 file=sys.stderr,
             )
         else:
             print(
                 "  Playwright chromium not detected. SSO login will need it. Install with:\n"
-                "    playwright install chromium\n"
-                "    # or, when InspireSkill is installed via uv tool:\n"
-                "    uvx --from inspire-skill playwright install chromium",
+                f"    {playwright_install_hint()}\n"
+                "    # or, on a non-uv install: playwright "
+                + " ".join(playwright_install_args()),
                 file=sys.stderr,
             )
 
@@ -218,17 +222,18 @@ def _playwright_chromium_available() -> bool:
 
 
 def _install_playwright_chromium(timeout_s: int = 600) -> bool:
-    """Attempt ``playwright install chromium``. Returns True on success.
+    """Attempt Playwright Chromium installation. Returns True on success.
 
     Tries the in-venv ``playwright`` binary first (works under ``uv tool
     install``); falls back to ``python -m playwright`` if the bin is not
     on PATH from this process.
     """
     candidates: list[list[str]] = []
+    install_args = playwright_install_args()
     direct = shutil.which("playwright")
     if direct:
-        candidates.append([direct, "install", "chromium"])
-    candidates.append([sys.executable, "-m", "playwright", "install", "chromium"])
+        candidates.append([direct, *install_args])
+    candidates.append([sys.executable, "-m", "playwright", *install_args])
 
     for cmd in candidates:
         try:

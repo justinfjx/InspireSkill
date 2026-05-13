@@ -95,7 +95,10 @@ def _ensure_playwright_browser() -> None:
 
     try:
         from playwright.sync_api import sync_playwright
-        from inspire.platform.web.session.browser_launch import chromium_launch_kwargs
+        from inspire.platform.web.session.browser_launch import (
+            chromium_launch_kwargs,
+            playwright_install_args,
+        )
 
         with sync_playwright() as p:
             browser = p.chromium.launch(**chromium_launch_kwargs(headless=True))
@@ -105,13 +108,22 @@ def _ensure_playwright_browser() -> None:
         pass
 
     click.echo()
-    click.echo("A local browser runtime is required for platform login (one-time ~150 MB download).")
+    install_args = playwright_install_args()
+    if "--with-deps" in install_args:
+        click.echo(
+            "A local browser runtime and Linux system dependencies are required for "
+            "platform login (one-time setup)."
+        )
+    else:
+        click.echo(
+            "A local browser runtime is required for platform login (one-time ~150 MB download)."
+        )
     if not click.confirm("Install Chromium now?", default=True):
         click.echo("Cannot proceed without a browser for platform login.")
         raise SystemExit(1)
 
     result = subprocess.run(
-        [sys.executable, "-m", "playwright", "install", "chromium"],
+        [sys.executable, "-m", "playwright", *install_args],
         capture_output=False,
     )
     if result.returncode != 0:
