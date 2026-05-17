@@ -24,7 +24,7 @@ description: "Execution-first Inspire platform CLI usage manual, with on-demand 
 
 日常主 workspace 基本只有两类：`CPU资源空间` 用于 CPU notebook、HPC、联网下载、依赖安装和镜像准备；`分布式训练空间` 用于 GPU notebook、GPU job、模型 serving 和训练调试。国产卡分区、`CI-情境智能` 工作空间或其它小组专属空间是特殊项目 / 特殊硬件路径，只有任务明确需要时才切换。
 
-联网能力属于 workspace / compute group 的实际环境，而不是命令本身。公网和 SII 内部源分开判断：拉 Git、取 Hugging Face 权重、访问外部数据源时，优先在 `CPU资源空间` 的可上网 CPU notebook 中完成，然后把结果留在 `me` / `public` 等 path alias 指向的共享路径，或保存成镜像；Python / Linux 包、Conda、npm、Maven、Docker Harbor、OSS、DNS 和 NTP 这类内部源优先在目标 notebook 里配置，`分布式训练空间` 等 GPU 空间也可以按实际可达性直接跑通依赖。环境跑通后用 `inspire image save` 固化成镜像，再给后续 notebook / job / HPC / Ray / serving 复用。
+联网能力属于 workspace / compute group 的实际环境，而不是命令本身。公网和 SII 内部源分开判断：拉 Git、取 Hugging Face 权重、访问外部数据源时，优先在 `CPU资源空间` 的可上网 CPU notebook 中完成，然后把结果留在 `me` / `public` 等 path alias 指向的共享路径，或保存成镜像；Python / Linux 包、Conda、npm、Maven、Docker 镜像仓库、OSS 和 NTP 这类内部源优先在目标 notebook 里配置，`分布式训练空间` 等 GPU 空间也可以按实际可达性直接跑通依赖。环境跑通后用 `inspire image save` 固化成镜像，再给后续 notebook / job / HPC / Ray / serving 复用。
 
 ## 2. 执行闭环
 
@@ -32,7 +32,7 @@ description: "Execution-first Inspire platform CLI usage manual, with on-demand 
 
 1. 用 help 确认可用命令和参数。
 2. 用 `inspire config context` 和 `inspire <workload> quota --workspace CPU资源空间` 或 `--workspace 分布式训练空间` 确认名字和可用规格；只有查询命令里的 `--group` 可输入 compute group 名称关键词或子串，不要求完整名称。`create` / profile 的 `--group` 必须填写完整 compute group 名称。
-3. 如果 `分布式训练空间` 或目标 compute group 不可上网，外部下载走 `CPU资源空间`；Python / Linux 包、Conda、npm、Maven、Docker 镜像、OSS、DNS / NTP 这类平台内部可达资源先在目标 notebook 里按 SII 内部源处理，跑通后保存镜像。
+3. 如果 `分布式训练空间` 或目标 compute group 不可上网，外部下载走 `CPU资源空间`；Python / Linux 包、Conda、npm、Maven、Docker 镜像、OSS 和 NTP 这类平台内部可达资源先在目标 notebook 里按 SII 内部源处理，跑通后保存镜像。
 4. 用 notebook / job / hpc / ray / serving 的 create 命令提交，必要时先 `--dry-run`。
 5. 用 events 看调度和启动原因，用 logs 看程序输出，用 metrics 看资源是否真的在工作，用 status / instances 看对象和实例状态。
 6. 终态且不再需要的 notebook、job、HPC、Ray、serving 和临时镜像要清理；运行中的对象先 stop，再 delete。

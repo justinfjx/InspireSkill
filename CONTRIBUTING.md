@@ -58,7 +58,7 @@ Path alias 只表示远端路径。`me`、`public`、`global-me` 和存储池前
 
 ## 平台工作流
 
-公网和 SII 内部源分开判断。公网下载、外部 Git、Hugging Face 权重和外部数据源通常放在 `CPU资源空间` 的可上网 notebook；PIP、Apt、Conda、npm、Maven、Docker Harbor、OSS、DNS 和 NTP 等内部源优先在目标 notebook 中按实际可达性配置，`分布式训练空间` 等 GPU 空间也可以直接跑通依赖。
+公网和 SII 内部源分开判断。公网下载、外部 Git、Hugging Face 权重和外部数据源通常放在 `CPU资源空间` 的可上网 notebook；PIP、Apt、Conda、npm、Maven、Docker 镜像仓库、OSS 和 NTP 等内部源优先在目标 notebook 中按实际可达性配置，`分布式训练空间` 等 GPU 空间也可以直接跑通依赖。
 
 运行环境跑通后要保存成镜像。`image save` 会触发一段中等时长的镜像保存过程，过程中不可操作该 notebook；保存完毕后 notebook 不会被自动停止，仍可继续连接和使用。保存出的镜像才是后续 notebook / job / HPC / Ray / serving 应复用的稳定环境。
 

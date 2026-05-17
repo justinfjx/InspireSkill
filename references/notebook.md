@@ -13,7 +13,7 @@ Notebook 是交互工作台，不只是“开一个终端”。常见角色：
 | 远端文件入口 | 用 `exec` / `shell` / `scp` 管理共享盘文件 |
 | 临时服务盒 | 启动 Gradio、FastAPI、OpenAI-compatible API，再通过 notebook proxy 访问 |
 
-`分布式训练空间` 不可上网时，不要把 `git clone`、外部权重下载或访问公网数据源放到目标 GPU notebook / job 里。先在 `CPU资源空间` 的可上网 CPU notebook 中准备，再把结果留在 `me` / `public` 等共享路径，或保存为镜像。安装 Python / Apt / Conda / npm / Maven 包、访问内部 Docker Harbor 或 OSS 时优先看 SII 内部源；它和公网不同，在不可上网 compute group 里也可能可用，因此可以在目标 GPU notebook 中按实际可达性直接配置并跑通任务。
+`分布式训练空间` 不可上网时，不要把 `git clone`、外部权重下载或访问公网数据源放到目标 GPU notebook / job 里。先在 `CPU资源空间` 的可上网 CPU notebook 中准备，再把结果留在 `me` / `public` 等共享路径，或保存为镜像。安装 Python / Apt / Conda / npm / Maven 包、访问内部 Docker 镜像仓库或 OSS 时优先看 SII 内部源；它和公网不同，在不可上网 compute group 里也可能可用，因此可以在目标 GPU notebook 中按实际可达性直接配置并跑通任务。
 
 日常 workspace 心智模型很简单：`CPU资源空间` 负责 CPU notebook 和联网准备，`分布式训练空间` 负责 GPU notebook 和训练调试。国产卡分区、`CI-情境智能` 工作空间或其它小组专属空间属于特殊硬件 / 特殊项目路径，只有任务明确要求时才切换。
 
@@ -111,8 +111,8 @@ inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,
 
 inspire notebook ssh connect base-box --workspace CPU资源空间
 inspire notebook exec base-box --cwd me:<repo> \
-  "pip config set global.index-url http://nexus.sii.shaipower.online/repository/pypi/simple && \
-   pip config set global.trusted-host nexus.sii.shaipower.online && \
+  "pip3 config set global.index-url http://nexus.sii.shaipower.online/repository/pypi/simple/ && \
+   pip3 config set global.trusted-host nexus.sii.shaipower.online && \
    pip install -r requirements.txt && python -m pytest -q"
 inspire notebook install-deps base-box --slurm --ray
 inspire image save base-box --workspace CPU资源空间 -n <IMAGE_NAME> -v v1 --visibility public --wait
