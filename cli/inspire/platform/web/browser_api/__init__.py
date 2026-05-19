@@ -89,6 +89,7 @@ from .rtunnel import (
     OpenSSHJammyInstallError,
     OPENSSH_JAMMY_INSTALL_LOG,
     RtunnelMissingInContainerError,
+    SII_UBUNTU_APT_MIRROR,
     setup_notebook_rtunnel,
 )
 from .projects import (
@@ -228,6 +229,7 @@ __all__ = [
     "OpenSSHJammyInstallError",
     "OPENSSH_JAMMY_INSTALL_LOG",
     "RtunnelMissingInContainerError",
+    "SII_UBUNTU_APT_MIRROR",
     "setup_notebook_rtunnel",
     "start_notebook",
     "stop_notebook",

@@ -958,7 +958,8 @@ def test_run_notebook_ssh_reports_jammy_openssh_install_failure(
     assert exc.value.code == EXIT_API_ERROR
     assert captured["type"] == "SetupError"
     assert "Ubuntu 22.04 OpenSSH" in captured["message"]
-    assert "可上网区" in captured["hint"]
+    assert "SII 内部 Ubuntu apt 源" in captured["hint"]
+    assert browser_api_module.SII_UBUNTU_APT_MIRROR in captured["hint"]
     assert browser_api_module.OPENSSH_JAMMY_INSTALL_LOG in captured["hint"]
 
 

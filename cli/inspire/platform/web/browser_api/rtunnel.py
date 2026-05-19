@@ -47,6 +47,7 @@ RTUNNEL_MISSING_MARKER = "INSPIRE_RTUNNEL_MISSING_IN_BOOTSTRAP"
 OPENSSH_JAMMY_INSTALL_FAILED_MARKER = "INSPIRE_OPENSSH_JAMMY_INSTALL_FAILED"
 OPENSSH_JAMMY_INSTALL_FAILED_FILE = "/tmp/.inspire_openssh_jammy_install_failed"
 OPENSSH_JAMMY_INSTALL_LOG = "/tmp/inspire-openssh-jammy-install.log"
+SII_UBUNTU_APT_MIRROR = "http://nexus.sii.shaipower.online/repository/ubuntu"
 
 # Canonical path of the InspireSkill offline SSH-bootstrap kit on the Inspire
 # platform's global_public fileset — mounted read-only in every notebook
@@ -57,8 +58,7 @@ OPENSSH_JAMMY_INSTALL_LOG = "/tmp/inspire-openssh-jammy-install.log"
 # This is the canonical offline source for rtunnel and Ubuntu 24.04 sshd.
 # Ubuntu 22.04 sshd is a temporary compatibility exception: there is no jammy
 # sshd kit yet, so jammy containers that lack OpenSSH 8.9, or that were
-# polluted by the 24.04 kit, downgrade via apt and therefore need internet
-# egress during setup.
+# polluted by the 24.04 kit, downgrade via the SII internal Ubuntu apt mirror.
 INSPIRE_BOOTSTRAP_ROOT = "/inspire/hdd/global_public/inspire-skill-bootstrap/v1"
 
 
@@ -75,7 +75,7 @@ def build_rtunnel_setup_commands(
     kit debs when missing. Ubuntu 22.04 sshd is accepted when already present;
     if it is missing, or if a jammy image has a 24.04 OpenSSH package installed,
     the script downgrades through apt and marks a clear failure when the
-    notebook has no internet egress.
+    SII internal Ubuntu apt mirror is unavailable.
     """
     if ssh_public_key:
         ssh_public_key_escaped = ssh_public_key.replace("'", "'\"'\"'")
@@ -95,6 +95,7 @@ def build_rtunnel_setup_commands(
         f"KIT={INSPIRE_BOOTSTRAP_ROOT}",
         f"OPENSSH_JAMMY_INSTALL_FAILED_FILE={OPENSSH_JAMMY_INSTALL_FAILED_FILE}",
         f"OPENSSH_JAMMY_INSTALL_LOG={OPENSSH_JAMMY_INSTALL_LOG}",
+        f"SII_UBUNTU_APT_MIRROR={SII_UBUNTU_APT_MIRROR}",
         # Detect container arch once — rtunnel ships one binary per Linux arch.
         '_RT_ARCH=$(uname -m 2>/dev/null); '
         'case "$_RT_ARCH" in arm64|aarch64) _RT_ARCH=arm64;; *) _RT_ARCH=amd64;; esac',
@@ -112,7 +113,7 @@ def build_rtunnel_setup_commands(
 
     # sshd:
     #   - jammy accepts OpenSSH 8.9 when present.
-    #   - jammy installs/downgrades through apt because there is no 22.04 kit.
+    #   - jammy installs/downgrades through SII internal apt because there is no 22.04 kit.
     #   - non-jammy keeps the existing offline Ubuntu 24.04 kit path.
     cmd_lines.append(
         'rm -f "$OPENSSH_JAMMY_INSTALL_FAILED_FILE"; '
@@ -123,33 +124,30 @@ def build_rtunnel_setup_commands(
         '! printf "%s\\n%s\\n" "$_OPENSSH_SERVER_VERSION" "$_OPENSSH_BINARY_VERSION" '
         '| grep -Eq "8[.]9p1|OpenSSH_8[.]9"; then _need_jammy_openssh=1; fi; '
         'if [ "$_need_jammy_openssh" = "1" ]; then '
-        'echo "[inspire bootstrap] installing Ubuntu 22.04 OpenSSH via apt; internet egress required" '
+        'echo "[inspire bootstrap] installing Ubuntu 22.04 OpenSSH via SII internal apt mirror" '
         '| tee "$OPENSSH_JAMMY_INSTALL_LOG"; '
-        '_dpkg_arch=$(dpkg --print-architecture 2>/dev/null || echo amd64); '
-        'if ! grep -Rqs "[[:space:]]jammy" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then '
-        'if [ "$_dpkg_arch" = "arm64" ] || [ "$_dpkg_arch" = "armhf" ]; then '
-        '_ubuntu_base=http://ports.ubuntu.com/ubuntu-ports; '
-        '_ubuntu_security=http://ports.ubuntu.com/ubuntu-ports; '
-        'else _ubuntu_base=http://archive.ubuntu.com/ubuntu; '
-        '_ubuntu_security=http://security.ubuntu.com/ubuntu; fi; '
-        'mkdir -p /etc/apt/sources.list.d; '
+        '_apt_source=/tmp/inspire-jammy-openssh.sources.list; '
+        '_apt_sourceparts=/tmp/inspire-empty-apt-sourceparts; '
+        'rm -rf "$_apt_sourceparts"; mkdir -p "$_apt_sourceparts"; '
         'printf "%s\\n" '
-        '"deb $_ubuntu_base jammy main restricted universe multiverse" '
-        '"deb $_ubuntu_base jammy-updates main restricted universe multiverse" '
-        '"deb $_ubuntu_security jammy-security main restricted universe multiverse" '
-        '> /etc/apt/sources.list.d/inspire-jammy-openssh.list; fi; '
+        '"deb $SII_UBUNTU_APT_MIRROR jammy main restricted universe multiverse" '
+        '"deb $SII_UBUNTU_APT_MIRROR jammy-updates main restricted universe multiverse" '
+        '"deb $SII_UBUNTU_APT_MIRROR jammy-security main restricted universe multiverse" '
+        '> "$_apt_source"; '
+        '_apt_opts="-o Dir::Etc::sourcelist=$_apt_source '
+        '-o Dir::Etc::sourceparts=$_apt_sourceparts -o APT::Get::List-Cleanup=0"; '
         'export DEBIAN_FRONTEND=noninteractive; '
-        'if ! timeout 45 apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 update -qq '
+        'if ! timeout 45 apt-get $_apt_opts -o Acquire::Retries=2 -o Acquire::http::Timeout=15 update -qq '
         '>>"$OPENSSH_JAMMY_INSTALL_LOG" 2>&1; then '
-        '_fail_jammy_openssh "apt update failed; run SSH setup on an internet-enabled notebook."; '
+        '_fail_jammy_openssh "apt update failed; SII internal Ubuntu apt mirror is unreachable or rejected."; '
         'else '
         'if [ -n "$_OPENSSH_SERVER_VERSION" ]; then '
         'timeout 45 apt-get remove -y -qq openssh-server openssh-client openssh-sftp-server '
         '>>"$OPENSSH_JAMMY_INSTALL_LOG" 2>&1 || true; fi; '
-        'if ! timeout 120 apt-get install -y -qq --allow-downgrades --no-install-recommends '
+        'if ! timeout 120 apt-get $_apt_opts install -y -qq --allow-downgrades --no-install-recommends '
         'openssh-server/jammy openssh-client/jammy openssh-sftp-server/jammy '
         '>>"$OPENSSH_JAMMY_INSTALL_LOG" 2>&1; then '
-        '_fail_jammy_openssh "apt install failed; run SSH setup on an internet-enabled notebook."; '
+        '_fail_jammy_openssh "apt install failed; SII internal Ubuntu apt mirror did not provide the jammy OpenSSH packages."; '
         'else '
         '_OPENSSH_SERVER_VERSION=$(dpkg-query -W -f=\'${Version}\' openssh-server 2>/dev/null || true); '
         '_OPENSSH_BINARY_VERSION=$(/usr/sbin/sshd -V 2>&1 || true); '
@@ -2168,7 +2166,7 @@ def _setup_notebook_rtunnel_sync(
             if jammy_openssh_failed is True:
                 raise OpenSSHJammyInstallError(
                     "Ubuntu 22.04 OpenSSH install/downgrade failed. "
-                    "This bootstrap path requires internet egress."
+                    "This bootstrap path requires the SII internal Ubuntu apt mirror."
                 )
             # Detect the "no rtunnel in image + no public network" case up
             # front so the CLI can surface a structured repair hint instead
@@ -2246,5 +2244,6 @@ __all__ = [
     "OpenSSHJammyInstallError",
     "OPENSSH_JAMMY_INSTALL_LOG",
     "RtunnelMissingInContainerError",
+    "SII_UBUNTU_APT_MIRROR",
     "setup_notebook_rtunnel",
 ]

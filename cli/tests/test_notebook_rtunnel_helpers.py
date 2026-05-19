@@ -11,6 +11,7 @@ from inspire.platform.web.browser_api.rtunnel import (
     INSPIRE_BOOTSTRAP_ROOT,
     OPENSSH_JAMMY_INSTALL_FAILED_FILE,
     OPENSSH_JAMMY_INSTALL_FAILED_MARKER,
+    SII_UBUNTU_APT_MIRROR,
     SETUP_DONE_MARKER,
     _StepTimer,
     _build_batch_setup_script,
@@ -910,7 +911,7 @@ def test_recover_api_terminal_surface_waits_for_menu_before_file_menu_fallback(
 # ---------------------------------------------------------------------------
 
 
-def test_build_rtunnel_setup_commands_supports_jammy_openssh_via_apt() -> None:
+def test_build_rtunnel_setup_commands_supports_jammy_openssh_via_internal_apt() -> None:
     commands = build_rtunnel_setup_commands(
         port=31337,
         ssh_port=22222,
@@ -921,6 +922,11 @@ def test_build_rtunnel_setup_commands_supports_jammy_openssh_via_apt() -> None:
     assert "VERSION_CODENAME" in script
     assert '"jammy"' in script
     assert "OpenSSH_8[.]9" in script
+    assert SII_UBUNTU_APT_MIRROR in script
+    assert "archive.ubuntu.com" not in script
+    assert "security.ubuntu.com" not in script
+    assert "ports.ubuntu.com" not in script
+    assert "Dir::Etc::sourcelist=$_apt_source" in script
     assert "apt-get remove" in script
     assert "--allow-downgrades" in script
     assert "openssh-server/jammy" in script

@@ -1,3 +1,3 @@
 """Inspire Training Platform SDK."""
 
-__version__ = "5.1.14"
+__version__ = "5.1.15"

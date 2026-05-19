@@ -766,7 +766,8 @@ def run_notebook_ssh(
             EXIT_API_ERROR,
             hint=(
                 "这个兼容路径用于 Ubuntu 22.04 / jammy 镜像，尤其是已装入 24.04 "
-                "OpenSSH 的 paper-repro:v2。请把 notebook 放到可上网区后重新执行 "
+                "OpenSSH 的 paper-repro:v2。请确认 notebook 能访问 SII 内部 Ubuntu "
+                f"apt 源 `{browser_api_module.SII_UBUNTU_APT_MIRROR}` 后重新执行 "
                 "`inspire notebook ssh connect <name> --workspace <workspace>`；"
                 f"远端日志在 `{browser_api_module.OPENSSH_JAMMY_INSTALL_LOG}`。"
             ),

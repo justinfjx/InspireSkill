@@ -6,6 +6,12 @@
 
 当前无未发布变更。
 
+## 5.1.15（2026-05-19）
+
+### Fixed
+
+- 修正 Ubuntu 22.04 / `jammy` SSH bootstrap 的 OpenSSH 降级来源：不再写公网 Ubuntu apt 源或要求可上网区，改为临时使用 SII 内部 Ubuntu apt 源 `http://nexus.sii.shaipower.online/repository/ubuntu` 安装 / 降级 22.04 OpenSSH；失败提示同步改为内部源可达性问题。
+
 ## 5.1.14（2026-05-19）
 
 ### Fixed
