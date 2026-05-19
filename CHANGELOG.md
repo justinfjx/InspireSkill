@@ -6,6 +6,12 @@
 
 当前无未发布变更。
 
+## 5.1.14（2026-05-19）
+
+### Fixed
+
+- 临时兼容 Ubuntu 22.04 / `jammy` Notebook 的 SSH bootstrap：已存在的 22.04 OpenSSH 会被直接接受；缺失 OpenSSH 或检测到 24.04 OpenSSH 时，会通过 apt 联网安装 / 降级到 22.04 OpenSSH，覆盖 `paper-repro:v2` 这类镜像的 SSH 配置路径。该分支要求 notebook 位于可上网区，失败时会给出明确错误和远端日志路径。
+
 ## 5.1.13（2026-05-19）
 
 ### Fixed

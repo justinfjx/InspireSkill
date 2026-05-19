@@ -758,6 +758,20 @@ def run_notebook_ssh(
             headless=not debug_playwright,
             timeout=setup_timeout,
         )
+    except browser_api_module.OpenSSHJammyInstallError:
+        _handle_error(
+            ctx,
+            "SetupError",
+            "SSH bootstrap 失败：Ubuntu 22.04 OpenSSH 需要联网安装或降级。",
+            EXIT_API_ERROR,
+            hint=(
+                "这个兼容路径用于 Ubuntu 22.04 / jammy 镜像，尤其是已装入 24.04 "
+                "OpenSSH 的 paper-repro:v2。请把 notebook 放到可上网区后重新执行 "
+                "`inspire notebook ssh connect <name> --workspace <workspace>`；"
+                f"远端日志在 `{browser_api_module.OPENSSH_JAMMY_INSTALL_LOG}`。"
+            ),
+        )
+        return
     except browser_api_module.RtunnelMissingInContainerError:
         # Structured failure: the offline SSH-bootstrap kit isn't reachable
         # from this container (neither /tmp/rtunnel was produced from the kit

@@ -883,6 +883,85 @@ def test_run_notebook_ssh_passes_resolved_runtime_to_setup(
     )
 
 
+def test_run_notebook_ssh_reports_jammy_openssh_install_failure(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class FakeSession:
+        workspace_id = "ws-test"
+        all_workspace_ids = ["ws-test"]
+        all_workspace_names = {"ws-test": "Test Workspace"}
+        storage_state = {}
+
+    captured: dict[str, str] = {}
+
+    def fake_handle_error(
+        ctx: Context,
+        error_type: str,
+        message: str,
+        exit_code: int,
+        *,
+        hint: Optional[str] = None,
+    ) -> None:
+        assert ctx is not None
+        captured["type"] = error_type
+        captured["message"] = message
+        captured["hint"] = hint or ""
+        raise SystemExit(exit_code)
+
+    monkeypatch.setattr(ssh_flow_module, "_handle_error", fake_handle_error)
+    monkeypatch.setattr(ssh_flow_module, "require_web_session", lambda ctx, hint: FakeSession())
+    monkeypatch.setattr(ssh_flow_module, "load_config", lambda ctx: make_test_config(tmp_path))
+    monkeypatch.setattr(
+        ssh_flow_module,
+        "_resolve_notebook_id",
+        lambda *args, **kwargs: ("notebook-12345678", None),
+    )
+    monkeypatch.setattr(
+        browser_api_module,
+        "wait_for_notebook_running",
+        lambda notebook_id, session=None: {
+            "name": "paper-nb",
+            "resource_spec_price": {"gpu_info": {"gpu_product_simple": "CPU"}},
+        },
+    )
+    monkeypatch.setattr(
+        ssh_flow_module,
+        "_get_current_user_detail",
+        lambda session, base_url: {"id": "user-1", "username": "user"},
+    )
+    monkeypatch.setattr(
+        ssh_flow_module,
+        "_validate_notebook_account_access",
+        lambda current_user, notebook_detail: (True, ""),
+    )
+    monkeypatch.setattr(ssh_flow_module, "load_ssh_public_key", lambda pubkey: "ssh-ed25519 AAA")
+    monkeypatch.setattr(
+        browser_api_module,
+        "setup_notebook_rtunnel",
+        lambda **kwargs: (_ for _ in ()).throw(browser_api_module.OpenSSHJammyInstallError()),
+    )
+
+    with pytest.raises(SystemExit) as exc:
+        ssh_flow_module.run_notebook_ssh(
+            Context(),
+            notebook_id="paper-nb",
+            workspace="Test Workspace",
+            wait=True,
+            pubkey=None,
+            port=31337,
+            ssh_port=22222,
+            command=None,
+            debug_playwright=False,
+            setup_timeout=60,
+        )
+
+    assert exc.value.code == EXIT_API_ERROR
+    assert captured["type"] == "SetupError"
+    assert "Ubuntu 22.04 OpenSSH" in captured["message"]
+    assert "可上网区" in captured["hint"]
+    assert browser_api_module.OPENSSH_JAMMY_INSTALL_LOG in captured["hint"]
+
+
 def test_run_notebook_ssh_refreshes_saved_profile_on_notebook_mismatch(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

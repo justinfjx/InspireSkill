@@ -85,7 +85,12 @@ from .images import (
     update_image,
     wait_for_image_ready,
 )
-from .rtunnel import RtunnelMissingInContainerError, setup_notebook_rtunnel
+from .rtunnel import (
+    OpenSSHJammyInstallError,
+    OPENSSH_JAMMY_INSTALL_LOG,
+    RtunnelMissingInContainerError,
+    setup_notebook_rtunnel,
+)
 from .projects import (
     ProjectInfo,
     check_scheduling_health,
@@ -220,6 +225,8 @@ __all__ = [
     "list_notebook_runs",
     "list_notebook_users",
     "run_command_in_notebook",
+    "OpenSSHJammyInstallError",
+    "OPENSSH_JAMMY_INSTALL_LOG",
     "RtunnelMissingInContainerError",
     "setup_notebook_rtunnel",
     "start_notebook",

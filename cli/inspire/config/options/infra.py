@@ -9,10 +9,12 @@ from inspire.config.schema_models import (
     _parse_list,
 )
 
-# SSH bootstrap has no user-configurable knobs: the container-side SSH stack
-# (rtunnel + sshd) is installed exclusively from the global_public offline kit
-# at /inspire/hdd/global_public/inspire-skill-bootstrap/v1/ (see
-# inspire.platform.web.browser_api.rtunnel.INSPIRE_BOOTSTRAP_ROOT).
+# SSH bootstrap has no user-configurable knobs: rtunnel and Ubuntu 24.04 sshd
+# come from the global_public offline kit at
+# /inspire/hdd/global_public/inspire-skill-bootstrap/v1/ (see
+# inspire.platform.web.browser_api.rtunnel.INSPIRE_BOOTSTRAP_ROOT). Ubuntu
+# 22.04 sshd is a temporary compatibility exception and uses apt in an
+# internet-enabled notebook when install/downgrade is required.
 SSH_OPTIONS: list[ConfigOption] = []
 
 TUNNEL_OPTIONS: list[ConfigOption] = [

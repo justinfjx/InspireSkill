@@ -44,6 +44,9 @@ _log = logging.getLogger("inspire.platform.web.browser_api.rtunnel")
 BOOTSTRAP_SENTINEL = "/tmp/.inspire_rtunnel_bootstrap_v1"
 SETUP_DONE_MARKER = "INSPIRE_RTUNNEL_SETUP_DONE"
 RTUNNEL_MISSING_MARKER = "INSPIRE_RTUNNEL_MISSING_IN_BOOTSTRAP"
+OPENSSH_JAMMY_INSTALL_FAILED_MARKER = "INSPIRE_OPENSSH_JAMMY_INSTALL_FAILED"
+OPENSSH_JAMMY_INSTALL_FAILED_FILE = "/tmp/.inspire_openssh_jammy_install_failed"
+OPENSSH_JAMMY_INSTALL_LOG = "/tmp/inspire-openssh-jammy-install.log"
 
 # Canonical path of the InspireSkill offline SSH-bootstrap kit on the Inspire
 # platform's global_public fileset — mounted read-only in every notebook
@@ -51,9 +54,11 @@ RTUNNEL_MISSING_MARKER = "INSPIRE_RTUNNEL_MISSING_IN_BOOTSTRAP"
 #   <root>/rtunnel/linux-{amd64,arm64}/rtunnel   (static Go binary)
 #   <root>/sshd-debs/*.deb                        (openssh-server + full dep closure, Ubuntu 24.04)
 #
-# This is the single source of truth for SSH bootstrap. The container must
-# have this path mounted (the platform does so by default for every notebook);
-# there is no network-download fallback.
+# This is the canonical offline source for rtunnel and Ubuntu 24.04 sshd.
+# Ubuntu 22.04 sshd is a temporary compatibility exception: there is no jammy
+# sshd kit yet, so jammy containers that lack OpenSSH 8.9, or that were
+# polluted by the 24.04 kit, downgrade via apt and therefore need internet
+# egress during setup.
 INSPIRE_BOOTSTRAP_ROOT = "/inspire/hdd/global_public/inspire-skill-bootstrap/v1"
 
 
@@ -66,9 +71,11 @@ def build_rtunnel_setup_commands(
     """Build the shell emitted into a notebook container to bring up sshd +
     rtunnel from the global_public offline kit.
 
-    No network involvement — rtunnel and sshd are cp/dpkg-installed from the
-    kit. Containers without the kit mounted cannot bootstrap SSH; that is by
-    design (the kit is the platform's canonical offline install point).
+    rtunnel is always read from the kit. Ubuntu 24.04 sshd is installed from
+    kit debs when missing. Ubuntu 22.04 sshd is accepted when already present;
+    if it is missing, or if a jammy image has a 24.04 OpenSSH package installed,
+    the script downgrades through apt and marks a clear failure when the
+    notebook has no internet egress.
     """
     if ssh_public_key:
         ssh_public_key_escaped = ssh_public_key.replace("'", "'\"'\"'")
@@ -86,6 +93,8 @@ def build_rtunnel_setup_commands(
         key_line,
         f"BOOTSTRAP_SENTINEL={BOOTSTRAP_SENTINEL}",
         f"KIT={INSPIRE_BOOTSTRAP_ROOT}",
+        f"OPENSSH_JAMMY_INSTALL_FAILED_FILE={OPENSSH_JAMMY_INSTALL_FAILED_FILE}",
+        f"OPENSSH_JAMMY_INSTALL_LOG={OPENSSH_JAMMY_INSTALL_LOG}",
         # Detect container arch once — rtunnel ships one binary per Linux arch.
         '_RT_ARCH=$(uname -m 2>/dev/null); '
         'case "$_RT_ARCH" in arm64|aarch64) _RT_ARCH=arm64;; *) _RT_ARCH=amd64;; esac',
@@ -93,13 +102,62 @@ def build_rtunnel_setup_commands(
         # /inspire/hdd/global_public/inspire-skill-bootstrap/v1/rtunnel/linux-<arch>/rtunnel
         # We exec it straight from there — no copy / chmod into the container.
         '_RT_BIN="$KIT/rtunnel/linux-${_RT_ARCH}/rtunnel"',
+        '_OS_CODENAME=$(. /etc/os-release 2>/dev/null && echo "${VERSION_CODENAME:-}" || true)',
+        '_OPENSSH_SERVER_VERSION=$(dpkg-query -W -f=\'${Version}\' openssh-server 2>/dev/null || true)',
+        '_OPENSSH_BINARY_VERSION=$(/usr/sbin/sshd -V 2>&1 || true)',
+        'echo "[inspire bootstrap] distro=${_OS_CODENAME:-unknown} openssh-server=${_OPENSSH_SERVER_VERSION:-none}"',
+        '_fail_jammy_openssh(){ touch "$OPENSSH_JAMMY_INSTALL_FAILED_FILE"; '
+        'echo "[inspire bootstrap] ERROR: $1" | tee -a "$OPENSSH_JAMMY_INSTALL_LOG"; }',
     ]
 
-    # sshd: dpkg-install from kit debs if system sshd is missing.
-    # (sshd ships as .deb packages and needs to be installed; only rtunnel
-    # is binary-portable enough to run zero-copy from GPFS.)
+    # sshd:
+    #   - jammy accepts OpenSSH 8.9 when present.
+    #   - jammy installs/downgrades through apt because there is no 22.04 kit.
+    #   - non-jammy keeps the existing offline Ubuntu 24.04 kit path.
     cmd_lines.append(
-        'if [ ! -x /usr/sbin/sshd ]; then '
+        'rm -f "$OPENSSH_JAMMY_INSTALL_FAILED_FILE"; '
+        'if [ "$_OS_CODENAME" = "jammy" ]; then '
+        '_need_jammy_openssh=0; '
+        'if [ ! -x /usr/sbin/sshd ]; then _need_jammy_openssh=1; fi; '
+        'if [ -x /usr/sbin/sshd ] && '
+        '! printf "%s\\n%s\\n" "$_OPENSSH_SERVER_VERSION" "$_OPENSSH_BINARY_VERSION" '
+        '| grep -Eq "8[.]9p1|OpenSSH_8[.]9"; then _need_jammy_openssh=1; fi; '
+        'if [ "$_need_jammy_openssh" = "1" ]; then '
+        'echo "[inspire bootstrap] installing Ubuntu 22.04 OpenSSH via apt; internet egress required" '
+        '| tee "$OPENSSH_JAMMY_INSTALL_LOG"; '
+        '_dpkg_arch=$(dpkg --print-architecture 2>/dev/null || echo amd64); '
+        'if ! grep -Rqs "[[:space:]]jammy" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null; then '
+        'if [ "$_dpkg_arch" = "arm64" ] || [ "$_dpkg_arch" = "armhf" ]; then '
+        '_ubuntu_base=http://ports.ubuntu.com/ubuntu-ports; '
+        '_ubuntu_security=http://ports.ubuntu.com/ubuntu-ports; '
+        'else _ubuntu_base=http://archive.ubuntu.com/ubuntu; '
+        '_ubuntu_security=http://security.ubuntu.com/ubuntu; fi; '
+        'mkdir -p /etc/apt/sources.list.d; '
+        'printf "%s\\n" '
+        '"deb $_ubuntu_base jammy main restricted universe multiverse" '
+        '"deb $_ubuntu_base jammy-updates main restricted universe multiverse" '
+        '"deb $_ubuntu_security jammy-security main restricted universe multiverse" '
+        '> /etc/apt/sources.list.d/inspire-jammy-openssh.list; fi; '
+        'export DEBIAN_FRONTEND=noninteractive; '
+        'if ! timeout 45 apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 update -qq '
+        '>>"$OPENSSH_JAMMY_INSTALL_LOG" 2>&1; then '
+        '_fail_jammy_openssh "apt update failed; run SSH setup on an internet-enabled notebook."; '
+        'else '
+        'if [ -n "$_OPENSSH_SERVER_VERSION" ]; then '
+        'timeout 45 apt-get remove -y -qq openssh-server openssh-client openssh-sftp-server '
+        '>>"$OPENSSH_JAMMY_INSTALL_LOG" 2>&1 || true; fi; '
+        'if ! timeout 120 apt-get install -y -qq --allow-downgrades --no-install-recommends '
+        'openssh-server/jammy openssh-client/jammy openssh-sftp-server/jammy '
+        '>>"$OPENSSH_JAMMY_INSTALL_LOG" 2>&1; then '
+        '_fail_jammy_openssh "apt install failed; run SSH setup on an internet-enabled notebook."; '
+        'else '
+        '_OPENSSH_SERVER_VERSION=$(dpkg-query -W -f=\'${Version}\' openssh-server 2>/dev/null || true); '
+        '_OPENSSH_BINARY_VERSION=$(/usr/sbin/sshd -V 2>&1 || true); '
+        'if ! printf "%s\\n%s\\n" "$_OPENSSH_SERVER_VERSION" "$_OPENSSH_BINARY_VERSION" '
+        '| grep -Eq "8[.]9p1|OpenSSH_8[.]9"; then '
+        '_fail_jammy_openssh "installed OpenSSH is not Ubuntu 22.04 OpenSSH."; '
+        'fi; fi; fi; fi; '
+        'elif [ ! -x /usr/sbin/sshd ]; then '
         'if [ -d "$KIT/sshd-debs" ] && ls "$KIT/sshd-debs"/*.deb >/dev/null 2>&1; then '
         'dpkg -i "$KIT/sshd-debs"/*.deb >/dev/null 2>&1 || true; fi; '
         "fi"
@@ -107,7 +165,8 @@ def build_rtunnel_setup_commands(
 
     # Sentinel bookkeeping (both pieces in place → sentinel set; else clear).
     cmd_lines.append(
-        'if [ -x "$_RT_BIN" ] && [ -x /usr/sbin/sshd ]; then '
+        'if [ -x "$_RT_BIN" ] && [ -x /usr/sbin/sshd ] '
+        '&& [ ! -f "$OPENSSH_JAMMY_INSTALL_FAILED_FILE" ]; then '
         'touch "$BOOTSTRAP_SENTINEL"; '
         'else rm -f "$BOOTSTRAP_SENTINEL"; fi'
     )
@@ -136,7 +195,8 @@ def build_rtunnel_setup_commands(
 
     # Start sshd on SSH_PORT if not already running.
     cmd_lines.append(
-        'if [ -x /usr/sbin/sshd ] && ! ps -ef | grep -q "[s]shd -p $SSH_PORT"; then '
+        'if [ ! -f "$OPENSSH_JAMMY_INSTALL_FAILED_FILE" ] && [ -x /usr/sbin/sshd ] '
+        '&& ! ps -ef | grep -q "[s]shd -p $SSH_PORT"; then '
         "mkdir -p /run/sshd && chmod 0755 /run/sshd; "
         "ssh-keygen -A >/dev/null 2>&1 || true; "
         '/usr/sbin/sshd -p "$SSH_PORT" -o ListenAddress=127.0.0.1 -o PermitRootLogin=yes '
@@ -162,6 +222,11 @@ def build_rtunnel_setup_commands(
     cmd_lines.append(
         'if [ ! -x "$_RT_BIN" ]; then '
         f'echo {RTUNNEL_MISSING_MARKER}; '
+        "fi"
+    )
+    cmd_lines.append(
+        'if [ -f "$OPENSSH_JAMMY_INSTALL_FAILED_FILE" ]; then '
+        f'echo {OPENSSH_JAMMY_INSTALL_FAILED_MARKER}; '
         "fi"
     )
     cmd_lines.append(f"echo {SETUP_DONE_MARKER}")
@@ -1029,46 +1094,42 @@ def _send_setup_command_via_terminal_ws(
 
 
 class RtunnelMissingInContainerError(RuntimeError):
-    """Raised when the bootstrap script finishes but ``/tmp/rtunnel`` is
-    still absent in the container — i.e. the image has no rtunnel baked in
-    and the container can't reach the default download URL either. The CLI
-    layer turns this into a structured repair-instruction error."""
+    """Raised when the bootstrap script finishes but rtunnel is still absent.
+
+    rtunnel may be copied to ``/tmp/rtunnel`` by older bootstrap paths, or run
+    directly from the global_public kit by the current zero-copy path.
+    """
 
 
-def _check_rtunnel_present_via_ws(
+class OpenSSHJammyInstallError(RuntimeError):
+    """Raised when Ubuntu 22.04 OpenSSH apt install/downgrade failed."""
+
+
+def _probe_terminal_command_markers_via_ws(
     *,
     context: Any,
     lab_frame: Any,
+    command: str,
+    markers: dict[str, Any],
     timeout_ms: int = 5000,
-) -> Optional[bool]:
-    """Return ``True`` when ``/tmp/rtunnel`` is executable inside the
-    container, ``False`` when confirmed missing, ``None`` when the probe
-    itself was inconclusive (terminal unavailable, WS dropped). Callers
-    should only surface a "rtunnel missing in image + no internet" error
-    when this returns ``False`` explicitly, so a transient WS glitch
-    doesn't get blamed on image prep."""
+) -> Any | None:
+    """Run a tiny terminal command and return the value mapped by a marker.
+
+    ``None`` means the terminal/WS probe itself was inconclusive.
+    """
     term_name = _create_terminal_via_api(context, lab_frame.url)
     if not term_name:
         return None
 
-    present_marker = "__INSPIRE_RTUNNEL_PRESENT__"
-    absent_marker = "__INSPIRE_RTUNNEL_ABSENT__"
+    marker_tokens = list(markers)
 
     try:
         ws_url = _build_terminal_websocket_url(lab_frame.url, term_name)
-        # Use the absent marker as the completion signal because the present
-        # case's echo always runs too — we just need *some* output line to
-        # guarantee the WS handler fires. The returned bool is meaningless
-        # here; we actually care about scanning the terminal's stdout for
-        # which of the two markers landed, which we do via a fresh evaluate.
-        probe_cmd = (
-            f"([ -x /tmp/rtunnel ] && echo {present_marker} "
-            f"|| echo {absent_marker})\r"
-        )
+        stdin_data = command if command.endswith("\r") else f"{command}\r"
         try:
             result = lab_frame.evaluate(
                 """
-                async ({ wsUrl, stdinData, timeoutMs, promptTimeoutMs, presentMarker, absentMarker }) => {
+                async ({ wsUrl, stdinData, timeoutMs, promptTimeoutMs, markers }) => {
                   return await new Promise((resolve) => {
                     let settled = false;
                     let sent = false;
@@ -1100,10 +1161,11 @@ def _check_rtunnel_present_via_ws(
                           if (promptRe.test(buf)) doSend();
                           return;
                         }
-                        if (buf.includes(presentMarker)) {
-                          clearTimeout(timer); finish("present");
-                        } else if (buf.includes(absentMarker)) {
-                          clearTimeout(timer); finish("absent");
+                        for (const marker of markers) {
+                          if (buf.includes(marker)) {
+                            clearTimeout(timer); finish(marker);
+                            return;
+                          }
                         }
                       } catch (_) {}
                     });
@@ -1121,27 +1183,73 @@ def _check_rtunnel_present_via_ws(
                 """,
                 {
                     "wsUrl": ws_url,
-                    "stdinData": probe_cmd,
+                    "stdinData": stdin_data,
                     "timeoutMs": int(timeout_ms),
                     "promptTimeoutMs": min(int(timeout_ms) - 500, 2500),
-                    "presentMarker": present_marker,
-                    "absentMarker": absent_marker,
+                    "markers": marker_tokens,
                 },
             )
         except (PlaywrightError, AttributeError, RuntimeError, TypeError, ValueError) as exc:
-            _log.debug("rtunnel presence probe failed to evaluate: %s", exc)
+            _log.debug("terminal marker probe failed to evaluate: %s", exc)
             return None
 
-        if result == "present":
-            return True
-        if result == "absent":
-            return False
-        return None
+        return markers.get(result)
     finally:
         try:
             _delete_terminal_via_api(context, lab_url=lab_frame.url, term_name=term_name)
         except Exception:
             pass
+
+
+def _check_rtunnel_present_via_ws(
+    *,
+    context: Any,
+    lab_frame: Any,
+    timeout_ms: int = 5000,
+) -> Optional[bool]:
+    """Return ``True`` when rtunnel is executable inside the container.
+
+    ``False`` means confirmed missing; ``None`` means the probe was
+    inconclusive. Callers should only surface a rtunnel-missing error on an
+    explicit ``False``.
+    """
+    present_marker = "__INSPIRE_RTUNNEL_PRESENT__"
+    absent_marker = "__INSPIRE_RTUNNEL_ABSENT__"
+    command = (
+        '_rt_arch=$(uname -m 2>/dev/null); '
+        'case "$_rt_arch" in arm64|aarch64) _rt_arch=arm64;; *) _rt_arch=amd64;; esac; '
+        f'_kit_rt="{INSPIRE_BOOTSTRAP_ROOT}/rtunnel/linux-${{_rt_arch}}/rtunnel"; '
+        f'([ -x /tmp/rtunnel ] || [ -x "$_kit_rt" ]) && echo {present_marker} '
+        f'|| echo {absent_marker}'
+    )
+    return _probe_terminal_command_markers_via_ws(
+        context=context,
+        lab_frame=lab_frame,
+        command=command,
+        markers={present_marker: True, absent_marker: False},
+        timeout_ms=timeout_ms,
+    )
+
+
+def _check_openssh_jammy_install_failed_via_ws(
+    *,
+    context: Any,
+    lab_frame: Any,
+    timeout_ms: int = 5000,
+) -> Optional[bool]:
+    failed_marker = "__INSPIRE_OPENSSH_JAMMY_FAILED__"
+    ok_marker = "__INSPIRE_OPENSSH_JAMMY_OK__"
+    command = (
+        f'[ -f "{OPENSSH_JAMMY_INSTALL_FAILED_FILE}" ] '
+        f'&& echo {failed_marker} || echo {ok_marker}'
+    )
+    return _probe_terminal_command_markers_via_ws(
+        context=context,
+        lab_frame=lab_frame,
+        command=command,
+        markers={failed_marker: True, ok_marker: False},
+        timeout_ms=timeout_ms,
+    )
 
 
 def _build_batch_setup_script(cmd_lines: list[str]) -> str:
@@ -2051,6 +2159,17 @@ def _setup_notebook_rtunnel_sync(
                 setup_sent_via_ws=setup_sent_via_ws,
                 timer=timer,
             )
+            jammy_openssh_failed = _check_openssh_jammy_install_failed_via_ws(
+                context=context,
+                lab_frame=lab_frame,
+            )
+            timer.mark("check_openssh_jammy")
+            _log.debug("jammy_openssh_failed=%s", jammy_openssh_failed)
+            if jammy_openssh_failed is True:
+                raise OpenSSHJammyInstallError(
+                    "Ubuntu 22.04 OpenSSH install/downgrade failed. "
+                    "This bootstrap path requires internet egress."
+                )
             # Detect the "no rtunnel in image + no public network" case up
             # front so the CLI can surface a structured repair hint instead
             # of making the user sit through a 120s proxy-verify timeout.
@@ -2123,4 +2242,9 @@ def setup_notebook_rtunnel(
     )
 
 
-__all__ = ["setup_notebook_rtunnel"]
+__all__ = [
+    "OpenSSHJammyInstallError",
+    "OPENSSH_JAMMY_INSTALL_LOG",
+    "RtunnelMissingInContainerError",
+    "setup_notebook_rtunnel",
+]

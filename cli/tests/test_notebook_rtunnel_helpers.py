@@ -8,10 +8,15 @@ import pytest
 
 from inspire.platform.web.browser_api import rtunnel as rtunnel_module
 from inspire.platform.web.browser_api.rtunnel import (
+    INSPIRE_BOOTSTRAP_ROOT,
+    OPENSSH_JAMMY_INSTALL_FAILED_FILE,
+    OPENSSH_JAMMY_INSTALL_FAILED_MARKER,
     SETUP_DONE_MARKER,
     _StepTimer,
     _build_batch_setup_script,
     _build_terminal_websocket_url,
+    _check_openssh_jammy_install_failed_via_ws,
+    _check_rtunnel_present_via_ws,
     _create_terminal_via_api,
     _delete_terminal_via_api,
     _extract_jupyter_token,
@@ -24,6 +29,7 @@ from inspire.platform.web.browser_api.rtunnel import (
     _wait_for_setup_completion,
     _wait_for_terminal_surface,
     _wait_for_terminal_surface_progressive,
+    build_rtunnel_setup_commands,
 )
 
 
@@ -900,6 +906,66 @@ def test_recover_api_terminal_surface_waits_for_menu_before_file_menu_fallback(
 
 
 # ---------------------------------------------------------------------------
+# build_rtunnel_setup_commands / bootstrap probes
+# ---------------------------------------------------------------------------
+
+
+def test_build_rtunnel_setup_commands_supports_jammy_openssh_via_apt() -> None:
+    commands = build_rtunnel_setup_commands(
+        port=31337,
+        ssh_port=22222,
+        ssh_public_key="ssh-ed25519 AAA",
+    )
+    script = "\n".join(commands)
+
+    assert "VERSION_CODENAME" in script
+    assert '"jammy"' in script
+    assert "OpenSSH_8[.]9" in script
+    assert "apt-get remove" in script
+    assert "--allow-downgrades" in script
+    assert "openssh-server/jammy" in script
+    assert OPENSSH_JAMMY_INSTALL_FAILED_FILE in script
+    assert OPENSSH_JAMMY_INSTALL_FAILED_MARKER in script
+    # Non-jammy images still use the 24.04 offline kit path.
+    assert '"$KIT/sshd-debs"/*.deb' in script
+
+
+def test_rtunnel_presence_probe_accepts_zero_copy_kit_binary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_probe(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return kwargs["markers"]["__INSPIRE_RTUNNEL_PRESENT__"]
+
+    monkeypatch.setattr(rtunnel_module, "_probe_terminal_command_markers_via_ws", fake_probe)
+
+    assert _check_rtunnel_present_via_ws(context=object(), lab_frame=object()) is True
+    command = str(captured["command"])
+    assert "/tmp/rtunnel" in command
+    assert INSPIRE_BOOTSTRAP_ROOT in command
+    assert "linux-${_rt_arch}/rtunnel" in command
+
+
+def test_openssh_jammy_failure_probe_checks_marker_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_probe(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return kwargs["markers"]["__INSPIRE_OPENSSH_JAMMY_FAILED__"]
+
+    monkeypatch.setattr(rtunnel_module, "_probe_terminal_command_markers_via_ws", fake_probe)
+
+    assert _check_openssh_jammy_install_failed_via_ws(
+        context=object(), lab_frame=object()
+    ) is True
+    assert OPENSSH_JAMMY_INSTALL_FAILED_FILE in str(captured["command"])
+
+
+# ---------------------------------------------------------------------------
 # _build_batch_setup_script
 # ---------------------------------------------------------------------------
 
@@ -1035,5 +1101,3 @@ def test_step_timer_summary_empty_when_no_steps(
     captured = capsys.readouterr()
     assert captured.err == ""
     assert captured.out == ""
-
-
