@@ -6,6 +6,12 @@
 
 当前无未发布变更。
 
+## 5.1.18（2026-05-25）
+
+### Fixed
+
+- 修复 bundled Chromium 不可用时 Playwright 无法复用本机 Chrome 的问题：新增 `INSPIRE_PLAYWRIGHT_CHROMIUM_EXECUTABLE` 和 `INSPIRE_PLAYWRIGHT_CHROMIUM_CHANNEL` 配置入口，显式 executable path 优先于 channel，便于在受限环境中使用系统 Chrome / Chromium 完成登录和 Web session 获取。
+
 ## 5.1.17（2026-05-19）
 
 ### Fixed
