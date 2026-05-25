@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from .env_detect import _detect_env_vars, _generate_toml_content
 from .init_cmd import init
-from .templates import CONFIG_TEMPLATE
+from .templates import ACCOUNT_CONFIG_TEMPLATE, PROJECT_CONFIG_TEMPLATE
 
 __all__ = [
-    "CONFIG_TEMPLATE",
+    "ACCOUNT_CONFIG_TEMPLATE",
+    "PROJECT_CONFIG_TEMPLATE",
     "_detect_env_vars",
     "_generate_toml_content",
     "init",

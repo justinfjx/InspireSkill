@@ -759,6 +759,9 @@ class TestInitCommand:
     def _project_config_path(self, root: Path) -> Path:
         return root / PROJECT_CONFIG_DIR / "accounts" / "default" / CONFIG_FILENAME
 
+    def _account_config_path(self) -> Path:
+        return Path.home() / ".inspire" / "accounts" / "default" / CONFIG_FILENAME
+
     @pytest.fixture
     def clean_env(self, monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, None]:
         """Clear relevant env vars for testing."""
@@ -800,9 +803,48 @@ class TestInitCommand:
         config_file = self._project_config_path(tmp_path)
         assert config_file.exists()
         content = config_file.read_text()
+        assert "[auth]" not in content
+        assert "[api]" not in content
+        assert "[paths]" in content
+        assert 'repo = "owner/repo"' in content
+
+    def test_init_global_template_excludes_project_only_keys(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
+    ) -> None:
+        """A global template must be loadable as an account config."""
+        monkeypatch.chdir(tmp_path)
+
+        result = CliRunner().invoke(init, ["--scope", "global", "--force"])
+
+        assert result.exit_code == 0, result.output
+        content = self._account_config_path().read_text()
         assert "[auth]" in content
         assert "[api]" in content
-        assert "your_username" in content  # Template placeholder
+        assert "log_cache_dir" in content
+        assert "log_pattern" not in content
+        assert "repo = " not in content
+        assert "[path_aliases]" not in content
+        assert "[profiles.notebook.example]" not in content
+        Config.from_files_and_env(require_credentials=False)
+
+    def test_init_project_template_excludes_account_scope_keys(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
+    ) -> None:
+        """A project template must be loadable as a repo/account config."""
+        monkeypatch.chdir(tmp_path)
+
+        result = CliRunner().invoke(init, ["--template", "--scope", "project", "--force"])
+
+        assert result.exit_code == 0, result.output
+        content = self._project_config_path(tmp_path).read_text()
+        assert "[auth]" not in content
+        assert "[api]" not in content
+        assert "[proxy]" not in content
+        assert "server = \"https://github.com\"" not in content
+        assert "action_timeout" not in content
+        assert "repo = \"owner/repo\"" in content
+        assert "log_pattern" in content
+        Config.from_files_and_env(require_credentials=False)
 
     def test_init_template_flag_creates_template(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -819,8 +861,9 @@ class TestInitCommand:
         config_file = self._project_config_path(tmp_path)
         assert config_file.exists()
         content = config_file.read_text()
-        # Should have template placeholder, not actual env var value
-        assert "your_username" in content
+        # Should have project placeholders, not actual env var values
+        assert 'repo = "owner/repo"' in content
+        assert "your_username" not in content
         assert "testuser" not in content
 
     def test_init_json_template_output(
@@ -901,12 +944,12 @@ class TestInitCommand:
         assert result.exit_code == 0
         content = config_file.read_text()
         assert "existing" not in content
-        assert "your_username" in content
+        assert 'repo = "owner/repo"' in content
 
-    def test_init_scope_project_forces_all_to_project(
+    def test_init_scope_project_writes_only_project_scope_env(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
     ) -> None:
-        """Test that --scope project forces all options to project config."""
+        """Test that --scope project does not write account-scope env vars."""
         monkeypatch.chdir(tmp_path)
 
         # Set both global and project scope env vars
@@ -918,14 +961,46 @@ class TestInitCommand:
 
         assert result.exit_code == 0
 
-        # Project config should have BOTH values
+        # Project config should only carry the project-scope value.
         project_config = self._project_config_path(tmp_path)
         assert project_config.exists()
         project_content = project_config.read_text()
-        assert 'username = "testuser"' in project_content
+        assert 'username = "testuser"' not in project_content
         assert 'repo = "user/repo"' in project_content
+        Config.from_files_and_env(require_credentials=False)
 
-    def test_init_excludes_secrets(
+    def test_init_scope_global_writes_only_account_scope_env(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
+    ) -> None:
+        """Test that --scope global does not write project-scope env vars."""
+        monkeypatch.chdir(tmp_path)
+
+        monkeypatch.setenv("INSPIRE_USERNAME", "testuser")
+        monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")
+
+        result = CliRunner().invoke(init, ["--scope", "global", "--force"])
+
+        assert result.exit_code == 0, result.output
+        account_content = self._account_config_path().read_text()
+        assert 'username = "testuser"' in account_content
+        assert 'repo = "user/repo"' not in account_content
+        Config.from_files_and_env(require_credentials=False)
+
+    def test_init_scope_project_with_only_account_env_does_not_clobber(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        self._account_config_path().write_text('[auth]\nusername = "existing"\n')
+        monkeypatch.setenv("INSPIRE_USERNAME", "testuser")
+
+        result = CliRunner().invoke(init, ["--scope", "project", "--force"])
+
+        assert result.exit_code == 0, result.output
+        assert "No project-scope environment variables detected" in result.output
+        assert not self._project_config_path(tmp_path).exists()
+        assert 'username = "existing"' in self._account_config_path().read_text()
+
+    def test_init_global_excludes_secrets(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
     ) -> None:
         """Test that init excludes secrets from config files."""
@@ -934,11 +1009,10 @@ class TestInitCommand:
         monkeypatch.setenv("INSPIRE_PASSWORD", "secretpass")
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--scope", "project", "--force"])
+        result = runner.invoke(init, ["--scope", "global", "--force"])
 
         assert result.exit_code == 0
-        project_config = self._project_config_path(tmp_path)
-        content = project_config.read_text()
+        content = self._account_config_path().read_text()
 
         # Username should be written
         assert 'username = "testuser"' in content

@@ -6,10 +6,10 @@ import click
 
 from inspire.accounts import (
     AccountError,
+    account_dir,
     create_account,
     current_account,
     ensure_inspire_home,
-    list_accounts,
     set_current_account,
     validate_name,
 )
@@ -84,10 +84,9 @@ def add(
     except AccountError as err:
         raise click.ClickException(str(err)) from err
 
-    if validated in list_accounts():
-        raise click.ClickException(f"Account already exists: {validated}")
-
     ensure_inspire_home()
+    if account_dir(validated).exists():
+        raise click.ClickException(f"Account already exists: {validated}")
 
     # ---- username -------------------------------------------------------
     if username is None:

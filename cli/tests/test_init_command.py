@@ -40,7 +40,9 @@ def test_init_template_project_succeeds_with_active_account(
     project_config = repo_dir / ".inspire" / "accounts" / "alice" / "config.toml"
     assert result.exit_code == EXIT_SUCCESS
     assert project_config.exists()
-    assert "Inspire CLI Configuration" in project_config.read_text(encoding="utf-8")
+    content = project_config.read_text(encoding="utf-8")
+    assert "Inspire CLI Project Configuration" in content
+    assert "[auth]" not in content
 
 
 def test_init_fails_fast_when_no_active_account(

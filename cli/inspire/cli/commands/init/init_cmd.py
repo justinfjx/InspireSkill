@@ -362,9 +362,11 @@ def init(
             )
             target_paths: list[Path]
             if global_flag:
-                target_paths = [global_path]
+                has_global = any(opt.scope == "global" for opt, _ in detected)
+                target_paths = [global_path] if has_global else []
             elif project_flag:
-                target_paths = [project_path]
+                has_project = any(opt.scope == "project" for opt, _ in detected)
+                target_paths = [project_path] if has_project else []
             else:
                 has_global = any(opt.scope == "global" for opt, _ in detected)
                 has_project = any(opt.scope == "project" for opt, _ in detected)

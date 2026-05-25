@@ -39,8 +39,13 @@ def _require_writable_global_path() -> Path:
     return global_path
 
 
-CONFIG_TEMPLATE = """# Inspire CLI Configuration
+ACCOUNT_CONFIG_TEMPLATE = """# Inspire CLI Account Configuration
 # Location: {location_comment}
+#
+# Account-level values are shared by every repository that uses this account.
+# Per-repository values such as path_aliases, github.repo, and profiles belong
+# in ./.inspire/accounts/<account>/config.toml. Run `inspire init` inside each
+# repository to create or refresh that file.
 #
 # Values here are overridden by environment variables.
 # Sensitive values (passwords, tokens) should use env vars.
@@ -63,11 +68,44 @@ retry_delay = 1.0
 # rtunnel = "http://127.0.0.1:7897"
 
 [paths]
-log_pattern = "training_master_*.log"
 log_cache_dir = "~/.inspire/logs"
 
+[github]
+server = "https://github.com"
+# token - use INSP_GITHUB_TOKEN env var (falls back to GITHUB_TOKEN)
+
+[bridge]
+action_timeout = 600
+
+[tunnel]
+retries = 3
+retry_pause = 2.0
+
+[remote_env]
+# Environment variables exported before remote commands run for every repo.
+# Tip: use "$VARNAME" or "${{VARNAME}}" to pull from your *local* env at runtime.
+# WANDB_API_KEY = "$WANDB_API_KEY"
+# HF_TOKEN = "$HF_TOKEN"
+"""
+
+
+PROJECT_CONFIG_TEMPLATE = """# Inspire CLI Project Configuration
+# Location: {location_comment}
+#
+# Project-level values live in this repository for the active account.
+# Account identity, API, and proxy settings belong in
+# ~/.inspire/accounts/<account>/config.toml.
+#
+# Values here are overridden by environment variables.
+
+[context]
+# project = "CI-情境智能"
+
+[paths]
+log_pattern = "training_master_*.log"
+
 [path_aliases]
-# Remote path aliases for notebook exec/shell/scp. `inspire init`
+# Remote path aliases for notebook exec/shell/scp. Plain `inspire init`
 # fills these from /inspire/<tier>/project/<topic>/<user>/.
 # me = "/inspire/ssd/project/<topic>/<user>/"
 # public = "/inspire/ssd/project/<topic>/public/"
@@ -77,9 +115,7 @@ log_cache_dir = "~/.inspire/logs"
 # qb-ilm2.me = "/inspire/qb-ilm2/project/<topic>/<user>/"
 
 [github]
-server = "https://github.com"
 repo = "owner/repo"
-# token - use INSP_GITHUB_TOKEN env var (falls back to GITHUB_TOKEN)
 sync_workflow = "sync_code.yml"
 bridge_workflow = "run_bridge_action.yml"
 remote_timeout = 90
@@ -88,12 +124,13 @@ remote_timeout = 90
 default_remote = "origin"
 
 [bridge]
-action_timeout = 600
 denylist = ["*.tmp", ".git/*"]
 
 [job]
 # priority = 10
 # shm_size = 32  # Default shared memory (GiB) for notebooks; jobs use it when set
+# auto_fault_tolerance = false
+# fault_tolerance_max_retry = 10
 
 [notebook]
 # post_start = "bash /workspace/setup.sh"  # none | shell command
@@ -107,7 +144,7 @@ denylist = ["*.tmp", ".git/*"]
 # image = "unified-base:v2"
 
 [remote_env]
-# Environment variables exported before remote commands run.
+# Environment variables exported before remote commands run in this repo.
 # Tip: use "$VARNAME" or "${{VARNAME}}" to pull from your *local* env at runtime.
 # WANDB_API_KEY = "$WANDB_API_KEY"
 # HF_TOKEN = "$HF_TOKEN"
@@ -117,9 +154,11 @@ denylist = ["*.tmp", ".git/*"]
 def _init_template_mode(global_flag: bool, project_flag: bool, force: bool) -> None:
     """Initialize config using template with placeholders (template mode)."""
     global_path = _require_writable_global_path()
+    is_global = False
     if global_flag:
         config_path = global_path
         location_comment = f"{global_path} (account)"
+        is_global = True
     elif project_flag:
         config_path = _project_config_write_path()
         location_comment = f"{config_path} (project/account)"
@@ -134,6 +173,7 @@ def _init_template_mode(global_flag: bool, project_flag: bool, force: bool) -> N
         if choice.lower() == "g":
             config_path = global_path
             location_comment = f"{global_path} (account)"
+            is_global = True
         else:
             config_path = _project_config_write_path()
             location_comment = f"{config_path} (project/account)"
@@ -144,15 +184,21 @@ def _init_template_mode(global_flag: bool, project_flag: bool, force: bool) -> N
             click.echo("Aborted.")
             return
 
-    content = CONFIG_TEMPLATE.format(location_comment=location_comment)
+    template = ACCOUNT_CONFIG_TEMPLATE if is_global else PROJECT_CONFIG_TEMPLATE
+    content = template.format(location_comment=location_comment)
     _atomic_write_text(config_path, content)
 
     click.echo(click.style(f"Created {config_path}", fg="green"))
 
     click.echo("\nNext steps:")
-    click.echo(f"  1. Edit {config_path} with your project-level settings")
-    click.echo("  2. Run 'inspire account add <name>' if you have not configured credentials")
-    click.echo("  3. Run 'inspire config show' to verify your configuration")
+    if is_global:
+        click.echo(f"  1. Edit {config_path} with your account-level settings")
+        click.echo("  2. Run 'inspire init' inside each repo for project-level settings")
+        click.echo("  3. Run 'inspire config show' to verify your configuration")
+    else:
+        click.echo(f"  1. Edit {config_path} with your project-level settings")
+        click.echo("  2. Run 'inspire account add <name>' if you have not configured credentials")
+        click.echo("  3. Run 'inspire config show' to verify your configuration")
 
 
 def _show_next_steps(detected: list[tuple[ConfigOption, str]]) -> None:
@@ -266,9 +312,15 @@ def _init_smart_mode(
     project_path = _project_config_write_path()
 
     if global_flag:
-        _write_single_file(detected, global_path, force, "global")
+        if not global_opts:
+            click.echo("No global-scope environment variables detected. No files written.")
+            return
+        _write_single_file(global_opts, global_path, force, "global")
     elif project_flag:
-        _write_single_file(detected, project_path, force, "project")
+        if not project_opts:
+            click.echo("No project-scope environment variables detected. No files written.")
+            return
+        _write_single_file(project_opts, project_path, force, "project")
     else:
         _write_auto_split(
             detected,

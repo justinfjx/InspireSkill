@@ -252,6 +252,18 @@ class TestAccountAddCommand:
         assert result.exit_code != 0
         assert "already exists" in result.output
 
+    def test_add_existing_account_dir_fails_before_prompts(
+        self, home: Path, runner: CliRunner
+    ) -> None:
+        orphan = home / ".inspire" / "accounts" / "alice"
+        orphan.mkdir(parents=True)
+
+        result = _add(runner, "alice", input_="\npw\npw\n\n\n")
+
+        assert result.exit_code != 0
+        assert "Account already exists: alice" in result.output
+        assert "Platform login username" not in result.output
+
     def test_add_invalid_name(self, home: Path, runner: CliRunner) -> None:
         result = _add(runner, "bad name", "--non-interactive", "--password", "pw")
         assert result.exit_code != 0
