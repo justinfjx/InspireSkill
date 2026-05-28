@@ -28,6 +28,7 @@ _NOTEBOOK_UUID_RE = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
+_CURRENT_USER_LOOKUP_ERROR_ATTR = "_inspire_current_user_lookup_error"
 
 
 def _unique_workspace_ids(values: list[str]) -> list[str]:
@@ -82,30 +83,71 @@ def _format_notebook_resource(item: dict) -> str:
     return "N/A"
 
 
+def _set_current_user_lookup_error(
+    session: web_session_module.WebSession,
+    message: str | None,
+) -> None:
+    try:
+        if message:
+            setattr(session, _CURRENT_USER_LOOKUP_ERROR_ATTR, message)
+        elif hasattr(session, _CURRENT_USER_LOOKUP_ERROR_ATTR):
+            delattr(session, _CURRENT_USER_LOOKUP_ERROR_ATTR)
+    except Exception:
+        pass
+
+
+def _current_user_lookup_failure_message(session: web_session_module.WebSession) -> str:
+    detail = str(getattr(session, _CURRENT_USER_LOOKUP_ERROR_ATTR, "") or "").strip()
+    if detail:
+        return detail
+    return (
+        "Cannot determine the current user from live /api/v1/user/detail. "
+        "Refresh the account session with `inspire account login`, then retry."
+    )
+
+
 def _try_get_current_user_ids(
     session: web_session_module.WebSession,
     *,
     base_url: str,
 ) -> list[str]:
+    _set_current_user_lookup_error(session, None)
+    endpoint = f"{base_url}/api/v1/user/detail"
     try:
         user_data = web_session_module.request_json(
             session,
             "GET",
-            f"{base_url}/api/v1/user/detail",
+            endpoint,
             timeout=30,
         )
-        data = user_data.get("data", {})
+        data = user_data.get("data", {}) if isinstance(user_data, dict) else {}
         if isinstance(data, dict):
             session.user_detail = data
             try:
                 session.save()
             except Exception:
                 pass
-        user_id = data.get("id")
+        user_id = (data.get("id") or data.get("user_id")) if isinstance(data, dict) else None
         if user_id:
             return [str(user_id)]
-    except Exception:
-        pass
+        _set_current_user_lookup_error(
+            session,
+            (
+                "Cannot determine the current user from live /api/v1/user/detail: "
+                "response did not include a user id. Refresh the account session "
+                "with `inspire account login`, then retry."
+            ),
+        )
+    except Exception as e:
+        _set_current_user_lookup_error(
+            session,
+            (
+                "Cannot determine the current user from live /api/v1/user/detail: "
+                f"{scrub_raw_ids(e)}. Refresh the account session with "
+                "`inspire account login`; if the message mentions browser runtime, "
+                "run `inspire update --cli-only`."
+            ),
+        )
     return []
 
 
@@ -401,7 +443,7 @@ def _resolve_notebook_id(
         _handle_error(
             ctx,
             "AuthenticationError",
-            "Cannot determine the current user from the live web session.",
+            _current_user_lookup_failure_message(session),
             EXIT_API_ERROR,
         )
 
@@ -514,6 +556,7 @@ def _resolve_notebook_id(
 __all__ = [
     "_ZERO_WORKSPACE_ID",
     "_collect_workspace_ids_for_lookup",
+    "_current_user_lookup_failure_message",
     "_format_notebook_resource",
     "_get_current_user_detail",
     "_list_notebooks_for_workspace",

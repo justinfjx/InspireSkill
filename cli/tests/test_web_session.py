@@ -443,6 +443,34 @@ def test_request_json_supports_delete(monkeypatch: pytest.MonkeyPatch):
     assert http.calls == [("DELETE", "https://example.test/api/v1/image/image-1", {}, 30)]
 
 
+def test_request_json_browser_runtime_error_uses_standard_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = WebSession(
+        storage_state={"cookies": [{"name": "session", "value": "abc"}]},
+        cookies={"session": "abc"},
+        workspace_id="ws-test",
+        created_at=0,
+    )
+
+    def raise_browser_runtime_error(_session):  # noqa: ANN001
+        raise RuntimeError(
+            "BrowserType.launch: Executable doesn't exist at /tmp/chromium\n"
+            "Please run the following command to download new browsers:\n"
+            "    playwright install"
+        )
+
+    monkeypatch.setattr(ws, "_get_browser_client", raise_browser_runtime_error)
+    monkeypatch.setattr(ws, "_BROWSER_API_FORCE_BROWSER", True)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        ws.request_json(session, "GET", "https://example.test")
+
+    message = str(excinfo.value)
+    assert "inspire update --cli-only" in message
+    assert "playwright install" not in message
+
+
 def test_browser_client_reset_on_expired(monkeypatch: pytest.MonkeyPatch):
     session = WebSession(
         storage_state={"cookies": [{"name": "session", "value": "abc"}]},

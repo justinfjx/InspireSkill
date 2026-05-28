@@ -63,7 +63,7 @@
 | **HPC / Ray / Serving / Model** | 仅有部分 job + notebook | 仅 HPC（单层）+ job | **HPC 两层模型 + Ray 弹性 + Serving + Model** 全覆盖 |
 | **多账号** | `[accounts."<user>"]` 合并层 | 单账号 | 一账号一独立目录，`~/.inspire/current` 切换 |
 | **Agent 接入** | 无 | `qzcli-mcp`（1 家 harness） | Skill 格式覆盖 5 家 harness |
-| **测试** | 53 文件 | 3 文件 | **818 单元测试** |
+| **测试** | 多文件回归套件 | 3 文件 | 持续扩展的单元测试套件 |
 
 一句话：**这两条 CLI 各做了一段路；InspireSkill 把整个平台的操作面和观测面端到端铺平了，并且在离线场景下零配置可用。**
 

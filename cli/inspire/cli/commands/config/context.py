@@ -33,8 +33,8 @@ def _collect_context(cfg: Config) -> dict[str, Any]:
 
     active_account = scrub_raw_ids(current_account() or cfg.username or "") or None
 
-    active_project_name = None
-    active_workspace_name = None
+    active_project_name = scrub_raw_ids(cfg.context_project or "") or None
+    active_workspace_name = scrub_raw_ids(cfg.context_workspace or "") or None
 
     # Projects: name + optional path segment (e.g. 'embodied-multimodality').
     projects_by_name: dict[str, dict[str, str]] = {}

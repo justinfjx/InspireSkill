@@ -10,8 +10,9 @@ import json
 import os
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 try:
     from playwright.sync_api import Error as _PlaywrightError
@@ -35,6 +36,12 @@ from inspire.platform.web.session import WebSession, build_requests_session, get
 import logging
 
 _log = logging.getLogger("inspire.platform.web.browser_api.rtunnel")
+
+
+@dataclass(frozen=True)
+class _SetupScriptSendResult:
+    sent_via_ws: bool
+    cleanup: Callable[[], None] | None = None
 
 
 # ============================================================================
@@ -1770,7 +1777,7 @@ def _open_or_create_terminal(
         page=page,
         api_term_created=api_term_created,
     ):
-        return False, None
+        return False, term_name
 
     _click_terminal_tab(
         lab_frame,
@@ -1960,7 +1967,7 @@ def _send_rtunnel_setup_script(
     lab_frame: Any,
     batch_cmd: str,
     timer: "_StepTimer",
-) -> bool:
+) -> _SetupScriptSendResult:
     import sys as _sys
 
     setup_sent_via_ws = False
@@ -1979,12 +1986,24 @@ def _send_rtunnel_setup_script(
         timer.mark("open_terminal")
         timer.mark("focus_xterm")
         timer.mark("build_and_send_cmd")
-        return True
+        return _SetupScriptSendResult(sent_via_ws=True)
 
     _sys.stderr.write("  WebSocket terminal setup unavailable, using browser automation.\n")
     _sys.stderr.flush()
 
     browser_term_name: str | None = None
+    browser_term_lab_url = str(getattr(lab_frame, "url", "") or "")
+
+    def _cleanup_browser_terminal() -> None:
+        if not browser_term_name:
+            return
+        try:
+            _delete_terminal_via_api(
+                context, lab_url=browser_term_lab_url, term_name=browser_term_name
+            )
+        except Exception:
+            pass
+
     try:
         result, browser_term_name = _open_or_create_terminal(context, page, lab_frame)
         if not result:
@@ -2000,7 +2019,10 @@ def _send_rtunnel_setup_script(
                 timer.mark("open_terminal")
                 timer.mark("focus_xterm")
                 timer.mark("build_and_send_cmd")
-                return True
+                return _SetupScriptSendResult(
+                    sent_via_ws=True,
+                    cleanup=_cleanup_browser_terminal,
+                )
             raise ValueError("Failed to open Jupyter terminal")
         timer.mark("open_terminal")
 
@@ -2018,7 +2040,10 @@ def _send_rtunnel_setup_script(
                     _sys.stderr.flush()
                     timer.mark("focus_xterm")
                     timer.mark("build_and_send_cmd")
-                    return True
+                    return _SetupScriptSendResult(
+                        sent_via_ws=True,
+                        cleanup=_cleanup_browser_terminal,
+                    )
                 raise ValueError("Failed to focus Jupyter terminal: xterm surface not ready")
             if not _focus_terminal_input(lab_frame, page):
                 if _send_setup_command_via_terminal_ws(
@@ -2032,7 +2057,10 @@ def _send_rtunnel_setup_script(
                     _sys.stderr.flush()
                     timer.mark("focus_xterm")
                     timer.mark("build_and_send_cmd")
-                    return True
+                    return _SetupScriptSendResult(
+                        sent_via_ws=True,
+                        cleanup=_cleanup_browser_terminal,
+                    )
                 raise ValueError("Failed to focus Jupyter terminal input")
         timer.mark("focus_xterm")
 
@@ -2043,15 +2071,13 @@ def _send_rtunnel_setup_script(
         page.keyboard.insert_text(batch_cmd)
         page.keyboard.press("Enter")
         timer.mark("build_and_send_cmd")
-        return False
-    finally:
-        if browser_term_name:
-            try:
-                _delete_terminal_via_api(
-                    context, lab_url=lab_frame.url, term_name=browser_term_name
-                )
-            except Exception:
-                pass
+        return _SetupScriptSendResult(
+            sent_via_ws=False,
+            cleanup=_cleanup_browser_terminal,
+        )
+    except Exception:
+        _cleanup_browser_terminal()
+        raise
 
 
 def _wait_for_setup_completion(
@@ -2179,6 +2205,7 @@ def _setup_notebook_rtunnel_sync(
         context = _new_context(browser, storage_state=session.storage_state)
         page = context.new_page()
         timer.mark("context_and_page")
+        setup_terminal_cleanup: Callable[[], None] | None = None
 
         try:
             lab_frame = open_notebook_lab(page, notebook_id=notebook_id, timeout=60000)
@@ -2199,13 +2226,15 @@ def _setup_notebook_rtunnel_sync(
             )
             batch_cmd = _build_batch_setup_script(cmd_lines)
             _log.debug("Setup script length: %d chars, %d commands", len(batch_cmd), len(cmd_lines))
-            setup_sent_via_ws = _send_rtunnel_setup_script(
+            setup_send_result = _send_rtunnel_setup_script(
                 context=context,
                 page=page,
                 lab_frame=lab_frame,
                 batch_cmd=batch_cmd,
                 timer=timer,
             )
+            setup_sent_via_ws = setup_send_result.sent_via_ws
+            setup_terminal_cleanup = setup_send_result.cleanup
             _log.debug("Setup script sent via WS: %s", setup_sent_via_ws)
             _wait_for_setup_completion(
                 page=page,
@@ -2253,6 +2282,8 @@ def _setup_notebook_rtunnel_sync(
             )
 
         finally:
+            if setup_terminal_cleanup is not None:
+                setup_terminal_cleanup()
             timer.summary()
             # Rely on sync_playwright() shutdown to terminate browser processes.
             # Explicit context/browser close can hang on some deployments.

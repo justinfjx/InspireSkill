@@ -52,9 +52,22 @@ class FileDirectoryInfo:
         return cls(
             name=str(data.get("name") or "").strip(),
             directory=str(data.get("directory") or "").strip(),
-            is_share=int(str(data.get("is_share") or "0")),
+            is_share=_parse_is_share(data.get("is_share")),
             raw=dict(data),
         )
+
+
+def _parse_is_share(value: Any) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return 1 if value else 0
+    text = str(value or "").strip().lower()
+    if text in {"1", "true"}:
+        return 1
+    if text in {"0", "false", ""}:
+        return 0
+    return 0
 
 
 @dataclass

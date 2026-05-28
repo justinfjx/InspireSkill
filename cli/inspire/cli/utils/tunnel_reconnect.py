@@ -115,7 +115,7 @@ def rebuild_notebook_bridge_profile(
     """Rebuild a notebook-backed bridge profile and persist it to tunnel config."""
     notebook_id = str(getattr(bridge, "notebook_id", "") or "").strip()
     if not notebook_id:
-        raise ValueError(f"Bridge '{bridge_name}' is not notebook-backed (missing notebook handle).")
+        raise ValueError(f"Bridge '{bridge_name}' is not notebook-backed (missing notebook metadata).")
 
     tunnel_port = bridge.rtunnel_port or extract_rtunnel_port(bridge.proxy_url)
     proxy_url = browser_api_module.setup_notebook_rtunnel(

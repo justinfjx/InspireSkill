@@ -16,7 +16,7 @@ from inspire.cli.context import (
 from inspire.cli.formatters import human_formatter, json_formatter
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.events import run_events_command
-from inspire.cli.utils.id_resolver import resolve_by_name
+from inspire.cli.utils.id_resolver import reject_id_at_boundary, resolve_by_name
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.config.workload_profiles import apply_workload_profile, profile_required_message
@@ -80,6 +80,15 @@ def _resolve_ray_name_in_workspace(
         list_candidates=_lister,
         json_output=ctx.json_output,
         pick_index=pick,
+    )
+
+
+def _reject_ray_name_at_boundary(ctx: Context, name: str) -> str:
+    return reject_id_at_boundary(
+        ctx,
+        name,
+        resource_type="ray",
+        list_command="inspire ray list --workspace <workspace>",
     )
 
 
@@ -254,6 +263,7 @@ def status_ray(ctx: Context, name: str, workspace: str) -> None:
     the top-level status fields; use ``--json`` only when a script needs the
     full structured response.
     """
+    name = _reject_ray_name_at_boundary(ctx, name)
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
@@ -318,6 +328,7 @@ def status_ray(ctx: Context, name: str, workspace: str) -> None:
 @pass_context
 def stop_ray(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> None:
     """Stop a running Ray (弹性计算) job."""
+    name = _reject_ray_name_at_boundary(ctx, name)
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
@@ -862,6 +873,7 @@ def events_ray(
         inspire ray events <ray-name> --workspace CPU资源空间 --follow
         inspire --json ray events <ray-name> --workspace CPU资源空间
     """
+    name = _reject_ray_name_at_boundary(ctx, name)
     try:
         session = get_web_session()
         config, _ = Config.from_files_and_env(require_credentials=False)
@@ -922,6 +934,7 @@ def instances_ray(ctx: Context, name: str, workspace: str, limit: int) -> None:
     Shows each pod's status; check `inspire ray events <name> --workspace <workspace>`
     for scheduler reasons when pods remain pending.
     """
+    name = _reject_ray_name_at_boundary(ctx, name)
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
@@ -991,6 +1004,7 @@ def delete_ray(ctx: Context, name: str, workspace: str, yes: bool, pick: Optiona
     job is still running, `stop` it first so the scheduler releases
     reserved capacity cleanly.
     """
+    name = _reject_ray_name_at_boundary(ctx, name)
     if not yes and not ctx.json_output:
         click.confirm(
             f"Permanently delete Ray job '{scrub_raw_ids(name)}'? This cannot be undone.",

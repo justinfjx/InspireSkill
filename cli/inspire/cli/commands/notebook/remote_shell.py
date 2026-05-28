@@ -156,7 +156,7 @@ def bridge_ssh(ctx: Context, notebook: str, cwd: Optional[str]) -> None:
                     "TunnelError",
                     "SSH tunnel not available",
                     hint=(
-                        "This cached connection has no notebook handle, so it cannot be "
+                        "This cached connection is missing notebook metadata, so it cannot be "
                         "rebuilt automatically. Re-create it via "
                         "'inspire notebook ssh connect <notebook> --workspace <workspace>'."
                     ),

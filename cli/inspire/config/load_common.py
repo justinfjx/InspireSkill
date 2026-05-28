@@ -68,6 +68,8 @@ def _default_config_values() -> dict[str, Any]:
         "remote_env": {},
         "path_aliases": {},
         "profiles": {},
+        "context_project": None,
+        "context_workspace": None,
     }
 
 

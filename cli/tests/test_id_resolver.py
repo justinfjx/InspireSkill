@@ -12,6 +12,7 @@ from inspire.cli.utils.id_resolver import (
     is_partial_id,
     normalize_partial,
     resolve_partial_id,
+    resolve_by_name,
 )
 
 
@@ -168,3 +169,81 @@ class TestResolvePartialId:
         with patch.object(click, "prompt", return_value=1):
             result = resolve_partial_id(ctx, "id", "resource", matches, json_output=False)
         assert result == "id-1"
+
+
+class TestResolveByName:
+    def test_handle_shaped_error_omits_id_hint_by_default(self, capsys):
+        ctx = _FakeContext(json_output=True)
+
+        with pytest.raises(SystemExit):
+            resolve_by_name(
+                ctx,
+                name="image-c4eb3ac3-6d83-405c-aa29-059bc945c4bf",
+                resource_type="image",
+                list_candidates=lambda: [],
+                json_output=True,
+            )
+
+        captured = capsys.readouterr()
+        assert "inspire image list" in captured.err
+        assert "dedicated `id` command" not in captured.err
+
+    def test_handle_shaped_error_uses_custom_id_hint(self, capsys):
+        ctx = _FakeContext(json_output=True)
+
+        with pytest.raises(SystemExit):
+            resolve_by_name(
+                ctx,
+                name="hpc-job-c4eb3ac3-6d83-405c-aa29-059bc945c4bf",
+                resource_type="hpc",
+                list_candidates=lambda: [],
+                json_output=True,
+                id_lookup_hint="Use `inspire hpc id <name>` for explicit platform-handle lookup.",
+            )
+
+        assert "inspire hpc id <name>" in capsys.readouterr().err
+
+    def test_date_suffixed_names_are_not_treated_as_handles(self):
+        ctx = _FakeContext(json_output=True)
+
+        result = resolve_by_name(
+            ctx,
+            name="job-smoke-20260507",
+            resource_type="job",
+            list_candidates=lambda: [{"name": "job-smoke-20260507", "id": "job-id"}],
+            json_output=True,
+        )
+
+        assert result == "job-id"
+
+    @pytest.mark.parametrize(
+        "name, resource_type",
+        [
+            ("hpc-job-123", "hpc"),
+            ("rj-abc", "ray"),
+            ("ray-abc-1", "ray"),
+            ("img-001", "image"),
+            ("image-abc-def", "image"),
+        ],
+    )
+    def test_compact_platform_handles_are_rejected_before_listing(
+        self,
+        name: str,
+        resource_type: str,
+        capsys,
+    ):
+        ctx = _FakeContext(json_output=True)
+
+        def _fail_lister():
+            raise AssertionError("compact handle should be rejected before listing")
+
+        with pytest.raises(SystemExit):
+            resolve_by_name(
+                ctx,
+                name=name,
+                resource_type=resource_type,
+                list_candidates=_fail_lister,
+                json_output=True,
+            )
+
+        assert f"{resource_type} name" in capsys.readouterr().err

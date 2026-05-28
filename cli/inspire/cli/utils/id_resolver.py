@@ -18,6 +18,7 @@ _FULL_UUID_RE = re.compile(
 )
 
 _HEX_RE = re.compile(r"^[0-9a-f]+$", re.IGNORECASE)
+_HEX_CHUNKS_RE = re.compile(r"^[0-9a-f]+(?:-[0-9a-f]+)*$", re.IGNORECASE)
 
 _MIN_PARTIAL_LEN = 4
 
@@ -48,6 +49,13 @@ def normalize_partial(value: str, prefix: str | None = None) -> str:
     if prefix and value.lower().startswith(prefix.lower()):
         value = value[len(prefix) :]
     return value.lower()
+
+
+def _is_compact_prefixed_platform_id_body(value: str) -> bool:
+    body = value.strip().lower()
+    if len(body.replace("-", "")) < 3:
+        return False
+    return bool(_HEX_CHUNKS_RE.match(body))
 
 
 def resolve_partial_id(
@@ -120,6 +128,7 @@ def resolve_by_name(
     id_key: str = "id",
     label_fn: Optional[Callable[[dict[str, Any]], str]] = None,
     pick_index: Optional[int] = None,
+    id_lookup_hint: str | None = None,
 ) -> str:
     """Resolve a platform name to its internal handle.
 
@@ -144,17 +153,16 @@ def resolve_by_name(
 
     # Reject handle-looking inputs at the normal CLI boundary.
     if _looks_like_platform_id(name):
+        hint = f"Find the name with `inspire {resource_type} list`."
+        if id_lookup_hint:
+            hint = f"{hint} {id_lookup_hint}"
         exit_with_error(
             ctx,
             "ValidationError",
             f"CLI commands take a {resource_type} name, not a platform handle "
             "or partial handle.",
             EXIT_VALIDATION_ERROR,
-            hint=(
-                f"Find the name with `inspire {resource_type} list`. "
-                "Use the resource's dedicated `id` command only for explicit "
-                "platform-handle lookup."
-            ),
+            hint=hint,
         )
         return ""  # unreachable
 
@@ -279,8 +287,15 @@ def _looks_like_platform_id(value: str) -> bool:
         "spec-",
         "user-",
     )
-    if any(v.startswith(p) for p in id_prefixes):
-        return True
+    for prefix in sorted(id_prefixes, key=len, reverse=True):
+        if not v.startswith(prefix):
+            continue
+        body = v[len(prefix) :]
+        return (
+            is_full_uuid(body)
+            or is_partial_id(body)
+            or _is_compact_prefixed_platform_id_body(body)
+        )
     if is_partial_id(v):
         return True
     # Bare UUID — stripping only colons/underscores would be wrong, just match exactly.

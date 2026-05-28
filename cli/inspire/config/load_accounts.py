@@ -23,7 +23,14 @@ def _apply_project_context_and_defaults(
     project_context: dict[str, Any],
     project_defaults: dict[str, Any],
 ) -> None:
-    _ = project_context
+    project_name = str(project_context.get("project") or "").strip()
+    if project_name:
+        config_dict["context_project"] = project_name
+        sources["context_project"] = SOURCE_PROJECT
+    workspace_name = str(project_context.get("workspace") or "").strip()
+    if workspace_name:
+        config_dict["context_workspace"] = workspace_name
+        sources["context_workspace"] = SOURCE_PROJECT
 
     _apply_defaults_overrides(
         defaults=project_defaults,

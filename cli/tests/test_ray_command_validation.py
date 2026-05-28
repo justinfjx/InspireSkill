@@ -53,3 +53,33 @@ def test_ray_create_help_uses_unified_head_condition_flags() -> None:
     assert "--head-image" not in result.output
     assert "--image TEXT" in result.output
     assert "shm-size" in result.output
+
+
+@pytest.mark.parametrize("command", ["status", "events", "instances", "stop", "delete"])
+def test_ray_name_commands_reject_handles_before_web_session(
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    from inspire.cli.commands.ray import ray_commands as ray_mod
+
+    def fail_session():  # noqa: ANN001
+        raise AssertionError("web session should not be opened for handle-shaped input")
+
+    monkeypatch.setattr(ray_mod, "get_web_session", fail_session)
+
+    args = [
+        "--json",
+        "ray",
+        command,
+        "ray-c4eb3ac3-6d83-405c-aa29-059bc945c4bf",
+        "--workspace",
+        "cpu-room",
+    ]
+    if command == "delete":
+        args.append("--yes")
+
+    result = CliRunner().invoke(cli_main, args)
+
+    assert result.exit_code != 0
+    assert "ValidationError" in result.output
+    assert "ray name" in result.output

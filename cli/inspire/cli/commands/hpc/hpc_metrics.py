@@ -41,8 +41,7 @@ def _hpc_name_to_id(ctx: Context, name: str) -> str:
     from inspire.config import Config
     from inspire.platform.web.session import get_web_session
 
-    if name.startswith("hpc-job-"):
-        return name
+    name = _hpc._reject_hpc_name_at_boundary(ctx, name)
 
     config, _ = Config.from_files_and_env(require_credentials=False)
     session = get_web_session()

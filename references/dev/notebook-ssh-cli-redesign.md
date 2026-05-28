@@ -2,7 +2,7 @@
 
 ## 背景
 
-当前 `inspire` v5.1.18 的 notebook SSH 命令表面是：
+本设计记录提出时，`inspire` 的 notebook SSH 命令表面是：
 
 ```bash
 inspire notebook ssh connect <notebook> --workspace <workspace>

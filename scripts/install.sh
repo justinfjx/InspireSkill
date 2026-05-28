@@ -28,6 +28,7 @@ LAUNCH_LABEL="sh.inspire-skill.update-check"
 HARNESSES=""
 INSTALL_CLI=1
 INSTALL_SCHEDULE=1
+INSTALLER=""
 
 color()  { local c="$1"; shift; printf '\033[%sm%s\033[0m' "$c" "$*"; }
 bold()   { color "1"  "$@"; }
@@ -124,6 +125,7 @@ SPEC_LABEL="$(bold "$PACKAGE") (PyPI)"
 
 if (( INSTALL_CLI )); then
   if command -v uv >/dev/null 2>&1; then
+    INSTALLER="uv"
     log "installing $SPEC_LABEL via $(bold 'uv tool')"
     uv tool install --force --refresh "$SPEC" || die "uv tool install failed — check the spec '$SPEC' and try again."
     # If a previous run installed the same package via pipx, leaving it around
@@ -133,6 +135,7 @@ if (( INSTALL_CLI )); then
       pipx uninstall "$PACKAGE" >/dev/null 2>&1 || true
     fi
   elif command -v pipx >/dev/null 2>&1; then
+    INSTALLER="pipx"
     log "installing $SPEC_LABEL via $(bold pipx)"
     pipx install --force "$SPEC" || die "pipx install failed — check the spec '$SPEC' and try again."
   else
@@ -178,6 +181,8 @@ if (( INSTALL_CLI )); then
   fi
   if [[ -n "$INSPIRE_BIN" ]]; then
     ok "$(INSPIRE_SKIP_UPDATE_CHECK=1 "$INSPIRE_BIN" --version 2>/dev/null || echo "$PACKAGE installed")"
+  else
+    die "installed inspire command was not found. Add ~/.local/bin to PATH or rerun the installer."
   fi
 
   log "preparing Playwright Chromium runtime"
@@ -309,7 +314,7 @@ cat <<EOF
         inspire init
   2) Verify auth and resource visibility:
         inspire config show --compact
-        inspire resources list --all --include-cpu
+        inspire resources availability --workspace all --include-cpu
   3) Check / apply upgrades anytime:
         inspire update --check     # report only
         inspire update             # CLI + SKILL in one shot

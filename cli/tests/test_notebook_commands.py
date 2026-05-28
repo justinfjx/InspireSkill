@@ -101,6 +101,29 @@ def test_current_user_id_uses_live_user_detail(
     assert calls == [("GET", "https://example.invalid/api/v1/user/detail")]
 
 
+def test_current_user_id_failure_records_live_user_detail_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class _FakeSession:
+        user_detail = {"id": "cached-user"}
+
+    def _fake_request_json(session, method, url, **kwargs):  # noqa: ANN001
+        raise RuntimeError("browser runtime missing")
+
+    monkeypatch.setattr(_NBL_MOD.web_session_module, "request_json", _fake_request_json)
+
+    session = _FakeSession()
+    assert _NBL_MOD._try_get_current_user_ids(
+        session,
+        base_url="https://example.invalid",
+    ) == []
+    message = _NBL_MOD._current_user_lookup_failure_message(session)
+    assert "/api/v1/user/detail" in message
+    assert "browser runtime missing" in message
+    assert "inspire account login" in message
+    assert "inspire update --cli-only" in message
+
+
 def test_current_user_detail_uses_live_user_detail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

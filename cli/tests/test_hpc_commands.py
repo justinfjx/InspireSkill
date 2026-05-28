@@ -335,6 +335,38 @@ def test_hpc_status_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Non
     assert api.calls["get_hpc_job_detail"] == "hpc-job-123"
 
 
+@pytest.mark.parametrize("command", ["status", "events", "instances", "stop", "delete"])
+def test_hpc_name_commands_reject_handles_before_web_session(
+    monkeypatch: pytest.MonkeyPatch,
+    command: str,
+) -> None:
+    from inspire.cli.commands.hpc import hpc_commands as hpc_mod
+    from inspire.cli.commands.hpc import hpc_events as hpc_events_mod
+
+    def fail_session():  # noqa: ANN001
+        raise AssertionError("web session should not be opened for handle-shaped input")
+
+    monkeypatch.setattr(hpc_mod, "get_web_session", fail_session)
+    monkeypatch.setattr(hpc_events_mod, "get_web_session", fail_session)
+
+    args = [
+        "--json",
+        "hpc",
+        command,
+        "hpc-job-c4eb3ac3-6d83-405c-aa29-059bc945c4bf",
+        "--workspace",
+        "cpu-room",
+    ]
+    if command == "delete":
+        args.append("--yes")
+
+    result = CliRunner().invoke(cli_main, args)
+
+    assert result.exit_code != 0
+    assert "ValidationError" in result.output
+    assert "hpc name" in result.output
+
+
 def test_hpc_list_json(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     patch_hpc_config_and_auth(monkeypatch, tmp_path)
     runner = CliRunner()

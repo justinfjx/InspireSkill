@@ -35,6 +35,11 @@ hpc_metrics_module = importlib.import_module(
 serving_metrics_module = importlib.import_module(
     "inspire.cli.commands.serving.serving_metrics"
 )
+hpc_commands_module = importlib.import_module(
+    "inspire.cli.commands.hpc.hpc_commands"
+)
+config_module = importlib.import_module("inspire.config")
+web_session_module = importlib.import_module("inspire.platform.web.session")
 
 
 class _FakeSession:
@@ -74,6 +79,33 @@ def _minimal_group() -> MetricGroup:
         metric_type="gpu_usage_rate",
         resource_name="GPU",
         samples=[MetricSample(timestamp=100, value=0.5)],
+    )
+
+
+def _patch_hpc_metrics_name_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    config = config_module.Config(
+        username="user",
+        password="pass",
+        base_url="https://example.invalid",
+    )
+    session = _FakeSession()
+
+    monkeypatch.setattr(
+        config_module.Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_credentials=False: (config, {})),
+    )
+    monkeypatch.setattr(web_session_module, "get_web_session", lambda: session)
+
+    def _fake_resolve_hpc_name_in_workspace(ctx, *, config, session, name, workspace, limit, pick=None):  # noqa: ANN001
+        assert name == "prep-a"
+        assert workspace == "all"
+        return "hpc-job-xyz"
+
+    monkeypatch.setattr(
+        hpc_commands_module,
+        "_resolve_hpc_name_in_workspace",
+        _fake_resolve_hpc_name_in_workspace,
     )
 
 
@@ -153,11 +185,12 @@ def test_hpc_metrics_resolver_and_wiring(
         return {"code": 0, "data": {"logic_compute_group_id": "lcg-hpc-9"}}
 
     monkeypatch.setattr(hpc_metrics_module, "_request_json", _fake_request)
+    _patch_hpc_metrics_name_resolver(monkeypatch)
 
     runner = CliRunner()
     result = runner.invoke(
         cli_main,
-        ["hpc", "metrics", "hpc-job-xyz", "--workspace", "all", "--metric", "gpu", "--window", "15m"],
+        ["hpc", "metrics", "prep-a", "--workspace", "all", "--metric", "gpu", "--window", "15m"],
     )
     assert result.exit_code == 0, result.output
 
@@ -170,8 +203,26 @@ def test_hpc_metrics_resolver_and_wiring(
     assert capture["task_type"] == "hpc_job"
     assert capture["logic_compute_group_id"] == "lcg-hpc-9"
     assert render_captures[0]["task_label"] == "HPC Job"
-    expected = tmp_path / "hpc-hpc-job-xyz-1000000.png"
+    expected = tmp_path / "hpc-prep-a-1000000.png"
     assert render_captures[0]["out_path"] == expected
+
+
+def test_hpc_metrics_rejects_platform_handle_before_web_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fail_session():  # noqa: ANN001
+        raise AssertionError("web session should not be opened for handle-shaped input")
+
+    monkeypatch.setattr(web_session_module, "get_web_session", _fail_session)
+
+    result = CliRunner().invoke(
+        cli_main,
+        ["--json", "hpc", "metrics", "hpc-job-123", "--workspace", "all", "--metric", "gpu"],
+    )
+
+    assert result.exit_code != 0
+    assert "ValidationError" in result.output
+    assert "hpc name" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +283,7 @@ def test_serving_metrics_resolver_and_wiring(
         ),
         (
             "hpc",
-            ["hpc", "metrics", "hpc-job-xyz", "--workspace", "all", "--metric", "gpu"],
+            ["hpc", "metrics", "prep-a", "--workspace", "all", "--metric", "gpu"],
             "hpc_job",
         ),
         (
@@ -270,6 +321,8 @@ def test_variants_emit_resource_tagged_json(
         hpc_metrics_module, "_request_json",
         lambda *a, **kw: {"code": 0, "data": {"logic_compute_group_id": "lcg-ok"}},
     )
+    if resource == "hpc":
+        _patch_hpc_metrics_name_resolver(monkeypatch)
 
     class _FakeServingApi:
         @staticmethod

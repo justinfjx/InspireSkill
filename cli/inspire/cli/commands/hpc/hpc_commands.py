@@ -19,7 +19,7 @@ from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.raw_ids import scrub_raw_ids
 from inspire.config import Config, ConfigError
 from inspire.config.workload_profiles import apply_workload_profile, profile_required_message
-from inspire.cli.utils.id_resolver import resolve_by_name
+from inspire.cli.utils.id_resolver import reject_id_at_boundary, resolve_by_name
 from inspire.config.workspaces import select_workspace_id, workspace_label
 from inspire.platform.openapi import InspireAPIError
 from inspire.platform.web import browser_api as browser_api_module
@@ -79,6 +79,15 @@ def _resolve_hpc_name_in_workspace(
         list_candidates=_lister,
         json_output=ctx.json_output,
         pick_index=pick,
+    )
+
+
+def _reject_hpc_name_at_boundary(ctx: Context, name: str) -> str:
+    return reject_id_at_boundary(
+        ctx,
+        name,
+        resource_type="hpc",
+        list_command="inspire hpc list --workspace <workspace>",
     )
 
 
@@ -625,6 +634,7 @@ def create_hpc(
 @pass_context
 def status_hpc(ctx: Context, name: str, workspace: str) -> None:
     """Get status/details of an HPC job (pass the job name)."""
+    name = _reject_hpc_name_at_boundary(ctx, name)
     try:
         config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
@@ -688,6 +698,7 @@ def status_hpc(ctx: Context, name: str, workspace: str) -> None:
 @pass_context
 def instances_hpc(ctx: Context, name: str, workspace: str, limit: int) -> None:
     """List pod/component instances for an HPC job."""
+    name = _reject_hpc_name_at_boundary(ctx, name)
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()
@@ -773,6 +784,7 @@ def hpc_id(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> None
 @pass_context
 def stop_hpc(ctx: Context, name: str, workspace: str, pick: Optional[int]) -> None:
     """Stop an HPC job (pass the job name)."""
+    name = _reject_hpc_name_at_boundary(ctx, name)
     try:
         config, _ = Config.from_files_and_env()
         api = AuthManager.get_api(config)
@@ -830,6 +842,7 @@ def delete_hpc(ctx: Context, name: str, workspace: str, yes: bool, pick: Optiona
     Example:
         inspire hpc delete my-hpc-run --workspace CPU资源空间
     """
+    name = _reject_hpc_name_at_boundary(ctx, name)
     if not yes and not ctx.json_output:
         click.confirm(
             f"Permanently delete HPC job '{scrub_raw_ids(name)}'? This cannot be undone.",

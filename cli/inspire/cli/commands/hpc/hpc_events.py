@@ -11,7 +11,10 @@ from typing import Optional
 import click
 
 from inspire.cli.context import Context, EXIT_CONFIG_ERROR, pass_context
-from inspire.cli.commands.hpc.hpc_commands import _resolve_hpc_name_in_workspace
+from inspire.cli.commands.hpc.hpc_commands import (
+    _reject_hpc_name_at_boundary,
+    _resolve_hpc_name_in_workspace,
+)
 from inspire.cli.utils.errors import exit_with_error as _handle_error
 from inspire.cli.utils.events import run_events_command
 from inspire.config import Config, ConfigError
@@ -59,6 +62,7 @@ def events(
       inspire hpc events <name> --workspace CPU资源空间 --reason Deleted
       inspire hpc events <name> --workspace CPU资源空间 --follow
     """
+    name = _reject_hpc_name_at_boundary(ctx, name)
     try:
         config, _ = Config.from_files_and_env(require_credentials=False)
         session = get_web_session()

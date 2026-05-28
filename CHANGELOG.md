@@ -6,6 +6,62 @@
 
 当前无未发布变更。
 
+## 5.2.0（2026-05-29）
+
+### 修复
+
+- 修复首次安装路径中 `INSTALLER` 未初始化导致 `scripts/install.sh` 在 `set -u` 下退出的问题。
+- 修复文件页 Browser API 目录解析不接受布尔型 `is_share` 的问题，避免 live 项目目录发现被合法响应中断。
+- 修复 Web session fallback 缺少 Playwright Chromium 时泄漏底层 `playwright install` 命令的问题，统一提示标准 `inspire update --cli-only` 修复入口。
+- 修复 Notebook 当前账号 live 查询失败时错误原因被吞掉的问题，现在会明确指向 `/api/v1/user/detail`、账号 session 或浏览器运行时。
+- 修复 rtunnel 浏览器 terminal fallback 在 setup 脚本完成前删除 Jupyter terminal 的问题，terminal 清理延后到 setup 等待和验证流程之后。
+- 修复 `config context` 不展示项目级 `[context]` 中 project / workspace 的问题；这些值仅用于展示，不恢复为 workload 隐式默认。
+- 修复 Name-only 边界中的若干残留：HPC / Ray 普通 name 命令和 `hpc metrics` 在打开 Web session 前拒绝平台 handle；通用 name resolver 不再默认建议不存在的 `id` 子命令；日期后缀名称不再被 ID 清洗器误删，同时短平台 handle 仍会被拒绝和清洗。
+- 清理 CLI 人类可见文案中残留的 “handle” 术语，并更新 README、开发文档和本地 Agent 记忆中的过期测试数量、命令名与版本描述。
+
+## 5.1.25（2026-05-28）
+
+### 修复
+
+- `inspire image list` 默认查询全部可见来源，公开镜像不再需要额外指定 `--source public` 才能被发现。
+
+## 5.1.24（2026-05-28）
+
+### 修复
+
+- `inspire init` 通过文件页 Browser API 读取项目共享盘目录来解析 path alias，不再依赖训练任务视角的 workdir。
+
+## 5.1.23（2026-05-28）
+
+### 修复
+
+- 个人路径 alias 使用平台文件页返回的共享盘目录用户段，避免把登录账号误当作远端路径组成部分。
+
+## 5.1.22（2026-05-28）
+
+### 修复
+
+- 修复 path alias 从平台 workdir 解析时的边界问题，为后续文件页目录解析收口做准备。
+
+## 5.1.21（2026-05-28）
+
+### 修复
+
+- 修复 CAS 登录流程可能卡住的问题，改善 Web session 获取稳定性。
+
+## 5.1.20（2026-05-28）
+
+### 修复
+
+- 安装器和 `inspire update` 统一通过全局 `inspire _ensure-playwright-runtime` 准备 Playwright Chromium，`--cli-only` 只升级 CLI 包与运行时、不刷新 skill 文件。
+
+## 5.1.19（2026-05-26）
+
+### 修复
+
+- 修复账号级和项目级 `init` 配置模板的 scope 边界，避免账号配置写入项目字段或项目配置写入账号字段。
+- 重构 notebook SSH 命令面，新增 `inspire notebook ssh <name> [-- <command>...]`、`connection`、`ssh-config` 与 `ssh-proxy`，并保留兼容入口。
+
 ## 5.1.18（2026-05-25）
 
 ### Fixed

@@ -13,6 +13,7 @@ from . import notebook_ssh_flow as notebook_ssh_flow_module
 from .notebook_create_flow import maybe_run_post_start, run_notebook_create
 from .notebook_lookup import (
     _collect_workspace_ids_for_lookup,
+    _current_user_lookup_failure_message,
     _get_current_user_detail,
     _list_notebooks_for_workspace,
     _resolve_notebook_id as _lookup_resolve_notebook_id,
@@ -759,7 +760,7 @@ def list_notebooks(
         _handle_error(
             ctx,
             "AuthenticationError",
-            "Cannot determine the current user from the live web session.",
+            _current_user_lookup_failure_message(session),
             EXIT_API_ERROR,
         )
         return

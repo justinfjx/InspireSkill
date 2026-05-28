@@ -462,6 +462,36 @@ class TestAccountConfigLayer:
         assert cfg.project_catalog["project-1"]["path_user"] == "tongjingqi-CZXS25110029"
         assert sources["project_catalog"] == SOURCE_GLOBAL
 
+    def test_project_context_is_loaded_for_display(
+        self, home: Path, clean_env: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        self._write_account_config(
+            home,
+            "alice",
+            '[auth]\nusername = "alice-platform"\npassword = "pw"\n',
+        )
+        monkeypatch.chdir(tmp_path)
+        project_config = (
+            tmp_path / ".inspire" / "accounts" / "alice" / "config.toml"
+        )
+        project_config.parent.mkdir(parents=True)
+        project_config.write_text(
+            '[context]\nproject = "CI-情境智能"\nworkspace = "CPU资源空间"\n',
+            encoding="utf-8",
+        )
+
+        cfg, sources = Config.from_files_and_env(require_credentials=False)
+
+        assert cfg.context_project == "CI-情境智能"
+        assert cfg.context_workspace == "CPU资源空间"
+        assert sources["context_project"] == SOURCE_PROJECT
+        assert sources["context_workspace"] == SOURCE_PROJECT
+
+        result = CliRunner().invoke(cli_main, ["config", "context"])
+        assert result.exit_code == 0
+        assert "project    CI-情境智能" in result.output
+        assert "workspace  CPU资源空间" in result.output
+
     def test_project_config_rejects_account_scope_keys(
         self, home: Path, clean_env: None, tmp_path: Path
     ) -> None:

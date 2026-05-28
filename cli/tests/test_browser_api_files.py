@@ -97,6 +97,18 @@ def test_list_file_directories_posts_frontend_directory_filter(monkeypatch) -> N
     }
 
 
+def test_file_directory_info_accepts_boolean_is_share() -> None:
+    entry = files_module.FileDirectoryInfo.from_api_response(
+        {
+            "name": "Demo",
+            "directory": "/inspire/hdd/project/topic-a/user-a",
+            "is_share": True,
+        }
+    )
+
+    assert entry.is_share == 1
+
+
 def test_get_sftpgo_connection_info_posts_storage_name(monkeypatch) -> None:  # noqa: ANN001
     captured: dict[str, Any] = {}
 

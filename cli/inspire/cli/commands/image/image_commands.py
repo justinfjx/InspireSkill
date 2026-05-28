@@ -522,7 +522,7 @@ def save_image_cmd(
         visibility_applied = False
         if not ctx.json_output:
             click.echo(
-                "Warning: save returned no image handle and list fallback didn't find the image; "
+                "Warning: save returned no image reference and list fallback didn't find the image; "
                 f"visibility not applied. Re-run 'inspire image set-visibility {image_label} "
                 "--visibility <private|public>' after confirming the image via "
                 "'inspire image list --source private'.",

@@ -26,6 +26,10 @@ from inspire.platform.web.session.models import (
     WebSession,
     get_session_cache_file,
 )
+from inspire.platform.web.session.browser_launch import (
+    is_playwright_browser_runtime_error,
+    playwright_install_hint,
+)
 from inspire.platform.web.session.proxy import get_playwright_proxy
 from inspire.platform.web.session.requests import build_requests_session
 from inspire.platform.web.session.workspace import (
@@ -60,6 +64,15 @@ logger = logging.getLogger(__name__)
 
 
 atexit.register(_close_browser_client)
+
+
+def _raise_browser_runtime_error(exc: BaseException) -> None:
+    raise RuntimeError(
+        "Playwright Chromium could not start for Inspire web requests. Prepare "
+        "the standard CLI runtime with:\n"
+        f"    {playwright_install_hint()}\n"
+        "Then retry the command."
+    ) from exc
 
 
 def _refresh_session_in_place(current: "WebSession", refreshed: "WebSession") -> None:
@@ -160,6 +173,11 @@ def request_json(
                 timeout=timeout,
                 _retry_count=_retry_count + 1,
             )
+        raise
+    except Exception as exc:
+        if is_playwright_browser_runtime_error(exc):
+            _close_browser_client()
+            _raise_browser_runtime_error(exc)
         raise
 
 

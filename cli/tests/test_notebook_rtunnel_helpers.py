@@ -25,6 +25,7 @@ from inspire.platform.web.browser_api.rtunnel import (
     _jupyter_server_base,
     _open_or_create_terminal,
     _probe_terminal_command_markers_via_ws,
+    _send_rtunnel_setup_script,
     _send_setup_command_via_terminal_ws,
     _send_terminal_command_via_websocket,
     _verify_terminal_focus,
@@ -466,6 +467,89 @@ def test_send_setup_command_via_terminal_ws_returns_false_when_terminal_create_f
         )
         is False
     )
+
+
+def test_send_rtunnel_setup_script_defers_browser_terminal_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    class _Keyboard:
+        def insert_text(self, text: str) -> None:
+            events.append(f"insert:{text}")
+
+        def press(self, key: str) -> None:
+            events.append(f"press:{key}")
+
+    class _Page:
+        keyboard = _Keyboard()
+
+        def wait_for_timeout(self, _timeout_ms: int) -> None:
+            events.append("wait")
+
+    class _Frame:
+        url = "https://nb.example.com/lab"
+
+    monkeypatch.setattr(
+        rtunnel_module,
+        "_send_setup_command_via_terminal_ws",
+        lambda *_a, **_k: False,
+    )
+    monkeypatch.setattr(
+        rtunnel_module,
+        "_open_or_create_terminal",
+        lambda _context, _page, lab_frame: setattr(
+            lab_frame,
+            "url",
+            "https://nb.example.com/lab/terminals/browser-term",
+        )
+        or (True, "browser-term"),
+    )
+    monkeypatch.setattr(rtunnel_module, "_focus_terminal_input", lambda *_a, **_k: True)
+    monkeypatch.setattr(
+        rtunnel_module,
+        "_delete_terminal_via_api",
+        lambda _ctx, *, lab_url, term_name: events.append(f"delete:{lab_url}|{term_name}")
+        or True,
+    )
+
+    result = _send_rtunnel_setup_script(
+        context=object(),
+        page=_Page(),
+        lab_frame=_Frame(),
+        batch_cmd="echo setup",
+        timer=_StepTimer(enabled=False),
+    )
+
+    assert result.sent_via_ws is False
+    assert "insert:echo setup" in events
+    assert "press:Enter" in events
+    assert not any(event.startswith("delete:") for event in events)
+    assert result.cleanup is not None
+
+    result.cleanup()
+    assert events[-1] == "delete:https://nb.example.com/lab|browser-term"
+
+
+def test_open_or_create_terminal_keeps_api_terminal_name_when_dom_fallback_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        rtunnel_module,
+        "_open_terminal_via_rest_api",
+        lambda **_kwargs: (False, True, "api-term"),
+    )
+    monkeypatch.setattr(rtunnel_module, "_recover_api_terminal_surface", lambda **_kwargs: False)
+    monkeypatch.setattr(rtunnel_module, "_wait_for_terminal_entry_point", lambda **_kwargs: None)
+    monkeypatch.setattr(rtunnel_module, "_dismiss_terminal_dialog_once", lambda **_kwargs: False)
+    monkeypatch.setattr(rtunnel_module, "_open_terminal_via_dom_fallback", lambda **_kwargs: False)
+
+    result, term_name = _open_or_create_terminal(
+        context=object(), page=object(), lab_frame=object()
+    )
+
+    assert result is False
+    assert term_name == "api-term"
 
 
 # ---------------------------------------------------------------------------

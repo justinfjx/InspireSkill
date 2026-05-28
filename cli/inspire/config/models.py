@@ -117,6 +117,12 @@ class Config:
     # for workspace/project/group/image/quota, not defaults.
     profiles: dict[str, dict[str, dict[str, str]]] = field(default_factory=dict)
 
+    # Display-only project context from project config. These names are shown
+    # by `inspire config context`; create commands still require explicit
+    # arguments or workload profiles.
+    context_project: Optional[str] = None
+    context_workspace: Optional[str] = None
+
     # Source precedence: "env" (default) = env vars win, "toml" = project TOML wins
     prefer_source: str = "env"
 

@@ -17,10 +17,10 @@ _PREFIXED_ID_RE = re.compile(
     re.IGNORECASE,
 )
 
-_PREFIXED_ID_BROAD_RE = re.compile(
+_PREFIXED_COMPACT_ID_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(?P<prefix>hpc-job|job|notebook|nb|ray|rj|sv|serving|image|img|ws|lcg|"
     r"project|user|ssh|quota|spec|model|mirror)-"
-    r"(?P<body>(?=[A-Za-z0-9-]*-)(?=[A-Za-z0-9-]*\d)[A-Za-z0-9][A-Za-z0-9-]{7,})\b",
+    r"(?P<body>[0-9a-f]{3,}(?:-[0-9a-f]+)*)\b",
     re.IGNORECASE,
 )
 
@@ -62,7 +62,7 @@ def scrub_raw_ids(value: object) -> str:
 
     text = "" if value is None else str(value)
     text = _PREFIXED_ID_RE.sub(_replace_prefixed_id, text)
-    text = _PREFIXED_ID_BROAD_RE.sub(_replace_prefixed_id, text)
+    text = _PREFIXED_COMPACT_ID_RE.sub(_replace_prefixed_id, text)
     return _UUID_RE.sub("<raw-id>", text)
 
 
