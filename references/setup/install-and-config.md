@@ -32,6 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/realZillionX/InspireSkill/main/scri
 ```bash
 curl -fsSL .../install.sh | bash -s -- --harness claude
 curl -fsSL .../install.sh | bash -s -- --harness claude,codex
+curl -fsSL .../install.sh | bash -s -- --harness qoder
 curl -fsSL .../install.sh | bash -s -- --no-cli
 curl -fsSL .../install.sh | bash -s -- --no-schedule
 ```

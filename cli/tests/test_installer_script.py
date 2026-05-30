@@ -64,7 +64,7 @@ def test_installer_first_uv_install_without_inspire_on_path(tmp_path: Path) -> N
         "INSPIRE_SKIP_UPDATE_CHECK": "1",
     }
     result = subprocess.run(
-        ["bash", str(installer), "--harness", "codex", "--no-schedule"],
+        ["bash", str(installer), "--harness", "codex,qoder", "--no-schedule"],
         cwd=installer.parent.parent,
         env=env,
         text=True,
@@ -75,3 +75,4 @@ def test_installer_first_uv_install_without_inspire_on_path(tmp_path: Path) -> N
     assert result.returncode == 0, result.stderr + result.stdout
     assert "unbound variable" not in result.stderr
     assert (home / ".codex" / "skills" / "inspire" / "SKILL.md").exists()
+    assert (home / ".qoder" / "skills" / "inspire" / "SKILL.md").exists()

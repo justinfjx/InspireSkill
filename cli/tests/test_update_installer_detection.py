@@ -76,6 +76,19 @@ def test_detect_installer_from_prefix(
     assert _detect_installer() == expected
 
 
+def test_detect_harnesses_includes_qoder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    roots = {
+        "claude": tmp_path / ".claude",
+        "qoder": tmp_path / ".qoder",
+        "opencode": tmp_path / ".config" / "opencode",
+    }
+    roots["claude"].mkdir()
+    roots["qoder"].mkdir()
+    monkeypatch.setattr(update_module, "HARNESS_ROOTS", roots)
+
+    assert update_module._detect_harnesses() == ["claude", "qoder"]
+
+
 def test_upgrade_cli_retries_pypi_network_errors_with_mirrors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -4,7 +4,7 @@
 # Reads: none (self-contained tarball + uv/pipx download)
 # Writes:
 #   - ~/.local/bin/inspire       (uv tool / pipx shim; installer-managed)
-#   - ~/.{claude,codex,gemini}/skills/inspire/{SKILL.md, references/, ...}
+#   - supported harness skill dirs, e.g. ~/.claude/skills/inspire/
 #   - ~/Library/LaunchAgents/sh.inspire-skill.update-check.plist  (macOS only)
 #   - ~/.inspire/update-status.json  (via post-install `inspire update --check`)
 #
@@ -14,7 +14,8 @@
 #   curl -fsSL .../install.sh | bash -s -- --no-schedule
 #
 # Flags:
-#   --harness claude[,codex,gemini]   explicit harness list (default: auto-detect)
+#   --harness claude[,codex,gemini,openclaw,opencode,qoder]
+#                                     explicit harness list (default: auto-detect)
 #   --no-cli                          skip installing the Python package (skill-only)
 #   --no-schedule                     skip the macOS launchd update-check agent
 #
@@ -63,21 +64,22 @@ detect_harnesses() {
   [[ -d "$HOME/.gemini"                                      ]] && found+=("gemini")
   [[ -d "$HOME/.openclaw"                                    ]] && found+=("openclaw")
   [[ -d "${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"     ]] && found+=("opencode")
+  [[ -d "$HOME/.qoder"                                       ]] && found+=("qoder")
   (IFS=,; echo "${found[*]:-}")
 }
 
 if [[ -z "$HARNESSES" ]]; then
   HARNESSES="$(detect_harnesses)"
   [[ -n "$HARNESSES" ]] \
-    || die "no agent harness detected (checked \$HOME/.claude, .codex, .gemini, .openclaw, and \$OPENCODE_CONFIG_DIR or \$HOME/.config/opencode). Pass --harness explicitly."
+    || die "no agent harness detected (checked \$HOME/.claude, .codex, .gemini, .openclaw, \$OPENCODE_CONFIG_DIR or \$HOME/.config/opencode, and .qoder). Pass --harness explicitly."
   log "auto-detected harnesses: $(bold "$HARNESSES")"
 fi
 
 IFS=',' read -r -a HARNESS_LIST <<<"$HARNESSES"
 for h in "${HARNESS_LIST[@]}"; do
   case "$h" in
-    claude|codex|gemini|openclaw|opencode) ;;
-    *) die "unknown harness: $h (pick from claude,codex,gemini,openclaw,opencode)" ;;
+    claude|codex|gemini|openclaw|opencode|qoder) ;;
+    *) die "unknown harness: $h (pick from claude,codex,gemini,openclaw,opencode,qoder)" ;;
   esac
 done
 
@@ -219,6 +221,7 @@ install_skill() {
     gemini)   target="$HOME/.gemini/skills/inspire"                                    ;;
     openclaw) target="$HOME/.openclaw/skills/inspire"                                  ;;
     opencode) target="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}/skills/inspire"   ;;
+    qoder)    target="$HOME/.qoder/skills/inspire"                                     ;;
   esac
 
   # Wipe prior install (handles real dirs and stale symlink layouts).

@@ -4,7 +4,9 @@
 
 ## Unreleased
 
-当前无未发布变更。
+### 新增
+
+- 新增 Qoder Harness 支持：安装器和 `inspire update` 可探测 `~/.qoder`，并把 InspireSkill 安装 / 刷新到 `~/.qoder/skills/inspire/`。
 
 ## 5.2.0（2026-05-29）
 

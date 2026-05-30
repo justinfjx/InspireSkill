@@ -64,6 +64,7 @@ HARNESS_SKILL_DIRS = {
     "gemini": Path.home() / ".gemini" / "skills" / "inspire",
     "openclaw": Path.home() / ".openclaw" / "skills" / "inspire",
     "opencode": _opencode_config_dir() / "skills" / "inspire",
+    "qoder": Path.home() / ".qoder" / "skills" / "inspire",
 }
 HARNESS_ROOTS = {
     "claude": Path.home() / ".claude",
@@ -71,6 +72,7 @@ HARNESS_ROOTS = {
     "gemini": Path.home() / ".gemini",
     "openclaw": Path.home() / ".openclaw",
     "opencode": _opencode_config_dir(),
+    "qoder": Path.home() / ".qoder",
 }
 
 SKILL_ASSETS = ("SKILL.md", "references")
@@ -710,7 +712,7 @@ def _refresh_skill_files(silent: bool, *, latest_version: str | None = None) -> 
             click.secho(
                 "! No agent harness detected "
                 "(checked ~/.claude, ~/.codex, ~/.gemini, ~/.openclaw, "
-                "$OPENCODE_CONFIG_DIR or ~/.config/opencode); "
+                "$OPENCODE_CONFIG_DIR or ~/.config/opencode, and ~/.qoder); "
                 "skipping SKILL refresh.",
                 fg="yellow",
                 err=True,
