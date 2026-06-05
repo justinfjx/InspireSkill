@@ -2,6 +2,27 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v5.2.5
+
+## 更新内容
+
+### 修复
+
+- 修复 `inspire job list --workspace all --active` 只在本地过滤最近一页全量 job 的问题；现在会向平台下推 `job_pending`、`job_creating`、`job_queuing` 和 `job_running` 状态查询，不再把 `job_succeeded` 误显示为 active 结果。
+- 修复 `inspire job list --workspace all --status RUNNING` 没有向平台下推 `job_running` 状态的问题，避免跨 workspace 扫描慢且无法快速确认当前账号没有 RUNNING job。
+- 优化 `inspire notebook list --workspace all -s RUNNING` 的跨 workspace 查询路径，复用并发 notebook lister，避免逐个 workspace 串行等待。
+
+### 验证
+
+- `uv lock --check`
+- `uv run pytest -q`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- Live smoke：`uv run inspire job list --workspace all --active`
+- Live smoke：`uv run inspire job list --workspace all --status RUNNING`
+- Live smoke：`uv run inspire notebook list --workspace all -s RUNNING`
+
 # v5.2.4
 
 ## 更新内容
