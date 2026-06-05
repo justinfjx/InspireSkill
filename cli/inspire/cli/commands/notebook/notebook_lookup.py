@@ -321,6 +321,7 @@ def _list_notebooks_for_workspaces(
     keyword: str = "",
     page_size: int = 20,
     status: list[str] | None = None,
+    errors: dict[str, Exception] | None = None,
 ) -> dict[str, list[dict]]:
     if not workspace_ids:
         return {}
@@ -359,7 +360,13 @@ def _list_notebooks_for_workspaces(
         future_map = {executor.submit(_fetch, ws_id): ws_id for ws_id in workspace_ids}
         for future in concurrent.futures.as_completed(future_map):
             ws_id = future_map[future]
-            ws_result_id, items = future.result()
+            try:
+                ws_result_id, items = future.result()
+            except Exception as e:
+                if errors is None:
+                    raise
+                errors[ws_id] = e
+                continue
             results[ws_result_id or ws_id] = items
 
     return results

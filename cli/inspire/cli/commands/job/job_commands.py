@@ -48,6 +48,33 @@ _STATUS_ALIAS_MAP = {
     "FAILED": {"FAILED", "job_failed"},
     "CANCELLED": {"CANCELLED", "job_cancelled", "job_stopped"},
 }
+_STATUS_API_ALIAS_MAP = {
+    "PENDING": ("job_pending", "job_creating"),
+    "RUNNING": ("job_running",),
+    "QUEUING": ("job_queuing",),
+    "SUCCEEDED": ("job_succeeded",),
+    "FAILED": ("job_failed",),
+    "CANCELLED": ("job_cancelled", "job_stopped"),
+}
+_JOB_ACTIVE_API_STATUSES = ("job_pending", "job_creating", "job_queuing", "job_running")
+_JOB_ACTIVE_STATUSES = {
+    "PENDING",
+    "job_pending",
+    "job_creating",
+    "QUEUING",
+    "job_queuing",
+    "RUNNING",
+    "job_running",
+}
+_JOB_TERMINAL_STATUSES = {
+    "SUCCEEDED",
+    "job_succeeded",
+    "FAILED",
+    "job_failed",
+    "CANCELLED",
+    "job_cancelled",
+    "job_stopped",
+}
 
 
 class WebJobResolutionError(Exception):
@@ -64,6 +91,32 @@ def _expand_status_aliases(statuses: list[str] | tuple[str, ...] | None) -> set[
         key = str(value).upper()
         expanded.update(_STATUS_ALIAS_MAP.get(key, {str(value)}))
     return expanded
+
+
+def _api_statuses_for_filter(status: Optional[str]) -> tuple[str, ...]:
+    raw = str(status or "").strip()
+    if not raw:
+        return ()
+    if raw.startswith("job_"):
+        return (raw,)
+    return _STATUS_API_ALIAS_MAP.get(raw.upper(), ())
+
+
+def _dedupe_job_rows(rows: list[dict]) -> list[dict]:
+    deduped: list[dict] = []
+    seen: set[tuple[str, str, str, str]] = set()
+    for row in rows:
+        key = (
+            str(row.get("job_id") or ""),
+            str(row.get("workspace_name") or ""),
+            str(row.get("name") or ""),
+            str(row.get("created_at") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(row)
+    return deduped
 
 
 def _looks_like_workspace_id(value: str) -> bool:
@@ -480,13 +533,15 @@ def _list_web_jobs(
     page_size: int,
     max_pages: int,
     limit: int,
+    api_statuses: tuple[str, ...] | None = None,
 ) -> tuple[list[dict], list[dict]]:
     try:
         session = get_web_session()
         creator_id = _current_user_id(session)
 
         allowed_statuses = _expand_status_aliases([status]) if status else None
-        api_status = status if status and status.startswith("job_") else None
+        mapped_api_statuses = tuple(api_statuses or ()) or _api_statuses_for_filter(status)
+        query_statuses: tuple[str | None, ...] = mapped_api_statuses or (None,)
         rows: list[dict] = []
         scanned: list[dict] = []
         workspace_ids = _list_workspace_ids(
@@ -496,72 +551,89 @@ def _list_web_jobs(
         )
 
         if name and (workspace or "").strip().lower() == "all":
-            rows, scanned = _scan_web_jobs_round_robin(
-                session=session,
-                workspace_ids=workspace_ids,
-                creator_id=creator_id,
-                api_status=api_status,
-                allowed_statuses=allowed_statuses,
-                name=name,
-                page_num=page_num,
-                page_size=page_size,
-                max_pages=max_pages,
-                limit=limit,
-            )
+            for query_status in query_statuses:
+                status_rows, status_scanned = _scan_web_jobs_round_robin(
+                    session=session,
+                    workspace_ids=workspace_ids,
+                    creator_id=creator_id,
+                    api_status=query_status,
+                    allowed_statuses=allowed_statuses,
+                    name=name,
+                    page_num=page_num,
+                    page_size=page_size,
+                    max_pages=max_pages,
+                    limit=limit,
+                )
+                rows.extend(status_rows)
+                scanned.extend(status_scanned)
+                if limit > 0 and len(rows) >= limit:
+                    break
+            rows = _dedupe_job_rows(rows)
             rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
             if limit > 0:
                 rows = rows[:limit]
             return rows, scanned
 
         for workspace_id in workspace_ids:
-            current_page = max(1, page_num)
-            pages_read = 0
-            total = 0
+            pages_read_total = 0
+            total_seen = 0
             workspace_label = _workspace_name(session, workspace_id) if workspace_id else ""
+            limit_reached = False
 
-            while True:
-                items, total = browser_api_module.list_jobs(
-                    workspace_id=workspace_id or None,
-                    created_by=creator_id,
-                    status=api_status,
-                    keyword=name,
-                    page_num=current_page,
-                    page_size=page_size,
-                    session=session,
-                )
-                pages_read += 1
+            for query_status in query_statuses:
+                current_page = max(1, page_num)
+                pages_read = 0
 
-                for job in items:
-                    if allowed_statuses and job.status not in allowed_statuses:
-                        continue
-                    if not _job_matches_name(job, name):
-                        continue
-                    rows.append(_job_info_to_row(job, workspace_name=workspace_label))
+                while True:
+                    items, total = browser_api_module.list_jobs(
+                        workspace_id=workspace_id or None,
+                        created_by=creator_id,
+                        status=query_status,
+                        keyword=name,
+                        page_num=current_page,
+                        page_size=page_size,
+                        session=session,
+                    )
+                    pages_read += 1
+                    pages_read_total += 1
+                    total_seen += int(total or 0)
 
-                if not name:
+                    for job in items:
+                        if allowed_statuses and job.status not in allowed_statuses:
+                            continue
+                        if not _job_matches_name(job, name):
+                            continue
+                        rows.append(_job_info_to_row(job, workspace_name=workspace_label))
+
+                    if not name:
+                        break
+                    if limit > 0 and len(rows) >= limit:
+                        limit_reached = True
+                        break
+                    if not items:
+                        break
+                    if total is not None and current_page * page_size >= int(total):
+                        break
+                    if pages_read >= max_pages:
+                        break
+                    current_page += 1
+
+                if limit_reached:
                     break
-                if limit > 0 and len(rows) >= limit:
-                    break
-                if not items:
-                    break
-                if total is not None and current_page * page_size >= int(total):
-                    break
-                if pages_read >= max_pages:
-                    break
-                current_page += 1
 
             scanned.append(
                 {
                     "workspace_id": workspace_id,
                     "workspace_name": workspace_label,
-                    "total": total,
-                    "pages": pages_read,
+                    "total": total_seen,
+                    "pages": pages_read_total,
                 }
             )
 
             if limit > 0 and len(rows) >= limit:
                 break
 
+        rows = _dedupe_job_rows(rows)
         rows.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         if limit > 0:
             rows = rows[:limit]
@@ -591,20 +663,12 @@ def _watch_jobs(
 
     exclude_statuses: set[str] | None = None
     if active:
-        exclude_statuses = {"FAILED", "job_failed", "CANCELLED", "job_cancelled", "job_stopped"}
+        exclude_statuses = set(_JOB_TERMINAL_STATUSES)
 
     completed_this_session: list[dict] = []
     completed_job_ids: set[str] = set()
     last_status_by_id: dict[str, str] = {}
-    terminal_statuses = {
-        "SUCCEEDED",
-        "job_succeeded",
-        "FAILED",
-        "job_failed",
-        "CANCELLED",
-        "job_cancelled",
-        "job_stopped",
-    }
+    terminal_statuses = set(_JOB_TERMINAL_STATUSES)
 
     try:
         while True:
@@ -756,17 +820,11 @@ def list_jobs(
             page_size=limit,
             max_pages=50,
             limit=limit,
+            api_statuses=_JOB_ACTIVE_API_STATUSES if active and not status else None,
         )
 
         if active:
-            exclude_statuses = {
-                "FAILED",
-                "job_failed",
-                "CANCELLED",
-                "job_cancelled",
-                "job_stopped",
-            }
-            rows = [j for j in rows if j.get("status") not in exclude_statuses]
+            rows = [j for j in rows if j.get("status") in _JOB_ACTIVE_STATUSES]
 
         if ctx.json_output:
             click.echo(

@@ -247,6 +247,75 @@ def test_resolve_notebook_id_retries_until_eventual_consistency_settles(
     assert len(call_log) >= 2  # at least one retry past the initial empty result
 
 
+def test_notebook_list_all_uses_multi_workspace_helper(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    config = make_test_config(tmp_path)
+    monkeypatch.setattr(
+        config_module.Config,
+        "from_files_and_env",
+        classmethod(lambda cls, require_credentials=True: (config, {})),
+    )
+    monkeypatch.setattr(notebook_cmd_module, "get_base_url", lambda: "https://example.invalid")
+    monkeypatch.setattr(
+        notebook_cmd_module,
+        "_try_get_current_user_ids",
+        lambda session, *, base_url: ["user-1"],  # noqa: ARG005
+    )
+
+    class _FakeSession:
+        workspace_id = "ws-a"
+        all_workspace_ids = ["ws-a", "ws-b"]
+        all_workspace_names = {"ws-a": "GPU A", "ws-b": "GPU B"}
+
+    monkeypatch.setattr(
+        notebook_cmd_module,
+        "require_web_session",
+        lambda ctx, *, hint: _FakeSession(),  # noqa: ARG005
+    )
+
+    captured: dict[str, Any] = {}
+
+    def _multi_lister(*args: Any, **kwargs: Any) -> dict[str, list[dict]]:
+        captured["args"] = args
+        captured.update(kwargs)
+        return {
+            "ws-a": [
+                {
+                    "name": "running-notebook",
+                    "status": "RUNNING",
+                    "created_at": "2026-06-05 10:00:00",
+                    "quota": {"cpu_count": 20},
+                }
+            ],
+            "ws-b": [],
+        }
+
+    def _single_lister(*args: Any, **kwargs: Any) -> list[dict]:
+        raise AssertionError("notebook list --workspace all should not query workspaces serially")
+
+    monkeypatch.setattr(
+        notebook_cmd_module,
+        "_list_notebooks_for_workspaces",
+        _multi_lister,
+        raising=False,
+    )
+    monkeypatch.setattr(notebook_cmd_module, "_list_notebooks_for_workspace", _single_lister)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli_main,
+        ["--json", "notebook", "list", "--workspace", "all", "-s", "RUNNING"],
+    )
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["data"]["items"][0]["name"] == "running-notebook"
+    assert captured["workspace_ids"] == ["ws-a", "ws-b"]
+    assert captured["user_ids"] == ["user-1"]
+    assert captured["status"] == ["RUNNING"]
+
+
 def test_notebook_create_accepts_priority_10(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 

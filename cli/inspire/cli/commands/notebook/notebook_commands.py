@@ -16,6 +16,7 @@ from .notebook_lookup import (
     _current_user_lookup_failure_message,
     _get_current_user_detail,
     _list_notebooks_for_workspace,
+    _list_notebooks_for_workspaces,
     _resolve_notebook_id as _lookup_resolve_notebook_id,
     _sort_notebook_items,
     _try_get_current_user_ids,
@@ -73,6 +74,7 @@ def _notebook_lookup_overrides() -> dict[str, object]:
         "_collect_workspace_ids_for_lookup": _collect_workspace_ids_for_lookup,
         "_get_current_user_detail": _get_current_user_detail,
         "_list_notebooks_for_workspace": _list_notebooks_for_workspace,
+        "_list_notebooks_for_workspaces": _list_notebooks_for_workspaces,
         "_try_get_current_user_ids": _try_get_current_user_ids,
         "_validate_notebook_account_access": _validate_notebook_account_access,
     }
@@ -765,46 +767,43 @@ def list_notebooks(
         )
         return
 
+    status_filter = [s.upper() for s in status] if status else []
+    workspace_errors: dict[str, Exception] | None = {} if len(workspace_ids) > 1 else None
+
+    try:
+        workspace_items = _list_notebooks_for_workspaces(
+            session,
+            base_url=base_url,
+            workspace_ids=workspace_ids,
+            user_ids=user_ids,
+            keyword=keyword,
+            page_size=limit,
+            status=status_filter,
+            errors=workspace_errors,
+        )
+    except ValueError as e:
+        _handle_error(
+            ctx,
+            "APIError",
+            str(e),
+            EXIT_API_ERROR,
+            hint="Check auth and proxy configuration.",
+        )
+        return
+    except Exception as e:
+        _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
+        return
+
     all_items: list[dict] = []
     for ws_id in workspace_ids:
-        status_filter = [s.upper() for s in status] if status else []
-        try:
-            items = _list_notebooks_for_workspace(
-                session,
-                base_url=base_url,
-                workspace_id=ws_id,
-                user_ids=user_ids,
-                keyword=keyword,
-                page_size=limit,
-                status=status_filter,
+        all_items.extend(workspace_items.get(ws_id, []))
+
+    if workspace_errors and not ctx.json_output:
+        for ws_id, error in workspace_errors.items():
+            click.echo(
+                f"Warning: workspace {_workspace_display(session, ws_id)} failed: {scrub_raw_ids(error)}",
+                err=True,
             )
-            all_items.extend(items)
-        except ValueError as e:
-            if len(workspace_ids) == 1:
-                _handle_error(
-                    ctx,
-                    "APIError",
-                    str(e),
-                    EXIT_API_ERROR,
-                    hint="Check auth and proxy configuration.",
-                )
-                return
-            if not ctx.json_output:
-                click.echo(
-                    f"Warning: workspace {_workspace_display(session, ws_id)} failed: {scrub_raw_ids(e)}",
-                    err=True,
-                )
-            continue
-        except Exception as e:
-            if len(workspace_ids) == 1:
-                _handle_error(ctx, "APIError", str(e), EXIT_API_ERROR)
-                return
-            if not ctx.json_output:
-                click.echo(
-                    f"Warning: workspace {_workspace_display(session, ws_id)} failed: {scrub_raw_ids(e)}",
-                    err=True,
-                )
-            continue
 
     if not all_items and len(workspace_ids) > 1:
         _handle_error(
