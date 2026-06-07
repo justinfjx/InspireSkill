@@ -409,6 +409,7 @@ def create_notebook(
     session: Optional[WebSession] = None,
     task_priority: Optional[int] = None,
     resource_spec_price: Optional[dict] = None,
+    node_id: Optional[str] = None,
 ) -> dict:
     """Create a new notebook instance.
 
@@ -454,6 +455,9 @@ def create_notebook(
 
     if task_priority is not None:
         body["task_priority"] = task_priority
+
+    if node_id:
+        body["node_id"] = node_id
 
     return _request_notebooks_data(
         session,
