@@ -31,7 +31,7 @@ cd cli
 uv run playwright install chromium
 ```
 
-代理：`INSPIRE_PLAYWRIGHT_PROXY` 环境变量或 `--proxy` 参数（默认 `http://127.0.0.1:7897`，与 `references/setup/install-and-config.md` 的 SII proxy setup 对齐）。
+代理默认不启用。需要经过本机 Clash Verge 时，用 `--proxy http://127.0.0.1:<mixed-port>` 显式传入，`<mixed-port>` 以本机 Clash Verge 设置为准；也可以用 `INSPIRE_PLAYWRIGHT_PROXY` 环境变量覆盖。
 
 ## 典型跑法
 

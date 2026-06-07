@@ -23,7 +23,7 @@
 **InspireSkill 把这些步骤交给 AI Agent。** 当 Claude Code / Codex / Antigravity / Cursor / OpenClaw / OpenCode / Qoder 识别到这个 skill，它会：
 
 - 直接调用 `inspire` 命令查实时资源、开 notebook、提 HPC 任务、拉日志
-- 提供**可选**的 Clash Verge `7897` 分流模板，让**公网与启智内网共存**一个本地端口，取代多人共用断连的 aTrust；CLI 本身不绑定 7897，任何能同时覆盖公网与 `*.sii.edu.cn` 的代理方案都行
+- 提供**可选**的 Clash Verge mixed-port 分流模板，让**公网与启智内网共存**一套本地代理配置，取代多人共用断连的 aTrust；CLI 本身不绑定固定端口，任何能同时覆盖公网与 `*.sii.edu.cn` 的代理方案都行
 - 把平台网页上的常用操作都变成**可复现、可串联、可自动化**的命令链
 - 从 SKILL.md 按需加载对应使用手册，理解调度语义、资源申请原则和验收点，不需要 Agent 在对话里反复解释平台语义
 
@@ -204,7 +204,7 @@ SKILL.md 装完是一份**通用 playbook**。日常 workspace 基本就是 `CPU
 
 ## 代理配置
 
-不常驻 SII 的科研人员通常需要让本机代理转发 `*.sii.edu.cn` 流量。Clash Verge `7897` mixed-port 的 SII proxy 最小配置见 [references/setup/install-and-config.md](references/setup/install-and-config.md)；但 CLI 本身不绑定 7897。代理地址通过 `inspire account add` 写入账号配置，并可用 `inspire config show --compact` 核对。
+不常驻 SII 的科研人员通常需要让本机代理转发 `*.sii.edu.cn` 流量；能直连 SII 校园网的人可以走 `DIRECT`。Clash Verge mixed-port 的 SII proxy / DIRECT 分流模板见 [references/setup/install-and-config.md](references/setup/install-and-config.md)；CLI 本身不绑定固定端口。代理地址通过 `inspire account add` 写入账号配置，并可用 `inspire config show --compact` 核对。
 
 > 凭据（host / user / password）**从实验室或组织管理员获取**，不要提交到任何公开仓库或聊天记录。
 

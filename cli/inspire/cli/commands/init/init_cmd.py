@@ -24,7 +24,7 @@ from inspire.accounts import (
 )
 from inspire.cli.commands.account.add import (
     DEFAULT_BASE_URL,
-    DEFAULT_PROXY_HINT,
+    EXAMPLE_PROXY,
     _render_config as _render_account_config,
 )
 from inspire.config import Config
@@ -126,7 +126,7 @@ def _bootstrap_first_account_if_needed(
 
     click.echo(
         "Proxy must reach BOTH the public internet and *.sii.edu.cn. "
-        f"Typical value: {DEFAULT_PROXY_HINT}"
+        f"Example if your Clash mixed port is 7897: {EXAMPLE_PROXY}"
     )
     proxy = click.prompt(
         "Proxy URL (leave empty for none)",

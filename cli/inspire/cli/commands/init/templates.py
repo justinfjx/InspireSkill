@@ -62,6 +62,7 @@ retry_delay = 1.0
 
 [proxy]
 # Proxy is OPTIONAL. Leave commented if your network can reach *.sii.edu.cn directly.
+# Replace 7897 with your local Clash mixed port when needed.
 # requests_http = "http://127.0.0.1:7897"
 # requests_https = "http://127.0.0.1:7897"
 # playwright = "http://127.0.0.1:7897"

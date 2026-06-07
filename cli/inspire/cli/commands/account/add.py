@@ -15,7 +15,7 @@ from inspire.accounts import (
 )
 
 DEFAULT_BASE_URL = "https://qz.sii.edu.cn"
-DEFAULT_PROXY_HINT = "http://127.0.0.1:7897"
+EXAMPLE_PROXY = "http://127.0.0.1:7897"
 
 
 @click.command("add")
@@ -75,6 +75,7 @@ def add(
         inspire account add alice
 
         # Fully scripted (CI, automation):
+        # Replace 7897 with your local Clash mixed port when needed.
         inspire account add alice \\
           --username user-abc123 --password "$INSPIRE_PW" \\
           --proxy http://127.0.0.1:7897 --use --non-interactive
@@ -132,7 +133,7 @@ def add(
         else:
             click.echo(
                 "Proxy must reach BOTH the public internet and *.sii.edu.cn. "
-                f"Typical value: {DEFAULT_PROXY_HINT}"
+                f"Example if your Clash mixed port is 7897: {EXAMPLE_PROXY}"
             )
             proxy = click.prompt(
                 "Proxy URL (leave empty for none)",

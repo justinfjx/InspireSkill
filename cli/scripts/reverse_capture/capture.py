@@ -57,7 +57,7 @@ except ModuleNotFoundError:
 
 BASE = "https://qz.sii.edu.cn"
 API_PREFIX = "/api/v1/"
-DEFAULT_PROXY = "http://127.0.0.1:7897"
+DEFAULT_PROXY = ""
 
 
 FORBIDDEN_CLICK = re.compile(

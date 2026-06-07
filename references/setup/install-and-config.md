@@ -60,11 +60,13 @@ inspire config check
 
 `inspire account add` 会询问平台登录 username、password、base URL 和代理。username 必须是登录 ID，不是网页右上角中文显示名。配置写入 `~/.inspire/accounts/<name>/config.toml`。
 
-不常驻 SII、但本机 Clash Verge 能转发 `*.sii.edu.cn` 时，代理填本机 mixed port：
+不常驻 SII、但本机 Clash Verge 能转发 `*.sii.edu.cn` 时，代理填本机 Clash mixed port。端口以本机 Clash Verge 设置为准，下面只用 `7897` 作为示例：
 
 ```text
 http://127.0.0.1:7897
 ```
+
+能直连 SII 校园网时，账号 proxy 可以留空；如果想复用同一套 Clash 配置，就仍然填本机 mixed port，然后在 Clash 的 `SII Proxy` 组里选择 `DIRECT`。
 
 CLI 不需要 shell 里的 `http_proxy`、`INSPIRE_FORCE_PROXY`、`INSPIRE_PLAYWRIGHT_PROXY` 之类一次性环境变量；账号级 proxy 就是标准入口。
 
@@ -98,7 +100,7 @@ inspire account current
 
 ## 5. SII Proxy
 
-Clash Verge 的目标只有一个：非 SII 直连网络访问 `*.sii.edu.cn` 时走专门的 SII proxy；其它流量继续走订阅原有规则。
+Clash Verge 的目标只有一个：把 `*.sii.edu.cn` 分到单独的 `SII Proxy` 组。公网环境在这个组里选 SII proxy 节点；能直连 SII 校园网时选 `DIRECT`；其它流量继续走订阅原有规则。
 
 Clash Verge Rev 的脚本常见路径：
 
@@ -106,16 +108,17 @@ Clash Verge Rev 的脚本常见路径：
 ~/Library/Application Support/io.github.clash-verge-rev.clash-verge-rev/profiles/Script.js
 ```
 
-把 mixed port 设为 `7897`，再在 `Script.js` 里保留下面这种最小注入。`<...>` 必须替换为组织分发的真实 SII proxy host、user、password；不要提交真实凭据。
+先在 Clash Verge 设置页确认本机 mixed port，再在 `Script.js` 里按下面模板合并 SII 分流逻辑。下面只是模板：节点数量、节点端口和本机 mixed port 都按自己的环境改。`<...>` 必须替换为组织分发的真实 SII proxy host、port、user、password；不要提交真实凭据。`DIRECT` 是给校园网直连使用的选项，不要删。
 
 ```javascript
 var SII_PROXY_GROUP_NAME = "SII Proxy";
+var SII_PROXY_NAMES = ["SII Proxy 1", "SII Proxy 2", "DIRECT"];
 var SII_PROXIES = [
   {
     name: "SII Proxy 1",
     type: "socks5",
     server: "<sii-proxy-host-1>",
-    port: 10808,
+    port: <sii-proxy-port-1>,
     username: "<sii-proxy-user-1>",
     password: "<sii-proxy-password-1>",
     tls: false,
@@ -126,7 +129,7 @@ var SII_PROXIES = [
     name: "SII Proxy 2",
     type: "socks5",
     server: "<sii-proxy-host-2>",
-    port: 10808,
+    port: <sii-proxy-port-2>,
     username: "<sii-proxy-user-2>",
     password: "<sii-proxy-password-2>",
     tls: false,
@@ -137,10 +140,8 @@ var SII_PROXIES = [
 
 var SII_PROXY_GROUP = {
   name: SII_PROXY_GROUP_NAME,
-  type: "fallback",
-  proxies: ["SII Proxy 1", "SII Proxy 2"],
-  url: "https://qz.sii.edu.cn",
-  interval: 300
+  type: "select",
+  proxies: SII_PROXY_NAMES
 };
 
 var SII_MANAGED_PROXY_NAMES = {
@@ -209,9 +210,9 @@ function main(config, profileName) {
 验证只看三件事：
 
 ```bash
-lsof -iTCP:7897 -sTCP:LISTEN
-curl -sS -o /dev/null -w "sii: %{http_code}\n" -x http://127.0.0.1:7897 https://qz.sii.edu.cn
+lsof -iTCP:<mixed-port> -sTCP:LISTEN
+curl -sS -o /dev/null -w "sii: %{http_code}\n" -x http://127.0.0.1:<mixed-port> https://qz.sii.edu.cn
 inspire config check
 ```
 
-如果 `qz.sii.edu.cn` 失败，先查 Clash Verge 规则里是否有 `DOMAIN-SUFFIX,sii.edu.cn,SII Proxy`，再查 `SII Proxy` 组里的节点是否可用，最后查 `inspire config show --compact` 里的账号级 proxy 是否是 `http://127.0.0.1:7897`。
+如果 `qz.sii.edu.cn` 失败，先查 Clash Verge 规则里是否有 `DOMAIN-SUFFIX,sii.edu.cn,SII Proxy`，再查 `SII Proxy` 组当前选中的是可用代理还是 `DIRECT`，最后查 `inspire config show --compact` 里的账号级 proxy 是否指向本机实际 mixed port。
