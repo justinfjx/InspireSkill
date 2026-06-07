@@ -355,7 +355,7 @@ OpenSSH
 
 6. 更新文档
    - `references/notebook.md` 改为新主路径。
-   - `references/notebook-service-proxy.md` 中涉及 SSH 前置步骤的例子同步。
+   - `references/notebook.md` 中涉及 SSH 前置步骤和容器 HTTP proxy 的例子同步。
    - skill 文档中的默认路径同步为 `notebook ssh` / 原生 OpenSSH。
 
 7. 兼容与弃用

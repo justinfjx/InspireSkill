@@ -1,6 +1,6 @@
 # Notebook 工作流
 
-创建、连接、执行、传文件，或在 notebook 内准备基底环境时，先查本手册。镜像保存、注册和可见性看 [image-management.md](image-management.md)；workspace、compute group、quota、workload profile 和 path alias 看 [resources-and-paths.md](resources-and-paths.md)；容器内 HTTP 服务暴露看 [notebook-service-proxy.md](notebook-service-proxy.md)。
+创建、连接、执行、传文件、暴露容器内 HTTP 服务，或在 notebook 内准备基底环境时，先查本手册。镜像保存、注册和可见性看 [image-management.md](image-management.md)；workspace、compute group、quota、workload profile 和 path alias 看 [resources-and-paths.md](resources-and-paths.md)。
 
 ## 1. Notebook 的角色
 
@@ -26,6 +26,8 @@ inspire notebook --help
 inspire notebook create --help
 inspire notebook exec --help
 inspire notebook scp --help
+inspire notebook url --help
+inspire notebook proxy-url --help
 inspire notebook install-deps --help
 ```
 
@@ -48,6 +50,8 @@ inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP_FUL
 ```
 
 需要复用同一组条件时，用 `inspire notebook profile set <name> ...` 保存，并在 create 中显式传 `--profile <name>`。
+
+需要把 notebook 固定到某个节点时，`inspire notebook create` 可传 `--node <NODE_NAME>`。这里的值是计算组里的节点名，例如 `qb-prod-gpu1736`，不是平台 handle；节点必须属于已选 `--group`，不匹配时由平台拒绝。日常创建建议让调度器自动放置，只有在排查坏节点、复现实验或平台同学明确指定节点时才手动 pin。当前 notebook create 走 Web UI 同款 Browser API `/notebook/create` payload，因此可以携带网页创建表单里的 `node_id`；这不是旧 OpenAPI 的能力。
 
 ## 4. 连接、`shell` 与 `exec`
 
@@ -91,7 +95,43 @@ inspire notebook shell <name> --cwd me:<repo>
 
 超过 20 分钟的任务写成远端后台进程和 sentinel 文件，再从本机轮询，不要让 `exec` 同步等待。
 
-## 5. 代码、数据和文件流转
+## 5. IDE URL 与容器 HTTP 服务
+
+打开 notebook Web IDE 时，用入口 URL：
+
+```bash
+inspire notebook url <name> --workspace CPU资源空间
+```
+
+这个 URL 是浏览器入口，形如 `https://qz.sii.edu.cn/ide?notebook_id=...`，平台会再跳转到当前运行容器的 IDE 网关。它适合发给有权限的协作者打开页面，不是 SDK base URL。
+
+容器内已经启动 HTTP 服务时，用 `proxy-url` 直接生成完整外部访问 URL。Notebook 必须处于 `RUNNING`，CLI 会读取或刷新当前容器的 IDE 网关 token：
+
+```bash
+inspire notebook exec <name> "curl -sS http://127.0.0.1:<container-port>/health"
+inspire notebook proxy-url <name> --workspace CPU资源空间 --port <container-port>
+```
+
+OpenAI-compatible API 通常把 base URL 指到 `/v1`：
+
+```bash
+inspire notebook exec <name> "curl -sS http://127.0.0.1:30000/v1/models"
+inspire notebook proxy-url <name> --workspace CPU资源空间 --port 30000 --path /v1
+```
+
+底层 `inspire notebook vscode-proxy-suffix <name>` 只输出 host-less 网关后缀，供需要自行拼接 host、端口和路径的工具使用。后缀里带容器生命周期内的 token；容器重启后 token 会变化，必要时传 `--refresh` 强制重新解析。
+
+安全边界：
+
+| 边界 | 说明 |
+| --- | --- |
+| 平台 URL | 受启智登录态、项目权限和 URL token 约束；不要发到公开渠道 |
+| 应用鉴权 | Notebook proxy 只提供网络通路，不替代 Gradio、FastAPI、LLM API 自己的登录或 API key |
+| 本机转发 | 不要用本机临时 gateway 绑定 `0.0.0.0` 对外分享，这会绕开启智访问控制 |
+
+发布前做无 key / 有 key 对照：无 key 请求应返回 `401` 或等价拒绝；带 key 的 `/health`、`/v1/models` 或业务 smoke test 应返回成功。
+
+## 6. 代码、数据和文件流转
 
 | 文件流转类型 | 做法 |
 | --- | --- |
@@ -117,7 +157,7 @@ inspire notebook scp <notebook-name> ./config.yaml me:<repo>/config.yaml
 inspire notebook scp <notebook-name> --download me:<repo>/outputs/ ./outputs/ -r
 ```
 
-## 6. 基底环境与镜像
+## 7. 基底环境与镜像
 
 项目刚开始时，建议用统一基底镜像起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好。公网下载放在 `CPU资源空间` 的可上网 notebook；只依赖 SII 内部源时，可以直接在 `分布式训练空间` 等目标 GPU notebook 中配置镜像源并验证。验证通过后保存成项目镜像，后续 notebook、job、HPC、Ray 和 serving 复用该镜像。
 
@@ -144,7 +184,7 @@ inspire notebook install-deps <name> --slurm --ray
 
 该命令会先 probe 再安装，已存在的组件会跳过。普通 notebook 中 Slurm 命令因无 controller 报错是正常现象；只有 `hpc create` 任务运行时才具备完整 Slurm 运行环境。
 
-## 7. 事件、指标和状态
+## 8. 事件、指标和状态
 
 `inspire notebook events <name> --workspace <workspace>` 看调度、镜像拉取、容器启动、停止、保存镜像等生命周期原因。Notebook 卡在 `PENDING`、`CREATING` 或失败时先看 events。
 
@@ -168,7 +208,7 @@ inspire notebook metrics <name> --workspace 分布式训练空间 --metric gpu,g
 
 终态且不再需要的 notebook 要清理；running notebook 先 stop，再 delete。不确定是否仍有人使用时跳过。
 
-## 8. 大文件操作
+## 9. 大文件操作
 
 大规模 `mv` / `cp` / `rm` 前先探形状：
 

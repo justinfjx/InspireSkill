@@ -181,6 +181,10 @@ def _split_ide_gateway(url: str) -> Optional[tuple[str, str, str, str]]:
     )
     if user_idx is None:
         return None
+    if not any(seg.startswith("ws-") for seg in segments[:user_idx]):
+        return None
+    if not any(seg.startswith("project-") for seg in segments[:user_idx]):
+        return None
 
     marker_idx = user_idx + 1
     runtime_idx = marker_idx + 1

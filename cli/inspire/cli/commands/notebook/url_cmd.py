@@ -1,4 +1,4 @@
-"""`inspire notebook url` / `inspire notebook vscode-proxy-suffix`.
+"""`inspire notebook url` / `proxy-url` / `vscode-proxy-suffix`.
 
 Two separate ways to address a notebook's web IDE:
 
@@ -9,11 +9,14 @@ Two separate ways to address a notebook's web IDE:
   ``/ws-.../project-.../user-.../vscode/<runtime>/<token>`` (starts with ``/``).
   This drives a headless browser to read the live gateway URL, so the notebook
   must be RUNNING and the embedded token is ephemeral.
+- ``proxy-url`` appends ``/proxy/<port>/`` and an optional service path to that
+  suffix, returning a full URL for container HTTP services.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from urllib.parse import urlsplit, urlunsplit
 
 import click
 
@@ -87,7 +90,7 @@ def notebook_url(ctx: Context, notebook: str, workspace: str) -> None:
     if ctx.json_output:
         click.echo(
             json_formatter.format_json(
-                {"name": notebook, "id": notebook_id, "url": url},
+                {"name": notebook, "url": url},
                 allow_ids=True,
             )
         )
@@ -158,9 +161,112 @@ def notebook_vscode_proxy_suffix(
     if ctx.json_output:
         click.echo(
             json_formatter.format_json(
-                {"name": notebook, "id": notebook_id, "vscode_proxy_suffix": suffix},
+                {"name": notebook, "vscode_proxy_suffix": suffix},
                 allow_ids=True,
             )
         )
     else:
         click.echo(suffix)
+
+
+def _build_proxy_url(base_url: str, suffix: str, *, port: int, service_path: str) -> str:
+    base = urlsplit(base_url)
+    suffix_parts = urlsplit(suffix)
+
+    proxy_path = f"{suffix_parts.path.rstrip('/')}/proxy/{port}/"
+    service_parts = urlsplit(str(service_path or "").strip())
+    extra_path = service_parts.path.strip()
+    if extra_path:
+        proxy_path = f"{proxy_path.rstrip('/')}/{extra_path.lstrip('/')}"
+
+    query_parts = [part for part in (suffix_parts.query, service_parts.query) if part]
+    return urlunsplit((base.scheme, base.netloc, proxy_path, "&".join(query_parts), ""))
+
+
+@click.command("proxy-url")
+@click.argument("notebook")
+@click.option("--workspace", required=True, help="Workspace name or 'all'.")
+@click.option(
+    "--port",
+    required=True,
+    type=click.IntRange(1, 65535),
+    help="Container HTTP port to expose through the notebook proxy.",
+)
+@click.option(
+    "--path",
+    "service_path",
+    default="",
+    help="Optional service path to append, for example /v1.",
+)
+@click.option(
+    "--timeout",
+    type=click.IntRange(10),
+    default=60,
+    show_default=True,
+    help="Seconds to wait for the IDE to load (when the browser runs).",
+)
+@click.option(
+    "--refresh",
+    is_flag=True,
+    help="Skip the cache and re-derive via the browser (use after a container restart).",
+)
+@pass_context
+def notebook_proxy_url(
+    ctx: Context,
+    notebook: str,
+    workspace: str,
+    port: int,
+    service_path: str,
+    timeout: int,
+    refresh: bool,
+) -> None:
+    """Print a full proxy URL for a notebook container HTTP service.
+
+    The notebook must be RUNNING. Use --path /v1 for OpenAI-compatible APIs or
+    omit --path for browser apps such as Gradio/FastAPI root pages.
+
+    \b
+    Examples:
+      inspire notebook proxy-url my-notebook --workspace CPU资源空间 --port 7860
+      inspire notebook proxy-url my-notebook --workspace CPU资源空间 --port 30000 --path /v1
+      inspire --json notebook proxy-url my-notebook --workspace CPU资源空间 --port 30000 --path /v1
+    """
+    from inspire.cli.context import EXIT_API_ERROR
+    from inspire.cli.formatters import json_formatter
+    from inspire.cli.utils.errors import exit_with_error as _handle_error
+    from inspire.platform.web.browser_api import resolve_notebook_vscode_proxy_suffix
+
+    session, base_url, notebook_id = _resolve_notebook(ctx, notebook, workspace)
+    suffix = resolve_notebook_vscode_proxy_suffix(
+        notebook_id,
+        session=session,
+        timeout=timeout,
+        refresh=refresh,
+    )
+    if not suffix:
+        _handle_error(
+            ctx,
+            "APIError",
+            f"Could not resolve the notebook proxy URL for '{notebook}'. The notebook must be "
+            "RUNNING with its web IDE reachable.",
+            EXIT_API_ERROR,
+            hint="Retry once it is RUNNING.",
+        )
+        return
+
+    url = _build_proxy_url(base_url, suffix, port=port, service_path=service_path)
+
+    if ctx.json_output:
+        click.echo(
+            json_formatter.format_json(
+                {
+                    "name": notebook,
+                    "port": port,
+                    "path": service_path,
+                    "url": url,
+                },
+                allow_ids=True,
+            )
+        )
+    else:
+        click.echo(url)

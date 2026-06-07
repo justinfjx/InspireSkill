@@ -1,4 +1,4 @@
-"""Tests for `inspire notebook url` / `vscode-proxy-suffix` and their helpers."""
+"""Tests for `inspire notebook url` / proxy URL helpers."""
 
 from __future__ import annotations
 
@@ -49,6 +49,7 @@ def test_suffix_keeps_query_token_when_no_path_token() -> None:
 
 def test_suffix_returns_none_without_gateway_structure() -> None:
     assert pw._vscode_proxy_suffix("https://h/ide?notebook_id=x") is None
+    assert pw._vscode_proxy_suffix("https://h/api/user-c/jupyter/run/tok") is None
     assert pw._vscode_proxy_suffix("") is None
 
 
@@ -196,7 +197,6 @@ def test_url_json(monkeypatch) -> None:  # noqa: ANN001
     data = json.loads(result.output)["data"]
     assert data == {
         "name": "nb",
-        "id": _NOTEBOOK_ID,
         "url": f"{_BASE_URL}/ide?notebook_id={_NOTEBOOK_ID}",
     }
 
@@ -224,7 +224,74 @@ def test_vscode_proxy_suffix_json(monkeypatch) -> None:  # noqa: ANN001
     )
     assert result.exit_code == 0
     data = json.loads(result.output)["data"]
-    assert data == {"name": "nb", "id": _NOTEBOOK_ID, "vscode_proxy_suffix": _SUFFIX}
+    assert data == {"name": "nb", "vscode_proxy_suffix": _SUFFIX}
+
+
+def test_build_proxy_url_appends_port_path_and_queries() -> None:
+    suffix = "/ws-a/project-b/user-c/vscode/run?token=secret"
+    out = url_cmd_mod._build_proxy_url(
+        _BASE_URL,
+        suffix,
+        port=30000,
+        service_path="/v1/models?limit=1",
+    )
+    assert out == (
+        "https://qz.sii.edu.cn/ws-a/project-b/user-c/vscode/run/proxy/30000/v1/models"
+        "?token=secret&limit=1"
+    )
+
+
+def test_proxy_url_prints_full_service_url(monkeypatch) -> None:  # noqa: ANN001
+    _patch_resolve(monkeypatch)
+    monkeypatch.setattr(
+        browser_api_mod, "resolve_notebook_vscode_proxy_suffix", lambda *a, **k: _SUFFIX
+    )
+    result = CliRunner().invoke(
+        cli_main,
+        [
+            "notebook",
+            "proxy-url",
+            "nb",
+            "--workspace",
+            "CPU资源空间",
+            "--port",
+            "30000",
+            "--path",
+            "/v1",
+        ],
+    )
+    assert result.exit_code == 0
+    assert result.output.strip() == f"{_BASE_URL}{_SUFFIX}/proxy/30000/v1"
+
+
+def test_proxy_url_json(monkeypatch) -> None:  # noqa: ANN001
+    _patch_resolve(monkeypatch)
+    monkeypatch.setattr(
+        browser_api_mod, "resolve_notebook_vscode_proxy_suffix", lambda *a, **k: _SUFFIX
+    )
+    result = CliRunner().invoke(
+        cli_main,
+        [
+            "--json",
+            "notebook",
+            "proxy-url",
+            "nb",
+            "--workspace",
+            "CPU资源空间",
+            "--port",
+            "30000",
+            "--path",
+            "/v1",
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.output)["data"]
+    assert data == {
+        "name": "nb",
+        "port": 30000,
+        "path": "/v1",
+        "url": f"{_BASE_URL}{_SUFFIX}/proxy/30000/v1",
+    }
 
 
 def test_vscode_proxy_suffix_refresh_passes_through(monkeypatch) -> None:  # noqa: ANN001
