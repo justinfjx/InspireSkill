@@ -184,13 +184,13 @@ def _bootstrap_first_account_if_needed(
     default=None,
     help=(
         "Platform login username, such as phone, student ID, or email "
-        "(not the display name). Used by plain init discovery."
+        "(not the display name). Used by discovery."
     ),
 )
 @click.option(
     "--base-url",
     default=None,
-    help="Platform base URL (prompted if not configured). Used by plain init discovery.",
+    help="Platform base URL (prompted if not configured). Used by discovery.",
 )
 @click.option(
     "--select-project",
@@ -198,7 +198,7 @@ def _bootstrap_first_account_if_needed(
     default=None,
     help=(
         "Pick a project explicitly by name (skips the interactive "
-        "prompt and the platform-heuristic guess). Used by plain init discovery."
+        "prompt and the platform-heuristic guess). Used by discovery."
     ),
 )
 @pass_context
@@ -246,25 +246,12 @@ def init(
 
     \b
     Examples:
-        # Discover account/workspace/project catalogs and default path aliases
-        inspire init
-
-        \b
-        # Refresh discovered global config non-interactively where possible
-        inspire init --force
-
-        \b
-        # Discover project context and path-alias overrides for this repository
-        inspire init --scope project
-
-        \b
-        # Create a placeholder project config instead of discovery
-        inspire init --template --scope project
-
-        \b
-        # Detect env vars and write only project/global config
-        inspire init --no-discover --scope project
-        inspire init --no-discover --scope global
+      inspire init
+      inspire init --force
+      inspire init --scope project
+      inspire init --template --scope project
+      inspire init --no-discover --scope project
+      inspire init --no-discover --scope global
     """
     effective_json = ctx.json_output
     warnings: list[str] = []

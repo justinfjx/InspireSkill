@@ -1,88 +1,77 @@
 ---
 name: inspire
-description: "Execution-first Inspire platform CLI usage manual, with on-demand references for platform workflows."
+description: "Inspire platform operating model for Agents: decide workspace, resources, paths, workload type, observation, cleanup, and load focused references; use CLI help for command syntax."
 ---
 
 # Inspire Skill
 
-`inspire` 是启智平台的本地命令入口。本文档只描述可观察、可执行的黑盒用法：命令是否存在、参数叫什么、默认值是什么，以 CLI help 为准；资源、项目、事件、日志和指标，以实时查询为准；不把内部接口、实现结构或历史行为当作使用事实。
+`inspire` 是启智平台的本地命令入口。这个 Skill 不复述 CLI 使用手册；命令组、子命令、参数、默认值和示例始终以 `inspire --help` / `inspire <group> --help` / `inspire <group> <subcommand> --help` 为准。
 
-同一份手册只服务 Agent。适合快速判断的表达，也应该适合稳定执行；不按操作者身份区分两套原则。
+本文件只保留超出 `--help` 的平台判断：任务应该落在哪个 workspace，资源条件和远端路径如何分离，公网和 SII 内部源怎么取舍，Notebook / Job / HPC / Ray / Serving 如何选型，以及观察、止损、清理的闭环。面向用户解释和 Agent 自己执行使用同一套原则：把用户目标翻译成可验证的平台决策，不制造一套“给人看的说法”和一套“给 Agent 跑的做法”。
 
-## 1. 平台使用模型
+## 1. 先建模，再查命令
 
-启智上的一次任务可以拆成四个黑盒层面：
+每个任务先拆成四个平面，再去查具体 help：
 
-| 层面 | 决策问题 | 主要入口 |
+| 平面 | 要回答的问题 | 不要混淆 |
 | --- | --- | --- |
-| 调度条件 | 在哪个 workspace、project、compute group 上，用多少 GPU / CPU / 内存，跑哪个镜像 | `config context`、`<workload> quota`、`<workload> profile` |
-| 远端文件 | 代码、数据、权重、产物放在哪个项目共享盘路径 | `init`、`notebook path`、`notebook exec --cwd`、`notebook scp` |
-| 工作负载 | 交互调试、GPU job、CPU HPC、Ray、serving 选哪一个入口 | `notebook`、`job`、`hpc`、`ray`、`serving` |
-| 观察与收尾 | 为什么排队 / 失败、是否真的在工作、日志在哪里、何时清理 | `events`、`logs`、`metrics`、`status`、`instances`、`stop`、`delete` |
+| 调度条件 | 跑在哪个 workspace / project / compute group，用多少 GPU / CPU / 内存，基于哪个镜像 | 不是远端路径，也不是对象名字 |
+| 远端文件 | 代码、数据、权重、checkpoint、产物放在哪个共享盘路径 | path alias 不能代替 workspace / project / group / quota |
+| 工作负载 | 需要交互调试、GPU 后台任务、CPU Slurm、Ray 弹性集群，还是模型服务 | 不要为了“能跑”把所有事都塞进 notebook |
+| 观察收尾 | 如何判断排队、失败、空转、已完成，以及何时 stop / delete | `status=RUNNING` 不等于业务健康，`status=SUCCEEDED` 不等于产物完整 |
 
-`workspace`、`project`、`group`、`quota` 和 `image` 是调度条件。它们没有隐式默认值；必须在 create 命令里显式传入，或用 workload profile 显式填入。Path alias 只表示远端路径，不能替代调度条件。
+`workspace`、`project`、`group`、`quota`、`image` 是调度条件，没有隐式默认值。创建 workload 时显式传入，或用 workload profile 明确保存这五类条件。Path alias 只表示远端路径，服务于 `--cwd`、scp、日志路径和共享盘约定。
 
-日常主 workspace 基本只有两类：`CPU资源空间` 用于 CPU notebook、HPC、联网下载、依赖安装和镜像准备；`分布式训练空间` 用于 GPU notebook、GPU job、模型 serving 和训练调试。国产卡分区、`CI-情境智能` 工作空间或其它小组专属空间是特殊项目 / 特殊硬件路径，只有任务明确需要时才切换。
+日常 workspace 选择通常很直接：
 
-联网能力属于 workspace / compute group 的实际环境，而不是命令本身。公网和 SII 内部源分开判断：拉 Git、取 Hugging Face 权重、访问外部数据源时，优先在 `CPU资源空间` 的可上网 CPU notebook 中完成，然后把结果留在 `me` / `public` 等 path alias 指向的共享路径，或保存成镜像；Python / Linux 包、Conda、npm、Maven、Docker 镜像仓库、OSS 和 NTP 这类内部源优先在目标 notebook 里配置，`分布式训练空间` 等 GPU 空间也可以按实际可达性直接跑通依赖。环境跑通后用 `inspire image save` 固化成镜像，再给后续 notebook / job / HPC / Ray / serving 复用。
+- `CPU资源空间`：CPU notebook、联网准备、依赖安装、HPC 数据处理、CPU Ray。
+- `分布式训练空间`：GPU notebook、GPU job、多节点训练、serving、GPU 指标观察。
+- 国产卡分区、`CI-情境智能` 工作空间或小组专属空间：只有任务明确要求特殊硬件、特殊权限或特殊项目环境时才切换。
 
-## 2. 执行闭环
+## 2. 网络、内部源和镜像
 
-日常任务按这个顺序推进：
+联网能力属于 workspace / compute group 的实际环境，不属于命令本身。先判断要访问的是公网还是 SII 内部源：
 
-1. 用 help 确认可用命令和参数。
-2. 用 `inspire config context` 和 `inspire <workload> quota --workspace CPU资源空间` 或 `--workspace 分布式训练空间` 确认名字和可用规格；只有查询命令里的 `--group` 可输入 compute group 名称关键词或子串，不要求完整名称。`create` / profile 的 `--group` 必须填写完整 compute group 名称。
-3. 如果 `分布式训练空间` 或目标 compute group 不可上网，外部下载走 `CPU资源空间`；Python / Linux 包、Conda、npm、Maven、Docker 镜像、OSS 和 NTP 这类平台内部可达资源先在目标 notebook 里按 SII 内部源处理，跑通后保存镜像。
-4. 用 notebook / job / hpc / ray / serving 的 create 命令提交，必要时先 `--dry-run`。
-5. 用 events 看调度和启动原因，用 logs 看程序输出，用 metrics 看资源是否真的在工作，用 status / instances 看对象和实例状态。
-6. 终态且不再需要的 notebook、job、HPC、Ray、serving 和临时镜像要清理；运行中的对象先 stop，再 delete。
+- 公网：GitHub、Hugging Face、外部数据源、公开下载地址。目标 GPU 空间不可上网时，先在 `CPU资源空间` 的可上网 CPU notebook 准备内容，再放到共享盘或保存镜像。
+- SII 内部源：PyPI / pip、Apt、Conda、PyTorch wheels、npm、Maven、Docker registry、OSS、NTP 等内部地址。即使没有公网，目标 notebook / job 所在环境也可能能访问内部源。
 
-## 3. CLI Help 是命令事实来源
+需要内部源地址、快速配置或发行版源选择时，加载 [references/resources-and-paths.md](references/resources-and-paths.md) 的“公网与内部源边界”部分。不要在 SKILL.md 或对话里凭记忆复写内部源清单。
 
-先查 help，再执行命令：
+依赖安装跑通后，优先把运行环境固化为镜像；后续 notebook / job / HPC / Ray / serving 复用镜像，而不是每次启动都重新联网安装。
 
-```bash
-inspire --help
-inspire <command-group> --help
-inspire <command-group> <subcommand> --help
-```
+## 3. 执行闭环
 
-在本仓库源码 checkout 内验证 CLI 行为时，用：
+日常执行顺序：
 
-```bash
-cd cli
-uv run inspire --help
-uv run inspire notebook --help
-uv run inspire hpc create --help
-```
+1. 根据用户目标选择最相关 reference，只读需要的上下文。
+2. 用 CLI help 确认当前版本的真实命令表面。
+3. 用 live 查询确认账号、workspace、project、compute group、quota、镜像和资源可用性；不要把本地缓存、旧截图或历史记忆当事实。
+4. 准备远端文件和环境。公网准备、内部源配置、镜像保存分别按实际环境选择位置。
+5. 提交 workload。复杂调度条件先 dry-run 或先用小规模 notebook 验证。
+6. 观察 events / logs / metrics / instances / status。先看调度事件，再看程序日志，再看资源曲线是否真的在工作。
+7. 终态且不再需要的 notebook、job、HPC、Ray、serving 和临时镜像要清理；运行中的对象先 stop，再 delete。
 
-`inspire --help` 给出当前版本真实命令组；`inspire <command-group> --help` 给出该组子命令和工作流说明；`inspire <command-group> <subcommand> --help` 给出参数、默认值、必填项和示例。
-
-需要复用调度条件时，用对应 workload 的 `profile set/list/show/delete` 管理条件组；具体参数以 `inspire <workload> profile --help` 为准。`profile set` 保存 `workspace`、`project`、`group`、`quota`、`image` 五个条件；create 命令显式传 `--profile <name>`；batch 条目写 `profile = "<name>"`。
+Name-only 边界始终有效：普通输入输出使用名称、alias、可读状态和短表格，不让用户理解或传递平台 handle。需要平台 handle 只走专门 `id` 命令或内部 resolver。
 
 ## 4. 按需加载索引
 
-每次优先只读一份最相关手册；跨边界时再读第二份。日常手册不维护完整命令清单，命令表面始终回到 CLI help。
+先按问题类型选一份 reference；跨边界时再读第二份。不要把 reference 当命令大全；命令语法回到 CLI help。
 
-| 场景 | 手册 |
+| 用户问题或 Agent 判断点 | 先加载 |
 | --- | --- |
-| 选择 `CPU资源空间` / `分布式训练空间`、compute group、`--quota`、存储池、path alias，或解释路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) |
-| 创建、连接、执行、传文件、准备 notebook 基底环境，或暴露容器内 HTTP 服务 | [references/notebook.md](references/notebook.md) |
-| 提交 GPU job、CPU HPC、Ray、serving，或观察事件、日志和指标 | [references/compute-workloads.md](references/compute-workloads.md) |
-| 一个项目从环境准备、数据处理推进到训练 | [references/workflows.md](references/workflows.md) |
-| 浏览、注册、保存、调整可见性或清理镜像 | [references/image-management.md](references/image-management.md) |
-| 浏览或注册模型仓库条目，判断 model registry 和 serving 的关系 | [references/model.md](references/model.md) |
-| 安装、更新、账号、项目初始化、SII proxy setup | [references/setup/install-and-config.md](references/setup/install-and-config.md) |
-
-开发者手册只在维护 CLI 封装、排查平台接口合约，或 Agent 明确要求看接口时读取：
-
-| 场景 | 手册 |
-| --- | --- |
-| 对照平台接口 | [references/dev/browser-api.md](references/dev/browser-api.md) |
+| 安装、更新、账号添加 / 切换、首次初始化、`inspire init` 全局发现与项目初始化、SII proxy setup | [references/setup/install-and-config.md](references/setup/install-and-config.md) |
+| 选择 `CPU资源空间` / `分布式训练空间` / 特殊 workspace，理解 compute group、`--quota gpu,cpu,mem`、资源实时查询、存储池、挂载隔离、path alias、远端路径不可见 | [references/resources-and-paths.md](references/resources-and-paths.md) |
+| 需要 PyPI / pip、Apt、Conda、PyTorch wheels、npm、Maven、Docker registry、OSS、NTP 等 SII 内部源地址或配置方式 | [references/resources-and-paths.md](references/resources-and-paths.md)，直接看“公网与内部源边界” |
+| 创建交互环境、连接 notebook、SSH / exec / shell / scp、IDE URL、容器 HTTP 服务暴露、基底环境准备、大文件流转 | [references/notebook.md](references/notebook.md) |
+| 在 GPU job、CPU HPC、Ray、serving 之间选型，或提交后观察 events / logs / metrics / instances / status，分析排队、失败、空转、优先级和异常状态 | [references/compute-workloads.md](references/compute-workloads.md) |
+| 一个项目跨越 CPU 准备、数据处理、GPU 训练、部署或交付，需要阶段化计划 | [references/workflows.md](references/workflows.md) |
+| 选择已有镜像、从 notebook 保存镜像、注册外部镜像、调整可见性、清理临时镜像 | [references/image-management.md](references/image-management.md) |
+| 浏览 / 注册模型仓库条目，判断 model registry、model version 和 serving 的关系 | [references/model.md](references/model.md) |
+| 维护 CLI Browser API 封装、排查前端接口合同、reverse-capture 平台请求，或用户明确要求看接口 | [references/dev/browser-api.md](references/dev/browser-api.md) |
 
 ## 5. 项目上下文
 
-仓库根可用 `INSPIRE.md` 记录非配置性上下文，建议包含：
+仓库根可用 `INSPIRE.md` 记录非配置性上下文，例如：
 
 - `Default Image`
 - `Path Conventions`
@@ -90,4 +79,4 @@ uv run inspire hpc create --help
 - `Existing Notebooks`
 - `Ongoing Jobs`
 
-不要把账号配置、密码、代理密钥或 `.inspire/accounts/<account>/config.toml` 内容复制进 `INSPIRE.md`。配置由 CLI 合并和展示。
+不要把账号配置、密码、代理密钥、平台 session 或 `.inspire/accounts/<account>/config.toml` 内容复制进 `INSPIRE.md`。配置事实由 CLI 合并和展示；项目说明只记录人类可读的协作约定。
