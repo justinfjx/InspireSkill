@@ -462,6 +462,23 @@ class TestAccountConfigLayer:
         assert cfg.project_catalog["project-1"]["path_user"] == "tongjingqi-CZXS25110029"
         assert sources["project_catalog"] == SOURCE_GLOBAL
 
+    def test_account_path_aliases_load_as_defaults(
+        self, home: Path, clean_env: None
+    ) -> None:
+        self._write_account_config(
+            home,
+            "alice",
+            '[path_aliases]\n'
+            'me = "/inspire/ssd/project/topic/alice/"\n'
+            'public = "/inspire/ssd/project/topic/public/"\n',
+        )
+
+        cfg, sources = Config.from_files_and_env(require_credentials=False)
+
+        assert cfg.path_aliases["me"] == "/inspire/ssd/project/topic/alice/"
+        assert cfg.path_aliases["public"] == "/inspire/ssd/project/topic/public/"
+        assert sources["path_aliases"] == SOURCE_GLOBAL
+
     def test_project_context_is_loaded_for_display(
         self, home: Path, clean_env: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -710,6 +727,28 @@ class TestAccountConfigLayer:
         assert alice_sources["path_aliases"] == SOURCE_PROJECT
         assert bob_sources["path_aliases"] == SOURCE_PROJECT
 
+    def test_project_path_aliases_merge_over_account_defaults(
+        self, home: Path, clean_env: None, tmp_path: Path
+    ) -> None:
+        self._write_account_config(
+            home,
+            "alice",
+            '[path_aliases]\n'
+            'me = "/inspire/ssd/project/topic/account/"\n'
+            'public = "/inspire/ssd/project/topic/public/"\n',
+        )
+        self._write_project_account_config(
+            tmp_path,
+            "alice",
+            '[path_aliases]\nme = "/inspire/qb-ilm2/project/topic/project/"\n',
+        )
+
+        cfg, sources = Config.from_files_and_env(require_credentials=False)
+
+        assert cfg.path_aliases["me"] == "/inspire/qb-ilm2/project/topic/project/"
+        assert cfg.path_aliases["public"] == "/inspire/ssd/project/topic/public/"
+        assert sources["path_aliases"] == SOURCE_PROJECT
+
     def test_project_config_search_does_not_treat_home_account_as_project(
         self, tmp_path: Path, clean_env: None, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -842,11 +881,10 @@ class TestInitCommand:
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
 
-        # Template mode still supports the legacy interactive project/global choice.
-        result = runner.invoke(init, ["--template"], input="p\n")
+        result = runner.invoke(init, ["--no-discover", "--scope", "project", "--force"])
 
         assert result.exit_code == 0
-        assert "Creating template config" in result.output
+        assert "No environment variables detected. Creating template config" in result.output
         config_file = self._project_config_path(tmp_path)
         assert config_file.exists()
         content = config_file.read_text()
@@ -861,7 +899,7 @@ class TestInitCommand:
         """A global template must be loadable as an account config."""
         monkeypatch.chdir(tmp_path)
 
-        result = CliRunner().invoke(init, ["--scope", "global", "--force"])
+        result = CliRunner().invoke(init, ["--template", "--scope", "global", "--force"])
 
         assert result.exit_code == 0, result.output
         content = self._account_config_path().read_text()
@@ -1004,7 +1042,7 @@ class TestInitCommand:
         monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")  # project
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--scope", "project", "--force"])
+        result = runner.invoke(init, ["--no-discover", "--scope", "project", "--force"])
 
         assert result.exit_code == 0
 
@@ -1025,7 +1063,7 @@ class TestInitCommand:
         monkeypatch.setenv("INSPIRE_USERNAME", "testuser")
         monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")
 
-        result = CliRunner().invoke(init, ["--scope", "global", "--force"])
+        result = CliRunner().invoke(init, ["--no-discover", "--scope", "global", "--force"])
 
         assert result.exit_code == 0, result.output
         account_content = self._account_config_path().read_text()
@@ -1040,7 +1078,7 @@ class TestInitCommand:
         self._account_config_path().write_text('[auth]\nusername = "existing"\n')
         monkeypatch.setenv("INSPIRE_USERNAME", "testuser")
 
-        result = CliRunner().invoke(init, ["--scope", "project", "--force"])
+        result = CliRunner().invoke(init, ["--no-discover", "--scope", "project", "--force"])
 
         assert result.exit_code == 0, result.output
         assert "No project-scope environment variables detected" in result.output
@@ -1056,7 +1094,7 @@ class TestInitCommand:
         monkeypatch.setenv("INSPIRE_PASSWORD", "secretpass")
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--scope", "global", "--force"])
+        result = runner.invoke(init, ["--no-discover", "--scope", "global", "--force"])
 
         assert result.exit_code == 0
         content = self._account_config_path().read_text()
@@ -1094,7 +1132,7 @@ class TestInitCommand:
         monkeypatch.setenv("INSP_GITHUB_REPO", "user/repo")
 
         runner = CliRunner()
-        result = runner.invoke(init, ["--scope", "project", "--force"])
+        result = runner.invoke(init, ["--no-discover", "--scope", "project", "--force"])
 
         assert result.exit_code == 0
 
@@ -1265,6 +1303,7 @@ class TestInitCommand:
         *,
         get_web_session_side_effect=None,
         login_session=None,
+        project_file_directories=None,
     ):
         """Wire up standard discover mocks and return (global_config, workspace_id)."""
         from inspire.platform.web.session.models import WebSession
@@ -1338,10 +1377,12 @@ class TestInitCommand:
                 )
             ],
         )
+        if project_file_directories is None:
+            project_file_directories = []
         monkeypatch.setattr(
             browser_api_module,
             "list_project_file_directories",
-            lambda **_: [],
+            lambda **_: project_file_directories,
         )
 
         # Stub out _ensure_playwright_browser and _ensure_ssh_key so they never
@@ -1367,11 +1408,115 @@ class TestInitCommand:
         assert "Discovering account catalog" in result.output
         assert "Workspace:" not in result.output
         assert "CPU临时测试空间" not in result.output
+        account_config = self._account_config_path()
+        assert account_config.exists()
+        account_content = account_config.read_text(encoding="utf-8")
+        assert "[projects]" in account_content
+        assert "[project_catalog" in account_content
+        assert not self._project_config_path(tmp_path).exists()
+
+    def test_global_scope_discover_writes_account_path_aliases(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
+    ) -> None:
+        from inspire.platform.web.browser_api.files import FileDirectoryInfo
+
+        self._setup_discover_mocks(
+            monkeypatch,
+            tmp_path,
+            project_file_directories=[
+                FileDirectoryInfo(
+                    name="My Project",
+                    directory="/inspire/hdd/project/exploration-topic/public",
+                ),
+                FileDirectoryInfo(
+                    name="My Project",
+                    directory=(
+                        "/inspire/hdd/project/exploration-topic/"
+                        "tongjingqi-CZXS25110029"
+                    ),
+                ),
+            ],
+        )
+        monkeypatch.setenv("INSPIRE_USERNAME", "cached-user")
+        monkeypatch.setenv("INSPIRE_BASE_URL", "https://example.invalid")
+
+        result = CliRunner().invoke(init, ["--force"])
+
+        assert result.exit_code == 0, result.output
+        assert not self._project_config_path(tmp_path).exists()
+        account_content = self._account_config_path().read_text(encoding="utf-8")
+        assert "[path_aliases]" in account_content
+        assert (
+            'me = "/inspire/ssd/project/exploration-topic/tongjingqi-CZXS25110029/"'
+            in account_content
+        )
+        assert 'public = "/inspire/ssd/project/exploration-topic/public/"' in account_content
+        assert (
+            'global-me = "/inspire/ssd/global_user/tongjingqi-CZXS25110029/"'
+            in account_content
+        )
+
+    def test_project_scope_discover_writes_project_context(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
+    ) -> None:
+        self._setup_discover_mocks(monkeypatch, tmp_path)
+        monkeypatch.setenv("INSPIRE_USERNAME", "cached-user")
+        monkeypatch.setenv("INSPIRE_BASE_URL", "https://example.invalid")
+
+        runner = CliRunner()
+        result = runner.invoke(init, ["--scope", "project", "--force"])
+
+        assert result.exit_code == 0, result.output
+        account_content = self._account_config_path().read_text(encoding="utf-8")
+        assert "[projects]" in account_content
+        assert "[project_catalog" in account_content
+
         project_config = self._project_config_path(tmp_path)
         assert project_config.exists()
         project_content = project_config.read_text(encoding="utf-8")
         assert "[context]" in project_content
+        assert 'project = "My Project"' in project_content
+        assert "[path_aliases]" not in project_content
         assert "workspace" not in project_content.lower()
+
+    def test_project_scope_discover_writes_project_path_alias_overrides(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_env: None
+    ) -> None:
+        from inspire.platform.web.browser_api.files import FileDirectoryInfo
+
+        self._setup_discover_mocks(
+            monkeypatch,
+            tmp_path,
+            project_file_directories=[
+                FileDirectoryInfo(
+                    name="My Project",
+                    directory="/inspire/hdd/project/exploration-topic/public",
+                ),
+                FileDirectoryInfo(
+                    name="My Project",
+                    directory=(
+                        "/inspire/hdd/project/exploration-topic/"
+                        "tongjingqi-CZXS25110029"
+                    ),
+                ),
+            ],
+        )
+        monkeypatch.setenv("INSPIRE_USERNAME", "cached-user")
+        monkeypatch.setenv("INSPIRE_BASE_URL", "https://example.invalid")
+
+        result = CliRunner().invoke(init, ["--scope", "project", "--force"])
+
+        assert result.exit_code == 0, result.output
+        account_content = self._account_config_path().read_text(encoding="utf-8")
+        assert "[path_aliases]" in account_content
+        project_content = self._project_config_path(tmp_path).read_text(encoding="utf-8")
+        assert "[context]" in project_content
+        assert "[path_aliases]" in project_content
+        assert (
+            'me = "/inspire/ssd/project/exploration-topic/tongjingqi-CZXS25110029/"'
+            in project_content
+        )
+        assert 'public = "/inspire/ssd/project/exploration-topic/public/"' in project_content
 
 
 # ===========================================================================
