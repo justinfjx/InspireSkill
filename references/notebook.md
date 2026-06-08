@@ -1,228 +1,90 @@
 # Notebook 工作流
 
-创建、连接、执行、传文件、暴露容器内 HTTP 服务，或在 notebook 内准备基底环境时，先查本手册。镜像保存、注册和可见性看 [image-management.md](image-management.md)；workspace、compute group、quota、workload profile 和 path alias 看 [resources-and-paths.md](resources-and-paths.md)。
+创建交互环境、进入容器、管理远端文件、暴露容器 HTTP 服务，或用 notebook 准备可复用环境时看本页。资源条件看 [resources-and-paths.md](resources-and-paths.md)；公网和内部源看 [network-and-sources.md](network-and-sources.md)；镜像生命周期看 [image-management.md](image-management.md)。命令语法和参数以 CLI help 为准。
 
 ## 1. Notebook 的角色
 
-Notebook 是交互工作台，不只是“开一个终端”。常见角色：
+Notebook 是交互工作台，不只是“开一个终端”。
 
-| 角色 | 用法 |
+| 角色 | 适用场景 |
 | --- | --- |
-| 联网 / 内部源准备盒 | 公网下载放在可上网 CPU 组；内部源依赖可在目标 GPU 组直接配置验证，写入共享盘或保存镜像 |
-| 训练调试盒 | 在目标 GPU 组做小规模 probe、查看 GPU / CUDA / NCCL / 数据路径 |
-| 远端文件入口 | 用 `exec` / `shell` / `scp` 管理共享盘文件 |
-| 临时服务盒 | 启动 Gradio、FastAPI、OpenAI-compatible API，再通过 notebook proxy 访问 |
+| 联网准备盒 | 在 `CPU资源空间` 准备公网内容，写共享盘或保存镜像 |
+| 内部源验证盒 | 在目标 workspace 验证 pip / apt / conda / npm / Docker 内部源是否可达 |
+| GPU probe | 在 `分布式训练空间` 小规模验证 CUDA、NCCL、数据路径和训练入口 |
+| 远端文件入口 | 通过 shell / exec / scp 管理共享盘文件 |
+| 临时服务盒 | 跑 Gradio、FastAPI、OpenAI-compatible API，再通过 notebook proxy 访问 |
 
-`分布式训练空间` 不可上网时，不要把 `git clone`、外部权重下载或访问公网数据源放到目标 GPU notebook / job 里。先在 `CPU资源空间` 的可上网 CPU notebook 中准备，再把结果留在 `me` / `public` 等共享路径，或保存为镜像。安装 Python / Apt / Conda / npm / Maven 包、访问内部 Docker 镜像仓库或 OSS 时优先看 SII 内部源；它和公网不同，在不可上网 compute group 里也可能可用，因此可以在目标 GPU notebook 中按实际可达性直接配置并跑通任务。
+`分布式训练空间` 不可上网时，不要把外部下载塞进 GPU notebook 或 job 的启动路径。公网内容先放到 CPU 准备盒；只依赖 SII 内部源时可以直接在目标 notebook 验证。
 
-日常 workspace 心智模型很简单：`CPU资源空间` 负责 CPU notebook 和联网准备，`分布式训练空间` 负责 GPU notebook 和训练调试。国产卡分区、`CI-情境智能` 工作空间或其它小组专属空间属于特殊硬件 / 特殊项目路径，只有任务明确要求时才切换。
+## 2. 创建前判断
 
-## 2. CLI Help 查询
+创建 notebook 前只判断平台语义，不在 reference 里维护完整命令模板：
 
-Notebook 子命令、参数和默认值以 CLI help 为准：
+1. 用真实 workspace 选择角色：CPU 准备盒走 `CPU资源空间`，GPU probe 走 `分布式训练空间`。
+2. 用 quota live 查询选择合法 `gpu,cpu,mem` 三元组。
+3. 确认 project 是目标项目名，image 已 `READY`。
+4. 需要复用同一调度条件时写 workload profile；远端目录仍用 path alias。
 
-```bash
-inspire notebook --help
-inspire notebook create --help
-inspire notebook exec --help
-inspire notebook scp --help
-inspire notebook url --help
-inspire notebook proxy-url --help
-inspire notebook install-deps --help
-```
+手动 pin 节点只用于排查坏节点、复现实验或平台同学明确指定节点。节点名是 compute group 里的节点名，不是平台 handle；节点必须属于所选 group。
 
-## 3. 创建前的选择
+## 3. 连接方式
 
-创建 notebook 前先确认三件事：
-
-1. 准备盒用 `inspire notebook quota --workspace CPU资源空间` 选 CPU-only `--quota`；GPU 调试盒用 `inspire notebook quota --workspace 分布式训练空间` 选 GPU `--quota`。
-2. 确认 `--project <PROJECT>` 是目标项目名。
-3. 用 `inspire image list` / `image detail` 选状态可用的镜像。
-
-联网准备盒通常选择 `CPU资源空间` 的可上网 compute group 和 CPU-only quota，例如 `0,20,256`。GPU 调试盒选择 `分布式训练空间` 的 H100 / H200 compute group 和小规模 GPU quota，例如 `1,20,200`。
-
-```bash
-inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
-  --name prep-box --image <BASE_IMAGE> --project <PROJECT> --wait
-
-inspire notebook create --workspace 分布式训练空间 --group <GPU_GROUP_FULL_NAME> -q 1,20,200 \
-  --name gpu-probe --image <TRAIN_IMAGE> --project <PROJECT> --wait
-```
-
-需要复用同一组条件时，用 `inspire notebook profile set <name> ...` 保存，并在 create 中显式传 `--profile <name>`。
-
-需要把 notebook 固定到某个节点时，`inspire notebook create` 可传 `--node <NODE_NAME>`。这里的值是计算组里的节点名，例如 `qb-prod-gpu1736`，不是平台 handle；节点必须属于已选 `--group`，不匹配时由平台拒绝。日常创建建议让调度器自动放置，只有在排查坏节点、复现实验或平台同学明确指定节点时才手动 pin。当前 notebook create 走 Web UI 同款 Browser API `/notebook/create` payload，因此可以携带前端/后端 create body 里的 `node_id`。
-
-## 4. 连接、`shell` 与 `exec`
-
-打开交互 SSH：
-
-```bash
-inspire notebook ssh <name> --workspace CPU资源空间
-```
-
-运行一次性远程命令也可以走 SSH 直觉：
-
-```bash
-inspire notebook ssh <name> -- hostname
-```
-
-`--workspace` 只用于首次解析或同名 notebook 消歧；连接缓存后，后续命令可直接按 notebook 名使用。需要显式管理缓存时，用 `inspire notebook connection list/status/refresh/forget/prune`。
-
-需要给原生 OpenSSH / scp / rsync / VS Code Remote SSH 使用时，输出配置片段：
-
-```bash
-inspire notebook ssh-config <name> --workspace CPU资源空间 >> ~/.ssh/config
-ssh inspire-<name>
-scp file inspire-<name>:/tmp/
-```
-
-`inspire notebook shell <name>` 是持久 SSH 会话，cwd、环境变量和 history 会保留到 `exit`。多个终端并开就是多个独立会话，互相共享同一容器资源。
-
-`inspire notebook exec <name> "<cmd>"` 是一次性独立命令。两次调用之间不共享 cwd 或环境变量。需要连续状态时，把状态放在同一条命令里：
-
-```bash
-inspire notebook exec <name> --cwd me:<repo> "export X=1 && ./run.sh"
-```
-
-不传 `--cwd` 时，CLI 默认使用 `me` path alias；没有 `me` 时才落到远端 `$HOME`。路径 alias 支持 `me`、`me:<subdir>` 和 `me/<subdir>` 形式：
-
-```bash
-inspire notebook exec <name> --cwd me "pwd"
-inspire notebook exec <name> --cwd me:<repo> "git pull && pytest -q"
-inspire notebook shell <name> --cwd me:<repo>
-```
-
-超过 20 分钟的任务写成远端后台进程和 sentinel 文件，再从本机轮询，不要让 `exec` 同步等待。
-
-## 5. IDE URL 与容器 HTTP 服务
-
-打开 notebook Web IDE 时，用入口 URL：
-
-```bash
-inspire notebook url <name> --workspace CPU资源空间
-```
-
-这个 URL 是浏览器入口，形如 `https://qz.sii.edu.cn/ide?notebook_id=...`，平台会再跳转到当前运行容器的 IDE 网关。它适合发给有权限的协作者打开页面，不是 SDK base URL。
-
-容器内已经启动 HTTP 服务时，用 `proxy-url` 直接生成完整外部访问 URL。Notebook 必须处于 `RUNNING`，CLI 会读取或刷新当前容器的 IDE 网关 token：
-
-```bash
-inspire notebook exec <name> "curl -sS http://127.0.0.1:<container-port>/health"
-inspire notebook proxy-url <name> --workspace CPU资源空间 --port <container-port>
-```
-
-OpenAI-compatible API 通常把 base URL 指到 `/v1`：
-
-```bash
-inspire notebook exec <name> "curl -sS http://127.0.0.1:30000/v1/models"
-inspire notebook proxy-url <name> --workspace CPU资源空间 --port 30000 --path /v1
-```
-
-底层 `inspire notebook vscode-proxy-suffix <name>` 只输出 host-less 网关后缀，供需要自行拼接 host、端口和路径的工具使用。后缀里带容器生命周期内的 token；容器重启后 token 会变化，必要时传 `--refresh` 强制重新解析。
-
-安全边界：
-
-| 边界 | 说明 |
+| 入口 | 心智模型 |
 | --- | --- |
-| 平台 URL | 受启智登录态、项目权限和 URL token 约束；不要发到公开渠道 |
-| 应用鉴权 | Notebook proxy 只提供网络通路，不替代 Gradio、FastAPI、LLM API 自己的登录或 API key |
-| 本机转发 | 不要用本机临时 gateway 绑定 `0.0.0.0` 对外分享，这会绕开启智访问控制 |
+| `ssh` | 交互 SSH；也可接一次性远程命令 |
+| `shell` | 持久会话，cwd、环境变量和 history 留在会话内 |
+| `exec` | 一次性独立命令，两次调用不共享 cwd 或环境 |
+| `ssh-config` | 给 OpenSSH、scp、rsync、VS Code Remote SSH 使用 |
+| `connection` | 管理 SSH / rtunnel 连接缓存 |
 
-发布前做无 key / 有 key 对照：无 key 请求应返回 `401` 或等价拒绝；带 key 的 `/health`、`/v1/models` 或业务 smoke test 应返回成功。
+`--workspace` 主要用于首次解析或同名 notebook 消歧；连接缓存建立后，后续命令通常可按名称使用。缓存是性能和连接复用工具，不是平台事实来源。
 
-## 6. 代码、数据和文件流转
+`exec` 超过 20 分钟时，把任务写成远端后台进程和 sentinel 文件，再从本机轮询，不要让本机同步等待。
 
-| 文件流转类型 | 做法 |
-| --- | --- |
-| 独立 repo 日常同步 | 本地 `git push`，远端 `git pull` |
-| 多仓库工作区 | 通过 `inspire init` 配好账号默认 `me`；需要当前 repo 覆盖时再跑 `inspire init --scope project`，多个 repo 并列放在 `me:<repo>` |
-| 非 Git 文件 | `notebook scp`，远端路径优先写 alias，例如 `me:<repo>/file` |
-| `分布式训练空间` 或目标计算组不可上网但共享路径可见 | 在 `CPU资源空间` 的可上网 CPU notebook 做下载 / git / pip，离线训练实例读取共享盘结果 |
+## 4. 路径和文件流转
 
-`notebook scp` 不是源码同步工具。源码走 `git push` + 远端 `git pull`，否则容易慢且不一致。
+源码同步优先走 Git：本地 push，远端 pull。`notebook scp` 适合少量非 Git 文件、产物下载和临时配置，不适合作为源码同步主路径。
 
-常用闭环：
+多仓库项目把 repo 并列放在 `me:<repo>` 这类路径约定下；项目公共数据、权重和 checkpoint 放 `public` 或指定存储池 alias。路径语义写进 `INSPIRE.md`，不要散落在本地 agent 计划文件里。
 
-```bash
-git push origin <branch>
-inspire notebook exec <notebook-name> --cwd me:<repo> "git pull && git log -1 --oneline"
-inspire notebook shell <notebook-name> --cwd me:<repo>
-```
+跨 workspace 时先确认共享盘作用域：同项目路径通常可见，不同项目路径通常因 fileset 隔离不可见。
 
-少量非 Git 文件用 alias 传：
+## 5. IDE URL 与 HTTP Proxy
 
-```bash
-inspire notebook scp <notebook-name> ./config.yaml me:<repo>/config.yaml
-inspire notebook scp <notebook-name> --download me:<repo>/outputs/ ./outputs/ -r
-```
+Notebook Web IDE URL 是浏览器入口，受启智登录态和项目权限约束，不是 SDK base URL。
 
-## 7. 基底环境与镜像
+容器内 HTTP 服务用 notebook proxy 暴露。Proxy 只提供网络通路，不替代应用自己的鉴权；Gradio、FastAPI、LLM API 仍要有自己的登录或 API key。发布给协作者前做无 key / 有 key 对照，确认未授权请求会被拒绝。
 
-项目刚开始时，建议用统一基底镜像起一个基底 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好。公网下载放在 `CPU资源空间` 的可上网 notebook；只依赖 SII 内部源时，可以直接在 `分布式训练空间` 等目标 GPU notebook 中配置镜像源并验证。验证通过后保存成项目镜像，后续 notebook、job、HPC、Ray 和 serving 复用该镜像。
+不要用本机临时 gateway 绑定 `0.0.0.0` 对外分享，这会绕开启智访问控制。
 
-```bash
-inspire notebook create --workspace CPU资源空间 --group CPU资源-2 -q 0,20,256 \
-  --name base-box --image <BASE_IMAGE> --project <PROJECT> --wait
+## 6. 基底环境
 
-inspire notebook connection refresh base-box --workspace CPU资源空间
-inspire notebook exec base-box --cwd me:<repo> \
-  "pip3 config set global.index-url http://nexus.sii.shaipower.online/repository/pypi/simple/ && \
-   pip3 config set global.trusted-host nexus.sii.shaipower.online && \
-   pip install -r requirements.txt && python -m pytest -q"
-inspire notebook install-deps base-box --slurm --ray
-inspire image save base-box --workspace CPU资源空间 -n <IMAGE_NAME> -v v1 --visibility public --wait
-```
+项目早期用统一基底镜像起 notebook，把 Slurm、Ray、分布式训练依赖和项目依赖一次性装好。公网下载放 CPU 准备盒；只缺内部源时可在目标 GPU notebook 配置验证。
 
-`image save` 会触发一段中等时长的镜像保存过程；保存过程中不可操作该 notebook；保存完毕后 notebook 不会被自动停止，仍可继续连接和使用。保存出的镜像才是后续 workload 应复用的稳定环境。
+验证通过后保存项目镜像。`image save` 会触发中等时长的保存过程，期间不可操作该 notebook；保存完成后 notebook 不会自动停止。保存出的镜像才是后续 notebook / job / HPC / Ray / serving 应复用的稳定环境。
 
-已有 Ubuntu 镜像需要补 Slurm / Ray 依赖时：
+普通 notebook 中 Slurm 命令因无 controller 报错是正常现象；只有 HPC 任务运行时才具备完整 Slurm 运行环境。
 
-```bash
-inspire notebook install-deps <name> --slurm --ray
-```
-
-该命令会先 probe 再安装，已存在的组件会跳过。普通 notebook 中 Slurm 命令因无 controller 报错是正常现象；只有 `hpc create` 任务运行时才具备完整 Slurm 运行环境。
-
-## 8. 事件、指标和状态
-
-`inspire notebook events <name> --workspace <workspace>` 看调度、镜像拉取、容器启动、停止、保存镜像等生命周期原因。Notebook 卡在 `PENDING`、`CREATING` 或失败时先看 events。
-
-`inspire notebook metrics <name> --workspace <workspace>` 看平台资源视图的历史资源曲线，不需要进入容器。适合判断实例是否真的吃到 GPU、CPU / 内存是否贴边、磁盘或网络是否在持续传输。
-
-常用入口：
-
-```bash
-inspire notebook events <name> --workspace 分布式训练空间 --tail 50
-inspire notebook metrics <name> --workspace 分布式训练空间 --window 30m
-inspire notebook metrics <name> --workspace 分布式训练空间 --metric gpu,gpu_mem,cpu,mem --sparkline --no-plot
-```
-
-分工原则：
+## 7. 观察与清理
 
 | 工具 | 主要回答 |
 | --- | --- |
-| `events` | 平台为什么还没调度、为什么启动失败、生命周期走到哪一步 |
-| `metrics` | 资源是否在工作、GPU / CPU / 内存是否打满、I/O 是否还有流量 |
-| `exec` / `shell` | 进容器查进程、日志、文件、应用自身状态 |
+| `events` | 平台为什么还没调度、为什么启动失败、生命周期走到哪 |
+| `metrics` | GPU / CPU / 内存 / I/O 是否真的在工作 |
+| `exec` / `shell` | 进容器查进程、文件、日志和应用状态 |
 
-终态且不再需要的 notebook 要清理；running notebook 先 stop，再 delete。不确定是否仍有人使用时跳过。
+Notebook 卡在 `PENDING`、`CREATING` 或启动失败时先看 events；显示 `RUNNING` 但业务不推进时看 metrics，再回到应用日志和产物路径。
 
-## 9. 大文件操作
+终态且不再需要的 notebook 要清理。Running notebook 先 stop，再 delete；不确定是否仍有人使用时跳过。
 
-大规模 `mv` / `cp` / `rm` 前先探形状：
+## 8. 大文件操作
 
-```bash
-ls -A <dir> | wc -l
-du -sh --max-depth=1 <dir>
-```
-
-按形状选策略：
+大规模 `mv` / `cp` / `rm` 前先探目录形状：顶层 fan-out、一两个巨型子树、百万级小文件对应的策略不同。
 
 | 形状 | 策略 |
 | --- | --- |
-| 顶层 fan-out 大且大小均匀 | `find <root> -mindepth 1 -maxdepth 1 -print0 \| xargs -0 -n 1 -P 16 rm -rf --` |
-| 一两个巨型子树 | 下钻一两层再 fan-out，否则并行度实际只有 1 路 |
-| 百万级小文件 | 优先 GNU `find -delete` 或 `rsync --delete-after empty/ target/`，减少 fork 和 metadata 压力 |
+| 顶层 fan-out 大且大小均匀 | 顶层并行处理，控制并发 |
+| 一两个巨型子树 | 先下钻再并行，否则实际只有一路 |
+| 百万级小文件 | 优先使用 `find -delete` 或 `rsync --delete-after` 这类少 fork 的方式 |
 
-超过 20 分钟的操作一律 `nohup ... &` + sentinel 文件，本地轮询远端 sentinel；不要让 `notebook exec` 同步挂住。并行度不要无脑拉到 64 以上，`-P 16` 通常已经够。
+超过 20 分钟的操作一律后台运行并写 sentinel；并行度不要无脑拉满，先看文件系统和业务风险。

@@ -190,7 +190,7 @@ inspire resources availability --workspace all --include-cpu
 
 SKILL.md 装完是一份**通用 playbook**。日常 workspace 基本就是 `CPU资源空间` 和 `分布式训练空间`；资源条件不要写成隐式默认值，把 `workspace`、`project`、`group`、`quota` 和 `image` 组合成 workload profile，并在 `inspire notebook/job/hpc/... create --profile <name>` 或 batch 文件里显式使用。如果你的主战场是启智的国产卡分区、`CI-情境智能` 工作空间，或小组自己划走的专属资源开发空间，两条口子做定制：
 
-1. **项目级（推荐）**：改仓库根的 `INSPIRE.md`，并用 `inspire <workload> profile set <name> ...` 保存条件组；`Path Conventions` 只写 remote path alias。`INSPIRE.md` 属于当前 repo，不会被 `inspire update` 覆写，也方便跟组内协作。
+1. **项目级（必须）**：维护仓库根的 `INSPIRE.md`，并用 `inspire <workload> profile set <name> ...` 保存条件组；`Path Conventions` 只写 remote path alias。`INSPIRE.md` 属于当前 repo，不会被 `inspire update` 覆写，也方便跟组内协作。启智相关上下文必须和 `AGENTS.md` / `CLAUDE.md` 这类本地 Agent 计划分开维护。
 2. **Harness 级**：直接编辑 `~/.claude/skills/inspire/SKILL.md` 和同目录 `references/`（Codex / Antigravity / Cursor / OpenClaw / OpenCode / Qoder 同理），改按需加载入口或对应使用手册。注意：`inspire update` **默认会覆盖 SKILL.md 和 references/**；维护了本地改动后用 `inspire update --cli-only` 只升级 CLI 与运行时、不动 skill 文件，想合并上游变更时再手动 diff。
 
 ---
@@ -230,10 +230,14 @@ SKILL.md 装完是一份**通用 playbook**。日常 workspace 基本就是 `CPU
 - [**SKILL.md**](SKILL.md) — 日常使用入口：CLI help 查询方式、按需加载索引和项目上下文字段。
 - [references/setup/install-and-config.md](references/setup/install-and-config.md) — 安装、更新、账号初始化、项目初始化和 SII proxy setup。
 - [references/dev/browser-api.md](references/dev/browser-api.md) — CLI 维护参考：网页会话接口和当前前端请求合约。
-- [references/resources-and-paths.md](references/resources-and-paths.md) — 实时资源、规格三元组、共享盘作用域、存储池和项目路径。
-- [references/notebook.md](references/notebook.md) — Notebook 创建、连接、远程执行、传文件、基底环境准备和容器内 HTTP 服务暴露。
-- [references/compute-workloads.md](references/compute-workloads.md) — GPU job、CPU HPC、Ray、serving 的适用边界、调度语义和示例。
+- [references/resources-and-paths.md](references/resources-and-paths.md) — Workspace、compute group、规格三元组、实时资源和 workload profile 边界。
+- [references/network-and-sources.md](references/network-and-sources.md) — 公网、离线 GPU 空间、SII 内部源和镜像固化策略。
+- [references/paths.md](references/paths.md) — 共享盘作用域、存储池、挂载隔离、path alias 和项目 `INSPIRE.md` 维护边界。
+- [references/notebook.md](references/notebook.md) — Notebook 作为交互工作台、连接方式、文件流转、proxy、安全和观察边界。
+- [references/image-management.md](references/image-management.md) — 镜像职责、保存 / 注册边界、可见性和清理原则。
+- [references/compute-workloads.md](references/compute-workloads.md) — GPU job、CPU HPC、Ray、serving 的适用边界、调度语义和观察闭环。
 - [references/workflows.md](references/workflows.md) — CPU 准备、数据处理、分布式训练三阶段项目流程。
+- [references/model.md](references/model.md) — Model registry 与 serving 的职责边界、注册限制和版本判断。
 - [`cli/`](cli/) — CLI 源码；入口 `cli/inspire/cli/main.py`。
 - [`scripts/install.sh`](scripts/install.sh) — curl-pipe-bash 安装器。
 
