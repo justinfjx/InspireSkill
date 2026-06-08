@@ -2,6 +2,31 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.0.3
+
+## 更新内容
+
+### 修复
+
+- 修复 `inspire init` 发现项目目录和 path alias 时的边界处理，避免目录事实、项目上下文和账号级 catalog 在部分平台响应形状下漂移。
+- 修复 notebook SSH / proxy 相关配置输出和连接入口的兼容细节，补齐 SSH proxy、ssh-config 和连接缓存相关回归测试。
+
+### 文档
+
+- 将 `SKILL.md` 和 references 继续收敛为平台操作模型与 reference 路由，不再复述 CLI 使用手册。
+- 拆分资源调度、网络 / SII 内部源、共享盘路径和 `INSPIRE.md` 项目上下文边界，新增 `references/network-and-sources.md` 与 `references/paths.md`。
+- 明确启智项目仓库必须维护根目录 `INSPIRE.md`，并与 `AGENTS.md` / `CLAUDE.md` 等本地 Agent 计划文件分开。
+- 修正 `CONTRIBUTING.md` 开头的人类贡献者表述。
+
+### 验证
+
+- `uv lock --check`
+- `uv run pytest -q`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+
 # v6.0.2
 
 ## 更新内容
