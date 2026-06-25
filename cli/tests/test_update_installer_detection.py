@@ -34,6 +34,7 @@ from inspire.cli.commands.update import (
     _detect_installer,
     _ensure_global_playwright_runtime,
     _ensure_playwright_runtime,
+    _kimi_code_home,
     _release_entries_between,
     _is_local_requirement,
     _parse_uv_tool_list,
@@ -125,6 +126,34 @@ def test_kimi_code_skill_dir_uses_kimi_code_global_skills_path() -> None:
     assert update_module.HARNESS_SKILL_DIRS["kimi-code"] == (
         Path.home() / ".kimi-code" / "skills" / "inspire"
     )
+
+
+def test_kimi_code_home_respects_environment_override(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    custom_home = tmp_path / "custom-kimi-code"
+    monkeypatch.setenv("KIMI_CODE_HOME", str(custom_home))
+
+    assert _kimi_code_home() == custom_home
+
+
+def test_kimi_code_harness_paths_respect_environment_at_module_load(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    custom_home = tmp_path / "custom-kimi-code"
+    monkeypatch.setenv("KIMI_CODE_HOME", str(custom_home))
+    reloaded = importlib.reload(update_module)
+
+    try:
+        assert reloaded.HARNESS_ROOTS["kimi-code"] == custom_home
+        assert reloaded.HARNESS_SKILL_DIRS["kimi-code"] == (
+            custom_home / "skills" / "inspire"
+        )
+    finally:
+        monkeypatch.delenv("KIMI_CODE_HOME", raising=False)
+        importlib.reload(update_module)
 
 
 def test_upgrade_cli_retries_pypi_network_errors_with_mirrors(

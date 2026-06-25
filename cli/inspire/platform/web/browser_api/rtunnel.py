@@ -284,6 +284,7 @@ def build_rtunnel_setup_commands(
         "ssh-keygen -A >/dev/null 2>&1 || true; "
         '/usr/sbin/sshd -p "$SSH_PORT" -o ListenAddress=127.0.0.1 -o PermitRootLogin=yes '
         "-o PasswordAuthentication=no -o PubkeyAuthentication=yes "
+        '-o AuthorizedKeysFile="$_INSPIRE_AUTHORIZED_KEYS" '
         ">/tmp/sshd-bootstrap.log 2>&1 & fi"
     )
 

@@ -60,6 +60,14 @@ def _opencode_config_dir() -> Path:
     return Path.home() / ".config" / "opencode"
 
 
+def _kimi_code_home() -> Path:
+    """Resolve Kimi Code's home dir: $KIMI_CODE_HOME or ~/.kimi-code."""
+    override = os.environ.get("KIMI_CODE_HOME", "").strip()
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".kimi-code"
+
+
 HARNESS_SKILL_DIRS = {
     "claude": Path.home() / ".claude" / "skills" / "inspire",
     "codex": Path.home() / ".codex" / "skills" / "inspire",
@@ -68,7 +76,7 @@ HARNESS_SKILL_DIRS = {
     "openclaw": Path.home() / ".openclaw" / "skills" / "inspire",
     "opencode": _opencode_config_dir() / "skills" / "inspire",
     "qoder": Path.home() / ".qoder" / "skills" / "inspire",
-    "kimi-code": Path.home() / ".kimi-code" / "skills" / "inspire",
+    "kimi-code": _kimi_code_home() / "skills" / "inspire",
 }
 HARNESS_LEGACY_SKILL_DIRS = {
     "antigravity": [Path.home() / ".gemini" / "skills" / "inspire"],
@@ -81,7 +89,7 @@ HARNESS_ROOTS = {
     "openclaw": Path.home() / ".openclaw",
     "opencode": _opencode_config_dir(),
     "qoder": Path.home() / ".qoder",
-    "kimi-code": Path.home() / ".kimi-code",
+    "kimi-code": _kimi_code_home(),
 }
 
 SKILL_ASSETS = ("SKILL.md", "references")
@@ -806,7 +814,8 @@ def _refresh_skill_files(silent: bool, *, latest_version: str | None = None) -> 
             click.secho(
                 "! No agent harness detected "
                 "(checked ~/.claude, ~/.codex, ~/.gemini, ~/.cursor, ~/.openclaw, "
-                "$OPENCODE_CONFIG_DIR or ~/.config/opencode, ~/.qoder, and ~/.kimi-code); "
+                "$OPENCODE_CONFIG_DIR or ~/.config/opencode, ~/.qoder, and "
+                "$KIMI_CODE_HOME or ~/.kimi-code); "
                 "skipping SKILL refresh.",
                 fg="yellow",
                 err=True,

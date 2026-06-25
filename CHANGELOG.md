@@ -2,6 +2,34 @@
 
 本文件同步 GitHub Releases 正文格式；Release 页面是发布说明的标准口径。
 
+# v6.0.6
+
+## 更新内容
+
+### 新增
+
+- 新增 Kimi Code harness 支持，安装器和 `inspire update` 会把 skill 刷到 Kimi Code 默认 `$KIMI_CODE_HOME/skills/inspire/`，未设置时为 `~/.kimi-code/skills/inspire/`。
+- `KIMI_CODE_HOME` 现在会同时影响 Kimi Code harness 自动检测和 skill 写入位置，方便使用自定义 Kimi Code home 的环境。
+
+### 修复
+
+- 修复 notebook SSH target cache 重发现后可能重新选中不可达 bridge 的问题；当旧 target 不可达时，候选会再次经过 SSH 可用性校验。
+- 修复 notebook rtunnel bootstrap 在非 root notebook 用户 home 写入 authorized_keys 后，默认 `root@localhost` 登录仍可能找不到 key 的问题；sshd 现在显式使用 bootstrap 写入的 authorized_keys 文件。
+- notebook rtunnel bootstrap 不再硬编码 `/root/.ssh/authorized_keys`，会优先按运行中用户的 passwd home 写入，并保留 `$HOME` / `/root` 兜底。
+
+### 文档
+
+- README 和安装 reference 同步更新 8 家 harness 口径，补充 Kimi Code 的 `$KIMI_CODE_HOME` / `~/.kimi-code` skill 目录说明。
+
+### 验证
+
+- `uv lock --check`
+- `uv run pytest -q`
+- `uv run ruff check inspire tests`
+- `uv run mypy`
+- `uv build`
+- `git diff --check`
+
 # v6.0.5
 
 ## 更新内容

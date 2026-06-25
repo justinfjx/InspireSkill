@@ -20,6 +20,7 @@ def test_installer_first_uv_install_without_inspire_on_path(tmp_path: Path) -> N
     bin_dir = tmp_path / "bin"
     home.mkdir()
     bin_dir.mkdir()
+    kimi_home = home / "custom-kimi-code"
 
     (home / ".codex").mkdir()
     (home / ".gemini").mkdir()
@@ -68,6 +69,7 @@ def test_installer_first_uv_install_without_inspire_on_path(tmp_path: Path) -> N
         "HOME": str(home),
         "PATH": f"{bin_dir}:/usr/bin:/bin",
         "INSPIRE_SKIP_UPDATE_CHECK": "1",
+        "KIMI_CODE_HOME": str(kimi_home),
     }
     result = subprocess.run(
         [
@@ -91,7 +93,8 @@ def test_installer_first_uv_install_without_inspire_on_path(tmp_path: Path) -> N
     assert not (home / ".gemini" / "skills" / "inspire").exists()
     assert (home / ".cursor" / "skills" / "inspire" / "SKILL.md").exists()
     assert (home / ".qoder" / "skills" / "inspire" / "SKILL.md").exists()
-    assert (home / ".kimi-code" / "skills" / "inspire" / "SKILL.md").exists()
+    assert (kimi_home / "skills" / "inspire" / "SKILL.md").exists()
+    assert not (home / ".kimi-code" / "skills" / "inspire" / "SKILL.md").exists()
 
 
 def test_installer_advertises_antigravity_not_gemini_cli() -> None:

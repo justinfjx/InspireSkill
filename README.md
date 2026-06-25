@@ -181,7 +181,7 @@ inspire resources availability --workspace all --include-cpu
 | [OpenClaw](https://github.com/openclaw/openclaw) | `~/.openclaw/skills/inspire/` | 全局 "managed skills" 层；workspace 层 （`~/.openclaw/workspace/skills/`） 可覆盖 |
 | [OpenCode](https://github.com/anomalyco/opencode) | `~/.config/opencode/skills/inspire/` | 遵循 XDG；`$OPENCODE_CONFIG_DIR` 可改根 |
 | [Qoder CLI](https://docs.qoder.com/en/cli/Skills) | `~/.qoder/skills/inspire/` | 用户级 Skills 层，跨项目可用 |
-| [Kimi Code](https://github.com/MoonshotAI/kimi-code) | `~/.kimi-code/skills/inspire/` | 用户级 Skills 层，跨项目可用 |
+| [Kimi Code](https://github.com/MoonshotAI/kimi-code) | `$KIMI_CODE_HOME/skills/inspire/`（默认 `~/.kimi-code/skills/inspire/`） | 用户级 Skills 层，跨项目可用 |
 
 **为什么默认推 Claude Code**：它的 scheduler 支持在**后台 Bash 命令结束时自动唤醒 Agent**。把 `inspire job logs <name> --workspace <workspace> --follow` / 长轮询 checkpoint / `inspire hpc status <name> --workspace <workspace>` 监视之类长 watch 挂到后台，训练或 HPC 任务跑完 Agent 自己醒过来接下一步。Codex / Antigravity / Cursor / OpenClaw / OpenCode / Qoder / Kimi Code 目前没有这个能力，做长流水的自动化会弱一档。
 
