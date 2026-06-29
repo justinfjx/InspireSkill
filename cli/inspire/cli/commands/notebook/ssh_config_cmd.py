@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+import shutil
 import shlex
 import sys
+from pathlib import Path
 
 import click
 
@@ -20,6 +22,13 @@ from .target_resolver import NotebookConnectionTarget, resolve_cached_notebook_t
 def _default_host_alias(notebook: str) -> str:
     slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", notebook.strip()).strip("-")
     return f"inspire-{slug or 'notebook'}"
+
+
+def _resolve_inspire_executable() -> str:
+    executable = shutil.which("inspire")
+    if not executable:
+        return "inspire"
+    return str(Path(executable).expanduser().resolve())
 
 
 def _load_cached_target(
@@ -61,7 +70,7 @@ def _load_cached_target(
 
 def _format_ssh_config(*, host: str, bridge: BridgeProfile, account: str | None) -> str:
     proxy_parts = [
-        "inspire",
+        _resolve_inspire_executable(),
         "notebook",
         "ssh-proxy",
         "%h",

@@ -102,6 +102,11 @@ def test_ssh_config_uses_cached_bridge_and_proxy_command(monkeypatch) -> None:  
     )
 
     monkeypatch.setattr(ssh_config_module, "load_tunnel_config", lambda: tunnel_config)
+    monkeypatch.setattr(
+        ssh_config_module.shutil,
+        "which",
+        lambda command: "/Users/me/.local/bin/inspire" if command == "inspire" else None,
+    )
 
     result = CliRunner().invoke(
         cli_main,
@@ -113,7 +118,8 @@ def test_ssh_config_uses_cached_bridge_and_proxy_command(monkeypatch) -> None:  
     assert "HostName demo-box" in result.output
     assert "IdentityFile /home/me/.ssh/id_ed25519" in result.output
     assert (
-        "ProxyCommand inspire notebook ssh-proxy %h --workspace 'CPU资源空间' --port %p --quiet"
+        "ProxyCommand /Users/me/.local/bin/inspire notebook ssh-proxy %h "
+        "--workspace 'CPU资源空间' --port %p --quiet"
     ) in result.output
     assert "proxy.invalid" not in result.output
 

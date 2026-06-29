@@ -14,6 +14,7 @@ from inspire.cli.main import main as cli_main
 
 target_resolver = importlib.import_module("inspire.cli.commands.notebook.target_resolver")
 ssh_tunnel_module = importlib.import_module("inspire.bridge.tunnel")
+ssh_config_module = importlib.import_module("inspire.cli.commands.notebook.ssh_config_cmd")
 ssh_proxy_module = importlib.import_module("inspire.cli.commands.notebook.ssh_proxy_cmd")
 
 
@@ -274,6 +275,11 @@ def test_ssh_config_proxy_command_pins_resolved_account(
     tmp_path: Path,
 ) -> None:
     monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(
+        ssh_config_module.shutil,
+        "which",
+        lambda command: "/Users/me/.local/bin/inspire" if command == "inspire" else None,
+    )
     _install_accounts(
         monkeypatch,
         {"alice": _config("alice", _bridge("dev-box", workspace="CPU资源空间"))},
@@ -282,7 +288,9 @@ def test_ssh_config_proxy_command_pins_resolved_account(
     result = CliRunner().invoke(cli_main, ["notebook", "ssh-config", "dev-box"])
 
     assert result.exit_code == EXIT_SUCCESS, result.output
-    assert "ProxyCommand inspire notebook ssh-proxy %h --account alice" in result.output
+    assert (
+        "ProxyCommand /Users/me/.local/bin/inspire notebook ssh-proxy %h --account alice"
+    ) in result.output
 
 
 def test_ssh_proxy_explicit_account_uses_that_tunnel_config(
